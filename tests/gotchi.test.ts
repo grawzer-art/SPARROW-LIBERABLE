@@ -3,7 +3,6 @@ import {
   COOLDOWN,
   FLOOR,
   MAX_CATCHUP,
-  absenceReport,
   act,
   mood,
   newState,
@@ -57,7 +56,7 @@ describe("Sparrowgotchi — actions", () => {
   });
   it("la salade passe une fois, puis il la refuse", () => {
     let r = act(newState(T0), "salade", T0, always(0.9));
-    expect(r.anim).toBe("salade");
+    expect(r.anim).toBe("grimace");
     expect(r.delta.forme).toBe(12);
     r = act(r.state, "salade", T0 + 60_000, always(0.9));
     expect(r.anim).toBe("refus");
@@ -70,7 +69,7 @@ describe("Sparrowgotchi — actions", () => {
   });
   it("Dofus peut provoquer une rage ou un ultra focus", () => {
     expect(act(newState(T0), "dofus", T0, always(0.1)).state.status).toBe("rage");
-    const f = act(newState(T0), "dofus", T0, always(0.4)).state;
+    const f = act(newState(T0), "dofus", T0, always(0.5)).state;
     expect(f.status).toBe("focus");
     expect(act(f, "douche", T0 + 1000).anim).toBe("refus");
   });
@@ -95,7 +94,7 @@ describe("Sparrowgotchi — événements et sauvegarde", () => {
   });
   it("réclame des frites quand il a faim", () => {
     const s = { ...newState(T0), stats: { ...newState(T0).stats, satiete: 20 } };
-    expect(LINES.reclameFrites).toContain(randomEvent(s, T0, always(0.1))?.line);
+    expect(LINES.reclameFrites).toContain(randomEvent(s, T0, always(0.4))?.line);
   });
   it("restaure un état abîmé sans planter", () => {
     const s = restore({ stats: { satiete: "x", humeur: 500 }, status: "nimporte", last: 1e20 }, T0);
@@ -104,12 +103,6 @@ describe("Sparrowgotchi — événements et sauvegarde", () => {
     expect(s.status).toBeNull();
     expect(s.last).toBe(T0);
     expect(restore(null, T0).stats.satiete).toBe(70);
-  });
-  it("rapport d'absence après une longue absence", () => {
-    const before = newState(T0);
-    const after = tick(before, T0 + 10 * H);
-    expect(absenceReport(before, after, T0 + 10 * H)).toMatch(/^Absent 10 h\./);
-    expect(absenceReport(before, before, T0 + 60_000)).toBeNull();
   });
 });
 

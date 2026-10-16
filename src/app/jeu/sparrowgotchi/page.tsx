@@ -4,7 +4,7 @@ import "./gotchi.css";
 
 export const metadata: Metadata = {
   title: "Sparrowgotchi — SPARROW",
-  description: "Occupe-toi de Sparrow : frites, salade (il refuse), Dofus et siestes qu'il ne fera pas.",
+  description: "Occupe-toi de Sparrow dans son appart : frites, salade (il refuse), sessions de farm, niveaux, objets et trophées.",
 };
 
 export default function Page() {

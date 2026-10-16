@@ -85,7 +85,7 @@ export function GameHub() {
           <div className="hub-card__txt">
             <span className="mono hub-card__tag">JEU 02 · ANIMAL VIRTUEL</span>
             <h2 className="hub-card__title">Sparrowgotchi</h2>
-            <p className="mono hub-card__desc">Frites, salade (il refuse), Dofus et siestes qu&apos;il ne fera jamais. Il vit même quand tu n&apos;es pas là.</p>
+            <p className="mono hub-card__desc">Son appart, ses frites, ses sessions de farm. Niveaux, objets, missions et trophées. Il vit même quand tu n&apos;es pas là.</p>
             <span className="mono hub-card__meta hub-card__meta--live">{gotchi ?? "…"}</span>
           </div>
           <span className="btn btn--primary hub-card__cta">▶ M&apos;occuper de lui</span>
