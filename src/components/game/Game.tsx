@@ -346,7 +346,7 @@ export function Game() {
   };
 
   const share = async () => {
-    const url = `${window.location.origin}/jeu`;
+    const url = `${window.location.origin}/jeu/evasion`;
     const who = last.skin === "lili" ? "Lili" : "Sparrow";
     const text =
       screenRef.current === "won"
@@ -395,7 +395,7 @@ export function Game() {
   return (
     <div className="arcade">
       <header className="arcade__bar mono">
-        <a href="/">← DOSSIER</a>
+        <a href="/jeu">← JEUX</a>
         <span className="arcade__brand">L&apos;ÉVASION DE SPARROW</span>
         <button type="button" onClick={toggleSound} aria-pressed={sound} aria-label="Son">
           {sound ? "SON ●" : "SON ○"}
