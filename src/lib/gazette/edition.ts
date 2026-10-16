@@ -176,15 +176,16 @@ function palier(date: string): Speciale | null {
   const j = joursRestants(date);
   if (!PALIERS.includes(j)) return null;
   const titres: Record<number, string> = {
-    1500: "J-1500 : le compteur perd son premier « 1 ». Sparrow parle d'un « tournant historique »",
-    1000: "J-1000 : le compteur n'a plus que quatre chiffres… pour la dernière fois. Sparrow pleure de joie, puis de fatigue",
-    500: "J-500 : Sparrow commence à compter en semaines pour se donner l'impression d'aller plus vite",
-    365: "J-365 : plus qu'un an. Sparrow demande s'il peut le faire en accéléré",
-    100: "J-100 : trois chiffres seulement. Le calendrier, nerveux, commence à transpirer",
-    30: "J-30 : Sparrow essaie déjà ses tenues de sortie. Le masque est passé au pressing",
-    7: "J-7 : une semaine. La rédaction installe un lit de camp devant le compteur",
-    1: "J-1 : demain, c'est le grand jour. Sparrow n'a pas fermé l'œil depuis 1 825 jours",
+    1500: "J-1500 : Sparrow fête ça avec une bouteille. Il la retrouve à J-1497, vide, dans le four",
+    1000: "J-1000 : Sparrow passe sous la barre des mille. Il pleure, vomit, recommence",
+    500: "J-500 : Sparrow compte désormais en dodos. Ses potes, eux, comptent en verres : ils en sont à 1 200",
+    365: "J-365 : plus qu'un an. Sparrow demande si on peut le passer en vitesse ×2 comme sur YouTube",
+    100: "J-100 : le calendrier commence à flipper et réclame une protection policière",
+    30: "J-30 : Sparrow a repassé son masque de Batman. Le fer à repasser a fondu",
+    7: "J-7 : Sparrow ne dort plus, ne mange plus, il fixe. Ses potes ont posé une bâche",
+    1: "J-1 : Sparrow a mis 14 réveils pour un truc qui arrive à minuit",
   };
+
   return {
     date,
     nom: `DERNIÈRE MINUTE · J-${j.toLocaleString("fr-FR")}`,

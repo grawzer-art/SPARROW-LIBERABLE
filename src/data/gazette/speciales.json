@@ -4,50 +4,94 @@
     {
       "date": "2026-10-16",
       "nom": "ÉDITION INAUGURALE",
-      "bandeau": "N° 1 · Tirage : un exemplaire, photocopié 68 millions de fois",
-      "une": { "id": "es-2026-10-16", "rubrique": "sparrow", "tampon": "EXCLUSIF", "titre": "La Gazette du Chaos paraît pour la première fois. La rédaction annonce déjà un démenti", "chapo": "Notre journal s'engage à ne publier que des informations fausses, vérifiées par personne." }
+      "bandeau": "N° 1 · Tirage : un exemplaire, photocopié illégalement",
+      "une": {
+        "id": "es-2026-10-16",
+        "rubrique": "sparrow",
+        "tampon": "EXCLUSIF",
+        "titre": "La Gazette du Chaos sort son premier numéro. Le deuxième dépendra de notre avocat",
+        "chapo": "Notre rédaction s'engage à ne publier que des informations fausses, vérifiées par personne, relues par un pote bourré."
+      }
     },
     {
       "date": "2026-12-25",
       "nom": "ÉDITION DE NOËL",
       "bandeau": "Supplément gratuit : la dinde vous juge",
-      "une": { "id": "es-2026-12-25", "rubrique": "france", "tampon": "URGENT", "titre": "Le Père Noël annonce une livraison « entre le 24 décembre et le 12 octobre 2031 »", "chapo": "Le transporteur évoque « un léger retard dû à la conjoncture ». Les rennes sont en grève." }
+      "une": {
+        "id": "es-2026-12-25",
+        "rubrique": "france",
+        "tampon": "URGENT",
+        "titre": "Le Père Noël en garde à vue : 2,1 milliards d'effractions par cheminée en une seule nuit",
+        "chapo": "Ses complices, huit rennes et un lutin syndiqué, affirment n'avoir « fait que conduire »."
+      }
     },
     {
       "date": "2027-01-01",
       "nom": "ÉDITION DU NOUVEL AN",
-      "bandeau": "Gueule de bois nationale · Ouverture des pharmacies en continu",
-      "une": { "id": "es-2027-01-01", "rubrique": "sparrow", "tampon": "À LA UNE", "titre": "2027 commence. Le calendrier rappelle discrètement qu'il en reste encore quatre" }
+      "bandeau": "Gueule de bois nationale · Pharmacies ouvertes en continu",
+      "une": {
+        "id": "es-2027-01-01",
+        "rubrique": "vdm",
+        "tampon": "À LA UNE",
+        "titre": "1er janvier : 68 millions de Français promettent d'arrêter de boire. 67 millions craquent avant midi"
+      }
     },
     {
       "date": "2027-10-12",
       "nom": "ÉDITION SPÉCIALE SPARROW · AN I",
-      "bandeau": "Un an de dossier · La rédaction a mis une bougie sur le compteur",
-      "une": { "id": "es-2027-10-12", "rubrique": "sparrow", "tampon": "EXCLUSIF", "titre": "Un an déjà : Sparrow fête l'événement en fixant le compteur pendant six heures", "chapo": "Le compteur, imperturbable, a décliné toute interview." }
+      "bandeau": "Un an de compteur · La rédaction a mis une bougie dessus, et elle a pris feu",
+      "une": {
+        "id": "es-2027-10-12",
+        "rubrique": "sparrow",
+        "tampon": "EXCLUSIF",
+        "titre": "Un an : Sparrow fête ça en hurlant sur une horloge du rayon cuisine de chez Leroy Merlin",
+        "chapo": "L'horloge, choquée, a été placée en cellule de soutien psychologique."
+      }
     },
     {
       "date": "2028-10-12",
       "nom": "ÉDITION SPÉCIALE SPARROW · AN II",
-      "bandeau": "Deux ans · Le Ministère du Calendrier se félicite de sa régularité",
-      "une": { "id": "es-2028-10-12", "rubrique": "sparrow", "tampon": "RÉVÉLATION", "titre": "Deux ans de dossier : Sparrow réclame le remboursement du 29 février" }
+      "bandeau": "Deux ans · Le Ministère du Calendrier refuse tout commentaire",
+      "une": {
+        "id": "es-2028-10-12",
+        "rubrique": "sparrow",
+        "tampon": "RÉVÉLATION",
+        "titre": "Deux ans : Sparrow exige le remboursement du 29 février, intérêts compris"
+      }
     },
     {
       "date": "2029-10-12",
       "nom": "ÉDITION SPÉCIALE SPARROW · AN III",
-      "bandeau": "Trois ans · Plus de la moitié du chemin, moins de la moitié de la patience",
-      "une": { "id": "es-2029-10-12", "rubrique": "sparrow", "tampon": "À LA UNE", "titre": "Trois ans : Sparrow annonce qu'il a dépassé la moitié. Le calendrier demande des preuves" }
+      "bandeau": "Trois ans · La moitié du chemin, la totalité de la patience",
+      "une": {
+        "id": "es-2029-10-12",
+        "rubrique": "sparrow",
+        "tampon": "À LA UNE",
+        "titre": "Trois ans : Sparrow a dépassé la moitié. Ses potes, eux, ont dépassé le stade du foie"
+      }
     },
     {
       "date": "2030-10-12",
       "nom": "ÉDITION SPÉCIALE SPARROW · AN IV",
-      "bandeau": "Quatre ans · Les potes commencent à préparer les confettis",
-      "une": { "id": "es-2030-10-12", "rubrique": "sparrow", "tampon": "URGENT", "titre": "Plus qu'un an : Sparrow commence à faire ses valises. Il ne sait pas encore pour où" }
+      "bandeau": "Quatre ans · Les potes commencent à stocker les bouteilles",
+      "une": {
+        "id": "es-2030-10-12",
+        "rubrique": "sparrow",
+        "tampon": "URGENT",
+        "titre": "Plus qu'un an : Sparrow fait ses valises toutes les nuits et les défait le matin pour passer le temps"
+      }
     },
     {
       "date": "2031-10-12",
       "nom": "ÉDITION HISTORIQUE",
-      "bandeau": "Date symbolique atteinte · Tirage exceptionnel · Les potes en larmes (de rire)",
-      "une": { "id": "es-2031-10-12", "rubrique": "sparrow", "tampon": "EXCLUSIF", "titre": "C'est fait : après 1 826 jours, le calendrier capitule", "chapo": "Le compteur a rendu son verdict symbolique. Sparrow est libérable. La rédaction, elle, ne l'est toujours pas." }
+      "bandeau": "Date symbolique atteinte · Tirage exceptionnel · Rédaction ivre",
+      "une": {
+        "id": "es-2031-10-12",
+        "rubrique": "sparrow",
+        "tampon": "EXCLUSIF",
+        "titre": "C'EST FINI : le calendrier capitule après 1 826 jours. Sparrow est libérable, ses potes sont bourrés",
+        "chapo": "Date purement symbolique. Aucune valeur juridique, énormément de valeur alcoolique."
+      }
     }
   ]
 }

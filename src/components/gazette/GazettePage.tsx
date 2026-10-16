@@ -31,8 +31,8 @@ const VUES: { id: Vue; label: string }[] = [
   { id: "favoris", label: "Favoris" },
 ];
 
-const PRIX = ["un soupir", "deux euros et votre dignité", "un « bof »", "gratuit, comme vos opinions", "un ticket resto périmé"];
-const METEO = ["couvert", "averses de lundis", "brouillard administratif", "éclaircies passagères", "orageux en fin de mois"];
+const PRIX = ["un rein (le gauche)", "deux euros et votre dignité", "une clope", "votre âme, payable en 3 fois", "un ticket resto périmé"];
+const METEO = ["dépression sur tout le pays", "averses de lundis", "risque de pétage de câble", "gueule de bois persistante", "orageux en fin de mois"];
 
 const simulated = typeof window !== "undefined" && initClock(window.location.search);
 
@@ -122,7 +122,7 @@ export function GazettePage() {
     const next = favs.includes(id) ? favs.filter((x) => x !== id) : [id, ...favs];
     setFavs(next);
     save("sp.gazette.favs", next);
-    toast(favs.includes(id) ? "Retiré des favoris." : "Ajouté aux favoris. Votre goût est discutable.");
+    toast(favs.includes(id) ? "Retiré des favoris. Lâche." : "Ajouté aux favoris. Vous avez des goûts de chiotte, on adore.");
   };
 
   const shareTitre = async (item: Item) => {
@@ -277,7 +277,7 @@ export function GazettePage() {
             {edition.une.chapo && <p className="gz-une__chapo">{edition.une.chapo}</p>}
             <figure className="gz-photo" aria-hidden="true">
               <div className="gz-photo__img" />
-              <figcaption>Photo d&apos;illustration. Aucun rapport. Merci de votre compréhension.</figcaption>
+              <figcaption>Photo d&apos;illustration. Aucun rapport. On n&apos;avait pas le budget.</figcaption>
             </figure>
             {actions(edition.une)}
           </article>
@@ -427,7 +427,7 @@ export function GazettePage() {
       ) : vue === "archives" ? (
         <main className="gz-view">
           <h2 className="gz-viewtitle">Archives</h2>
-          <p className="gz-viewsub">Toutes les éditions parues depuis le n° 1. Rien n&apos;est jamais vraiment perdu, surtout pas la honte.</p>
+          <p className="gz-viewsub">Toutes les éditions depuis le n° 1. On n&apos;efface rien, surtout pas la honte.</p>
           <ol className="gz-arch">
             {arch.map((a) => (
               <li key={a.date}>
@@ -452,7 +452,7 @@ export function GazettePage() {
           <h2 className="gz-viewtitle">Vos favoris</h2>
           <p className="gz-viewsub">Gardés sur ce téléphone uniquement. Aucun compte, aucun espion (à part nous).</p>
           {favs.length === 0 ? (
-            <p className="gz-empty">Aucun favori. Touchez l&apos;étoile d&apos;un titre pour le conserver ici.</p>
+            <p className="gz-empty">Aucun favori. Même pas un ? Touchez l&apos;étoile d&apos;un titre, on ne jugera pas (si).</p>
           ) : (
             <ul className="gz-feed">
               {favs
@@ -477,7 +477,7 @@ export function GazettePage() {
       <footer className="gz-foot">
         <p>
           <b>La Gazette du Chaos</b> est un journal parodique réalisé entre amis. Tous les titres sont inventés, aucun ne
-          décrit un fait réel. Toute ressemblance avec la réalité serait profondément déprimante.
+          décrit un fait réel. Si ça vous rappelle quelque chose, c&apos;est votre vie qui a un problème.
         </p>
         <p className="gz-foot__small">Rédaction : le Ministère du Calendrier · Dépôt légal : jamais.</p>
       </footer>
