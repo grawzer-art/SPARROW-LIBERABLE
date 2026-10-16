@@ -21,14 +21,10 @@ export const SHORT_NAME = "SPARROW";
  * ─────────────────────────────────────────────────────────────
  *  CAISSE DE SOUTIEN AU CHEVALIER NOIR
  * ─────────────────────────────────────────────────────────────
- *  Laisser une valeur vide ("") pour masquer le bouton correspondant.
- *  - paypal    : lien complet, ex. "https://paypal.me/pseudo"
- *  - weroUrl   : lien de paiement Wero s'il existe (sinon "")
- *  - weroId    : numéro de téléphone ou e-mail Wero, copié au toucher
- *  ⚠ Ces informations sont publiques (site et dépôt GitHub publics).
+ *  paypal : lien PayPal.me (sans montant). Laisser "" pour masquer la caisse.
+ *  Le barème de /don ajoute le montant au lien (ex. …/10EUR).
+ *  ⚠ Information publique (site et dépôt GitHub publics).
  */
-export const DONATIONS: { paypal: string; weroUrl: string; weroId: string } = {
-  paypal: "",
-  weroUrl: "",
-  weroId: "0650026203",
+export const DONATIONS: { paypal: string } = {
+  paypal: "https://paypal.me/dydoududu",
 };

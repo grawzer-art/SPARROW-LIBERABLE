@@ -25,7 +25,7 @@ Application web installable (PWA) : compte à rebours cinématographique, à la 
 | Sparrowgotchi | Tamagotchi de Sparrow : 5 jauges (faim, humeur, énergie, forme, gaming), frites / salade / Dofus / repos express / rafraîchir / parler, événements aléatoires, temps réel sauvegardé sur le téléphone. Répliques dans `src/lib/gotchi/lines.ts` |
 | Salle d'arcade | Mini jeu rétro « L'Évasion de Sparrow » (page `/jeu`) : deux persos, record local, défi à partager |
 | Pièces des témoins | Les potes déposent des photos du suspect (code des potes requis), galerie + vue agrandie |
-| Don pour le Chevalier Noir | Encart + page dédiée `/don` : numéro Wero à copier, barème humoristique, QR code de la page |
+| Don pour le Chevalier Noir | Encart + page dédiée `/don` : bouton PayPal, barème humoristique (montant pré-rempli), QR code de la page |
 | Diffusion | Partage du lien, fiche image (PNG 1080×1350), QR code, instructions d'installation |
 | Grand final | Écran spécial à zéro : confettis, photo finale, verdict, partage |
 
@@ -59,7 +59,7 @@ Capsule ouverte : `/capsule?simuler=2031-10-12T00:00:05`. Autres exemples : `?si
 - **Messages** : `src/data/messages.ts` (ajouter une ligne suffit).
 - **Caps** : `src/data/milestones.ts`.
 - **Citations du jour** : `src/data/quotes.ts` (Batman) et `src/data/kaamelott.ts` (Kaamelott) — une par jour, dans l'ordre, puis la liste recommence.
-- **Liens de don** : `src/config.ts` → `DONATIONS` (`paypal`, `weroUrl`, `weroId`). Une valeur vide masque le bouton.
+- **Liens de don** : `src/config.ts` → `DONATIONS.paypal` (lien PayPal.me). Vide = caisse masquée.
   Attention : ces informations sont visibles publiquement.
 
 ## Activer le dépôt de photos par les potes (une seule fois, depuis l'iPhone)

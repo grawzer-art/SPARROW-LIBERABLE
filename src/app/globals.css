@@ -1634,6 +1634,11 @@ a {
   white-space: nowrap;
 }
 
+.wero__num--handle {
+  font-size: clamp(32px, 11vw, 60px);
+  text-transform: none;
+}
+
 .wero__who {
   margin: 0 0 16px;
   font-size: 10px;
@@ -1676,6 +1681,8 @@ a {
 }
 
 .tarif {
+  color: inherit;
+  text-decoration: none;
   display: grid;
   grid-template-columns: 74px 1fr auto;
   align-items: center;

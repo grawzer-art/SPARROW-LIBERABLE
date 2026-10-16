@@ -3,7 +3,7 @@ import { DONATIONS } from "@/config";
 
 /** Encart d'accueil vers la page /don. */
 function DonationImpl() {
-  const open = Boolean(DONATIONS.weroId || DONATIONS.weroUrl || DONATIONS.paypal);
+  const open = Boolean(DONATIONS.paypal);
   return (
     <section className="don reveal" aria-labelledby="don-title">
       <header className="section-head">
@@ -25,7 +25,7 @@ function DonationImpl() {
           <li>Soutien psychologique face au calendrier</li>
         </ul>
         <span className="btn btn--primary don__cta">Ouvrir la caisse de soutien →</span>
-        <p className="don__fine mono">Don volontaire entre potes, via Wero. Les dons ne raccourcissent pas le compteur.</p>
+        <p className="don__fine mono">Don volontaire entre potes, via PayPal. Les dons ne raccourcissent pas le compteur.</p>
       </a>
     </section>
   );
