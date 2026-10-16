@@ -1,0 +1,35 @@
+{
+  "name": "sparrow-est-liberable",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SPARROW EST LIBÉRABLE — dossier classifié, compte à rebours jusqu'au 12 octobre 2031.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "npx serve out",
+    "lint": "tsc --noEmit",
+    "test": "vitest run",
+    "assets": "node scripts/build-assets.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@fontsource/anton": "^5.3.0",
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "next": "^16.4.2",
+    "qrcode": "^1.5.4",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "opentype.js": "^2.0.0",
+    "sharp": "^0.35.5",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.5"
+  }
+}
