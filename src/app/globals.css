@@ -351,7 +351,9 @@ a {
 
 .report,
 .archives,
-.share {
+.share,
+.quote,
+.don {
   margin-top: 46px;
 }
 
@@ -1111,6 +1113,172 @@ a {
 
 .archives__dots button.on::after {
   background: var(--red);
+}
+
+/* ─── Citation du jour ─── */
+
+.quote__card {
+  position: relative;
+  margin: 0;
+  padding: 22px 16px 16px;
+  border: 1px solid var(--line-strong);
+  background: radial-gradient(ellipse at 50% 0%, rgba(241, 239, 232, 0.07), transparent 60%), var(--ink-2);
+  overflow: hidden;
+  animation: reveal 0.9s var(--ease) both;
+}
+
+.quote__signal {
+  display: block;
+  width: 96px;
+  margin: 0 auto 14px;
+}
+
+.quote__beam {
+  fill: rgba(241, 239, 232, 0.9);
+  filter: drop-shadow(0 0 14px rgba(241, 239, 232, 0.35));
+}
+
+.quote__bat {
+  fill: var(--ink);
+}
+
+.quote__text {
+  margin: 0;
+}
+
+.quote__text p {
+  margin: 0;
+  font-family: var(--display);
+  font-size: clamp(26px, 8vw, 38px);
+  line-height: 1.04;
+  text-transform: uppercase;
+  text-align: center;
+  text-wrap: balance;
+}
+
+.quote__src {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 14px;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--steel);
+}
+
+.quote__src .red {
+  font-weight: 700;
+}
+
+.quote__en {
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+  font-size: 11px;
+  font-style: italic;
+  color: var(--paper-2);
+  text-align: center;
+}
+
+.quote__note {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.quote__note b {
+  color: var(--red-deep);
+}
+
+.quote__next {
+  margin: 10px 0 0;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--steel);
+  text-align: right;
+}
+
+.quote__next b {
+  color: var(--paper);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── Don pour le Chevalier Noir ─── */
+
+.don__card {
+  position: relative;
+  padding: 16px;
+  border: 2px solid var(--paper);
+  background:
+    repeating-linear-gradient(-45deg, transparent 0 14px, rgba(229, 57, 53, 0.05) 14px 15px),
+    var(--ink-2);
+}
+
+.don__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--steel);
+  font-weight: 700;
+}
+
+.don__lead {
+  margin: 14px 0 10px;
+  font-family: var(--display);
+  font-size: 22px;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.don__list {
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: var(--paper-2);
+}
+
+.don__list li {
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--line);
+}
+
+.don__list li::before {
+  content: "▪ ";
+  color: var(--red);
+}
+
+.don__actions {
+  display: grid;
+  gap: 8px;
+}
+
+.don__actions .btn {
+  text-decoration: none;
+  min-height: 54px;
+}
+
+.don__pending {
+  margin: 0;
+  padding: 12px;
+  border: 1px dashed var(--steel);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--paper-2);
+}
+
+.don__fine {
+  margin: 14px 0 0;
+  font-size: 10.5px;
+  color: var(--steel);
 }
 
 /* ─── Boutons ─── */

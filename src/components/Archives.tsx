@@ -35,7 +35,7 @@ function ArchivesImpl() {
   return (
     <section className="archives reveal" aria-labelledby="archives-title">
       <header className="section-head">
-        <span className="section-head__num mono">04</span>
+        <span className="section-head__num mono">05</span>
         <h2 id="archives-title" className="section-head__title">Archives du suspect</h2>
         <span className="section-head__meta mono">
           {pad(active + 1)} / {pad(ARCHIVES.length)}

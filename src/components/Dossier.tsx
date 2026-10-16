@@ -9,6 +9,8 @@ import { load, save, sessionFlag } from "@/lib/storage";
 import { useNow } from "@/lib/useNow";
 import { Archives } from "./Archives";
 import { Countdown } from "./Countdown";
+import { DailyQuote } from "./DailyQuote";
+import { Donation } from "./Donation";
 import { Feed } from "./Feed";
 import { Finale } from "./Finale";
 import { Alert, Intro, MilestoneModal, Toast } from "./Overlays";
@@ -182,8 +184,10 @@ export function Dossier() {
             <Feed r={r} fx={fx} />
           </section>
 
+          <DailyQuote t={t} />
           <Report r={r} t={t} />
           <Archives />
+          <Donation toast={toast} />
           <ShareSection toast={toast} />
 
           <footer className="foot mono">

@@ -38,7 +38,7 @@ export function Report({ r, t }: { r: Remaining | null; t: number | null }) {
   return (
     <section className="report reveal" aria-labelledby="report-title">
       <header className="section-head">
-        <span className="section-head__num mono">03</span>
+        <span className="section-head__num mono">04</span>
         <h2 id="report-title" className="section-head__title">Rapport d&apos;analyse</h2>
         <span className="section-head__meta mono">CALCULÉ EN TEMPS RÉEL</span>
       </header>

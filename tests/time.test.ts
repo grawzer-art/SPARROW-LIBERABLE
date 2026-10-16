@@ -94,3 +94,18 @@ describe("cadence sans dérive", () => {
     expect(msUntilNextTick(END_MS - 2_000)).toBe(1005);
   });
 });
+
+import { parisDayIndex } from "@/lib/calendar";
+import { QUOTES } from "@/data/quotes";
+
+describe("citation du jour", () => {
+  it("change à minuit heure de Paris (pas UTC)", () => {
+    const before = zonedToUtc("2027-03-05", "23:59");
+    const after = zonedToUtc("2027-03-06", "00:00");
+    expect(parisDayIndex(after) - parisDayIndex(before)).toBe(1);
+    expect(parisDayIndex(START_MS)).toBe(0);
+  });
+  it("au moins 20 citations", () => {
+    expect(QUOTES.length).toBeGreaterThanOrEqual(20);
+  });
+});

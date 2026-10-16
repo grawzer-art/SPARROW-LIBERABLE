@@ -45,7 +45,7 @@ function ShareSectionImpl({ toast }: { toast: (m: string) => void }) {
   return (
     <section className="share reveal" aria-labelledby="share-title">
       <header className="section-head">
-        <span className="section-head__num mono">05</span>
+        <span className="section-head__num mono">07</span>
         <h2 id="share-title" className="section-head__title">Diffusion restreinte</h2>
         <span className="section-head__meta mono">ACCÈS : LES POTES</span>
       </header>

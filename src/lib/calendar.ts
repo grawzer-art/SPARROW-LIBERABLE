@@ -38,3 +38,16 @@ export function countDays(fromMs: number, toMs: number, pred: (wd: number, m: nu
   }
   return n;
 }
+
+/** Numéro de jour civil (heure de Paris) depuis le 12/10/2026 — change à minuit pile à Paris. */
+export function parisDayIndex(utcMs: number): number {
+  const p = parisParts(utcMs);
+  return Math.round((Date.UTC(p.y, p.m - 1, p.d) - Date.UTC(2026, 9, 12)) / 86_400_000);
+}
+
+/** Date civile parisienne du lendemain, au format AAAA-MM-JJ. */
+export function parisTomorrow(utcMs: number): string {
+  const p = parisParts(utcMs);
+  const d = new Date(Date.UTC(p.y, p.m - 1, p.d + 1));
+  return d.toISOString().slice(0, 10);
+}
