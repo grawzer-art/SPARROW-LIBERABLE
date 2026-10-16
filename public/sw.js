@@ -3,12 +3,13 @@
  * Fichiers statiques : cache d'abord, mis à jour en arrière-plan.
  * Changer VERSION force la purge des anciens caches.
  */
-const VERSION = "sp2031-v6";
+const VERSION = "sp2031-v7";
 const PRECACHE = [
   "/",
   "/don",
   "/jeu",
   "/capsule",
+  "/filtre",
   "/manifest.webmanifest",
   "/icons/icon-192.png",
   "/icons/apple-touch-icon.png",
@@ -60,6 +61,24 @@ self.addEventListener("fetch", (event) => {
             .then((r) => r || caches.match("/"))
             .then((r) => r || Response.error()),
         ),
+    );
+    return;
+  }
+
+  // Moteur du filtre (gros fichiers versionnés) : cache d'abord, sans re-télécharger à chaque visite.
+  if (url.pathname.startsWith("/mediapipe/")) {
+    event.respondWith(
+      caches.match(req).then(
+        (cached) =>
+          cached ||
+          fetch(req).then((res) => {
+            if (res.ok) {
+              const copy = res.clone();
+              caches.open(VERSION).then((c) => c.put(req, copy));
+            }
+            return res;
+          }),
+      ),
     );
     return;
   }
