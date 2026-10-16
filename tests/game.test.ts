@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Engine, HERO_H, KEBAB_DAYS, MAX_MASKS, PX_PER_DAY, START_DAYS } from "@/components/game/engine";
+import { Engine, HERO_H, FRITES_DAYS, MAX_MASKS, PX_PER_DAY, START_DAYS } from "@/components/game/engine";
 
 const step = (e: Engine, seconds: number) => {
   for (let t = 0; t < seconds; t += 1 / 60) e.update(1 / 60);
@@ -43,8 +43,8 @@ describe("L'Évasion de Sparrow — moteur", () => {
     const e = new Engine(200, 260);
     e.start();
     e.run = PX_PER_DAY * 100;
-    e.kebabs = 2;
-    expect(e.daysLeft).toBe(START_DAYS - 100 - 2 * KEBAB_DAYS);
+    e.frites = 2;
+    expect(e.daysLeft).toBe(START_DAYS - 100 - 2 * FRITES_DAYS);
   });
 
   it("un obstacle coûte un masque, trois chocs = game over", () => {
@@ -59,12 +59,12 @@ describe("L'Évasion de Sparrow — moteur", () => {
     expect(e.status).toBe("over");
   });
 
-  it("le kebab rapporte des jours", () => {
+  it("les frites rapportent des jours", () => {
     const e = new Engine(200, 260);
     e.start();
-    e.entities = [{ id: 1, kind: "kebab", x: e.heroX + 2, y: e.groundY - 12, w: 10, h: 9, baseY: 0, t: 0 }];
+    e.entities = [{ id: 1, kind: "frites", x: e.heroX + 2, y: e.groundY - 12, w: 10, h: 9, baseY: 0, t: 0 }];
     e.update(1 / 60);
-    expect(e.kebabs).toBe(1);
+    expect(e.frites).toBe(1);
   });
 
   it("annonce les paliers et la victoire à 0 jour", () => {
@@ -100,5 +100,36 @@ describe("L'Évasion de Sparrow — moteur", () => {
     step(e, 20);
     expect(Number.isFinite(e.distance)).toBe(true);
     expect(e.entities.length).toBeLessThan(40);
+  });
+});
+
+describe("trous entre les toits", () => {
+  it("tomber dans un trou coûte un masque et fait rebondir", () => {
+    const e = new Engine(200, 260);
+    e.start();
+    e.entities = [{ id: 9, kind: "hole", x: e.heroX - 4, y: e.groundY, w: 22, h: 30, baseY: e.groundY, t: 0 }];
+    e.speed = 0;
+    for (let i = 0; i < 30 && e.masks === 3; i++) {
+      e.entities[0].x = e.heroX - 4;
+      e.update(1 / 60);
+    }
+    expect(e.masks).toBe(2);
+    expect(e.hero.vy).toBeLessThan(0);
+  });
+});
+
+import { cleanName, plausible } from "@/lib/scores";
+
+describe("tableau des scores", () => {
+  it("nettoie les pseudos", () => {
+    expect(cleanName("  lili <script>  ")).toBe("LILI SCRIPT");
+    expect(cleanName("Étienne_42!!!")).toBe("ÉTIENNE_42");
+    expect(cleanName("a".repeat(40)).length).toBe(14);
+  });
+  it("refuse les scores impossibles", () => {
+    expect(plausible(1826, 10, 30)).toBe(false);
+    expect(plausible(300, 5, 60)).toBe(true);
+    expect(plausible(1826, 50, 260)).toBe(true);
+    expect(plausible(-1, 0, 10)).toBe(false);
   });
 });

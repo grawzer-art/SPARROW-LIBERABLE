@@ -29,6 +29,10 @@ export const PALETTE: Record<string, string> = {
   C: "#a8692e", // pain cuit
   v: "#6fae4b", // salade
   W: "#ffffff",
+  H: "#4a2a17", // carré brun (Lili)
+  G: "#6b3d22", // reflet des cheveux
+  l: "#e8a0b0", // rose (haut de Lili)
+  L: "#c46f86", // rose ombré
   o: "#777777", // acier
 };
 
@@ -106,9 +110,83 @@ const BODY_HURT = [
   "..kk....kk....",
 ];
 
-export type Skin = "lunettes" | "masque";
+// ─── Lili : carré brun avec frange (14 × 20) ───
+const HEAD_LILI = [
+  "...HHHHHH.....",
+  "..HHGHHHHHH...",
+  ".HHHHHHHHHHH..",
+  ".HHHHHHHHHHH..",
+  ".HHssssssHHH..",
+  ".HHsKssKssHH..",
+  ".HHsKssKssHH..",
+  ".HHssssssSHH..",
+  ".HHsssrrsSHH..",
+  ".HHHssssSHHH..",
+  ".HHH.ssss.HH..",
+  "......ss......",
+];
+
+const LILI_RUN_A = [
+  "...llllll.....",
+  "..llllllls....",
+  "..lLllllLs....",
+  "..lllllll.....",
+  "..LLLLLLL.....",
+  "...pppppp.....",
+  "..ppp..ppp....",
+  ".kkk....kkk...",
+];
+
+const LILI_RUN_B = [
+  "...llllll.....",
+  "..slllllll....",
+  "..slLlllLl....",
+  "...lllllll....",
+  "...LLLLLLL....",
+  "...pppppp.....",
+  "....pppp......",
+  "....kkkk......",
+];
+
+const LILI_JUMP = [
+  "..llllllls....",
+  ".slllllll.....",
+  "..lLllllL.....",
+  "..lllllll.....",
+  "..LLLLLLL.....",
+  "..pppppppp....",
+  ".pp......pp...",
+  "kk........kk..",
+];
+
+const LILI_HURT = [
+  ".sllllllls....",
+  "..lllllll.....",
+  "..lLllllL.....",
+  "..lllllll.....",
+  "..LLLLLLL.....",
+  "...pppppp.....",
+  "...pp..pp.....",
+  "..kk....kk....",
+];
+
+export type Skin = "lunettes" | "masque" | "lili";
+
+export const SKIN_NAMES: Record<Skin, string> = {
+  lunettes: "SPARROW",
+  masque: "CHEVALIER NOIR",
+  lili: "LILI",
+};
 
 export function heroFrames(skin: Skin) {
+  if (skin === "lili") {
+    return {
+      runA: [...HEAD_LILI, ...LILI_RUN_A],
+      runB: [...HEAD_LILI, ...LILI_RUN_B],
+      jump: [...HEAD_LILI, ...LILI_JUMP],
+      hurt: [...HEAD_LILI, ...LILI_HURT],
+    };
+  }
   const head = skin === "masque" ? HEAD_MASK : HEAD_GLASSES;
   return {
     runA: [...head, ...BODY_RUN_A],
@@ -117,6 +195,9 @@ export function heroFrames(skin: Skin) {
     hurt: [...head, ...BODY_HURT],
   };
 }
+
+/** Qui court après qui : Lili poursuit Sparrow, et inversement. */
+export const chaserOf = (skin: Skin): Skin => (skin === "lili" ? "lunettes" : "lili");
 
 // ─── Obstacles ───
 export const CALENDAR = [
@@ -174,16 +255,16 @@ export const MONDAY_B = [
 ];
 
 // ─── Bonus ───
-export const KEBAB = [
-  "....cc....",
-  "...cCCc...",
-  "..cvPrvc..",
-  "..cPrvPc..",
-  "..cvPPrc..",
-  "...cPvc...",
-  "...cCCc...",
-  "....PP....",
-  "....PP....",
+export const FRITES = [
+  "..y.y.y...",
+  ".yy.yyyy..",
+  ".yyyyyyy..",
+  ".yYyyYyy..",
+  "rrrrrrrrr.",
+  "rRPPPPPRr.",
+  ".rRPPPRr..",
+  ".rrrrrrr..",
+  "..rrrrr...",
 ];
 
 export const MASK_ITEM = [
@@ -206,45 +287,6 @@ export const HOURGLASS = [
   ".y....y.",
   ".yyyyyy.",
   "YYYYYYYY",
-];
-
-/** Agent du Ministère du Calendrier (poursuivant), 12 × 18. */
-export const AGENT_A = [
-  "...KKKKKK...",
-  "..KKKKKKKK..",
-  "KKKKKKKKKKKK",
-  "...ssssss...",
-  "...sggggs...",
-  "...ssssss...",
-  "....ssss....",
-  "..KKKKKKKK..",
-  ".KKKKWWKKKK.",
-  ".KKKKrrKKKK.",
-  ".sKKKrrKKKs.",
-  "..KKKKKKKK..",
-  "..KKKKKKKK..",
-  "...KK..KK...",
-  "...KK..KK...",
-  "..KKK..KKK..",
-];
-
-export const AGENT_B = [
-  "...KKKKKK...",
-  "..KKKKKKKK..",
-  "KKKKKKKKKKKK",
-  "...ssssss...",
-  "...sggggs...",
-  "...ssssss...",
-  "....ssss....",
-  "..KKKKKKKK..",
-  ".KKKKWWKKKK.",
-  "sKKKKrrKKKKs",
-  "..KKKrrKKK..",
-  "..KKKKKKKK..",
-  "..KKKKKKKK..",
-  "....KKKK....",
-  "....KKKK....",
-  "...KKKKKK...",
 ];
 
 /** Rendu d'un sprite texte dans un canvas hors écran (1 caractère = 1 pixel). */

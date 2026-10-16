@@ -34,8 +34,12 @@ Application web installable (PWA) : compte à rebours cinématographique, à la 
 
 ### L'Évasion de Sparrow (`/jeu`)
 Jeu de course 8-bit sur les toits de Gotham. Toucher = sauter (double saut possible).
-Calendriers, horloges et lundis volants coûtent un masque (3 vies) ; l'agent du Ministère se rapproche à chaque choc.
-Kebab = −5 jours, masque = +1 vie, sablier = ralenti. But : faire tomber le compteur de 1 826 à 0 (≈ 5 min sans faute).
+Trois persos : Sparrow, Chevalier Noir, ou Lili (et c'est alors Sparrow qui lui court après).
+Calendriers, horloges, lundis volants et trous entre les toits coûtent une vie (3 vies) ; le poursuivant se rapproche à chaque choc.
+Frites = −5 jours, masque = +1 vie, sablier = ralenti. But : faire tomber le compteur de 1 826 à 0.
+Classement : en fin de partie, chacun inscrit son pseudo. Classement partagé entre potes dès que le stockage
+Vercel Blob est connecté (sinon classement local au téléphone). Supprimer un joueur : `DELETE /api/scores`
+avec l'en-tête `x-code: <ADMIN_CODE>` et `{ "name": "PSEUDO" }`.
 Code : `src/components/game/` (moteur testé dans `tests/game.test.ts`, sprites en texte dans `sprites.ts`).
 
 ### Tester le final sans attendre 5 ans

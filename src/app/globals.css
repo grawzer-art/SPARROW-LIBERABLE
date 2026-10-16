@@ -1968,7 +1968,7 @@ a {
 
 .arcade__overlay--title,
 .arcade__overlay--end {
-  background: rgba(5, 5, 7, 0.78);
+  background: rgba(5, 5, 7, 0.88);
 }
 
 .arcade__overlay--end.is-won {
@@ -2021,15 +2021,16 @@ a {
 
 .skins {
   display: flex;
-  gap: 10px;
-  margin: 6px 0;
+  gap: 8px;
+  margin: 6px 0 0;
 }
 
 .skin {
   display: grid;
   justify-items: center;
   gap: 6px;
-  padding: 10px 12px 8px;
+  padding: 8px 8px 6px;
+  min-width: 92px;
   border: 2px solid var(--line-strong);
   background: #3a3a3a;
   font-size: 9.5px;
@@ -2042,6 +2043,112 @@ a {
   border-color: var(--red);
   color: var(--paper);
   box-shadow: 0 0 20px -4px rgba(229, 57, 53, 0.7);
+}
+
+.arcade__hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--paper-2);
+}
+
+.lb {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  width: min(100%, 360px);
+  border-top: 1px solid var(--line);
+  text-align: left;
+}
+
+.lb li {
+  display: grid;
+  grid-template-columns: 30px 1fr auto auto;
+  gap: 8px;
+  align-items: baseline;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12.5px;
+}
+
+.lb li.me {
+  background: rgba(229, 57, 53, 0.18);
+}
+
+.lb__rank {
+  color: var(--red);
+  font-weight: 700;
+}
+
+.lb__name {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lb__skin {
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--steel);
+}
+
+.lb__days {
+  font-family: var(--display);
+  font-size: 18px;
+  color: #f2c14e;
+}
+
+.lb__empty,
+.lb__note {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--steel);
+}
+
+.lb__form {
+  display: grid;
+  gap: 6px;
+  width: min(100%, 360px);
+  margin-top: 4px;
+}
+
+.lb__form label {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  font-weight: 700;
+  color: #f2c14e;
+}
+
+.lb__row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.lb__row input {
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 12px;
+  border: 2px solid var(--line-strong);
+  border-radius: 0;
+  background: #000;
+  color: var(--paper);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.lb__wrap {
+  width: min(100%, 360px);
+}
+
+.lb__me {
+  margin: 4px 0;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  font-weight: 700;
+  color: #f2c14e;
 }
 
 .arcade__start {

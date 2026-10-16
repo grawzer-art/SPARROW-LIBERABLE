@@ -1,20 +1,20 @@
 import { Engine, HERO_H, type Entity } from "./engine";
 import {
-  AGENT_A,
-  AGENT_B,
   CALENDAR,
   CLOCK,
+  FRITES,
   HOURGLASS,
-  KEBAB,
   MASK_ITEM,
   MONDAY_A,
   MONDAY_B,
   bake,
+  chaserOf,
   heroFrames,
   type Skin,
 } from "./sprites";
 
 type Baked = HTMLCanvasElement;
+type Frames = Record<"runA" | "runB" | "jump" | "hurt", Baked>;
 
 interface Particle {
   x: number;
@@ -33,7 +33,7 @@ interface Float {
   color: string;
 }
 
-// Mini police bitmap 3×5 pour les « +5 J » flottants.
+// Mini police bitmap 3×5 (chiffres, quelques lettres).
 const GLYPHS: Record<string, string[]> = {
   "0": ["111", "101", "101", "101", "111"],
   "1": ["010", "110", "010", "010", "111"],
@@ -47,20 +47,36 @@ const GLYPHS: Record<string, string[]> = {
   "9": ["111", "101", "111", "001", "111"],
   "+": ["000", "010", "111", "010", "000"],
   "-": ["000", "000", "111", "000", "000"],
+  A: ["010", "101", "111", "101", "101"],
+  E: ["111", "100", "110", "100", "111"],
+  F: ["111", "100", "110", "100", "100"],
+  I: ["111", "010", "010", "010", "111"],
   J: ["001", "001", "001", "101", "111"],
+  L: ["100", "100", "100", "100", "111"],
+  N: ["101", "111", "111", "101", "101"],
+  O: ["111", "101", "101", "101", "111"],
+  R: ["110", "101", "110", "101", "101"],
+  S: ["011", "100", "010", "001", "110"],
+  T: ["111", "010", "010", "010", "010"],
+  U: ["101", "101", "101", "101", "111"],
+  V: ["101", "101", "101", "101", "010"],
   X: ["101", "101", "010", "101", "101"],
   " ": ["000", "000", "000", "000", "000"],
 };
 
-function pixelText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, color: string) {
+function pixelText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, color: string, step = 1) {
   ctx.fillStyle = color;
   let cx = x;
   for (const ch of text) {
     const g = GLYPHS[ch] ?? GLYPHS[" "];
-    g.forEach((row, yy) => [...row].forEach((v, xx) => v === "1" && ctx.fillRect(cx + xx, y + yy, 1, 1)));
-    cx += 4;
+    g.forEach((row, yy) =>
+      [...row].forEach((v, xx) => v === "1" && ctx.fillRect(cx + xx * step, y + yy * step, 1, 1)),
+    );
+    cx += 4 * step;
   }
 }
+
+const textWidth = (t: string, step = 1) => t.length * 4 * step - step;
 
 /** Générateur pseudo-aléatoire déterministe (le décor ne « saute » pas d'une image à l'autre). */
 function hash(n: number) {
@@ -68,8 +84,17 @@ function hash(n: number) {
   return s - Math.floor(s);
 }
 
+const framesFor = (skin: Skin): Frames => {
+  const f = heroFrames(skin);
+  return { runA: bake(f.runA), runB: bake(f.runB), jump: bake(f.jump), hurt: bake(f.hurt) };
+};
+
+const SECRET = "LILI REVIENS";
+const URSSAF_SIGNS = ["URSSAF", "URSSAF", "URSSAF TE VOIT"];
+
 export class Renderer {
-  private hero: Record<"runA" | "runB" | "jump" | "hurt", Baked>;
+  private hero!: Frames;
+  private chaser!: Frames;
   private sprites: Record<string, Baked>;
   private particles: Particle[] = [];
   private floats: Float[] = [];
@@ -78,25 +103,22 @@ export class Renderer {
   private stars: { x: number; y: number; b: number }[] = [];
 
   constructor(skin: Skin) {
-    const f = heroFrames(skin);
-    this.hero = { runA: bake(f.runA), runB: bake(f.runB), jump: bake(f.jump), hurt: bake(f.hurt) };
+    this.setSkin(skin);
     this.sprites = {
       calendar: bake(CALENDAR),
       clock: bake(CLOCK),
       mondayA: bake(MONDAY_A),
       mondayB: bake(MONDAY_B),
-      kebab: bake(KEBAB),
+      frites: bake(FRITES),
       mask: bake(MASK_ITEM),
       hourglass: bake(HOURGLASS),
-      agentA: bake(AGENT_A),
-      agentB: bake(AGENT_B),
     };
     for (let i = 0; i < 60; i++) this.stars.push({ x: hash(i) * 1000, y: hash(i + 99) * 0.55, b: hash(i + 7) });
   }
 
   setSkin(skin: Skin) {
-    const f = heroFrames(skin);
-    this.hero = { runA: bake(f.runA), runB: bake(f.runB), jump: bake(f.jump), hurt: bake(f.hurt) };
+    this.hero = framesFor(skin);
+    this.chaser = framesFor(chaserOf(skin));
   }
 
   burst(x: number, y: number, color: string, n = 10) {
@@ -126,7 +148,7 @@ export class Renderer {
       ctx.translate(Math.round((Math.random() - 0.5) * 4), Math.round((Math.random() - 0.5) * 3));
     }
 
-    // Ciel
+    // Ciel étoilé
     ctx.fillStyle = "#090909";
     ctx.fillRect(-4, -4, W + 8, H + 8);
     const d = e.distance;
@@ -134,6 +156,18 @@ export class Renderer {
       const x = Math.floor((((s.x - d * 0.02) % W) + W) % W);
       ctx.fillStyle = s.b > 0.8 ? "#f1efe8" : "#4a4a4a";
       ctx.fillRect(x, Math.floor(s.y * groundY), 1, 1);
+    }
+
+    // Message caché dans les étoiles, très discret, qui passe lentement.
+    {
+      const step = 2;
+      const tw = textWidth(SECRET, step);
+      const period = tw + W * 2.2;
+      const sx = Math.round(W - ((d * 0.05) % period));
+      if (sx < W && sx > -tw) {
+        const twinkle = 0.22 + 0.1 * Math.sin(e.time * 2);
+        pixelText(ctx, SECRET, sx, Math.round(groundY * 0.12), `rgba(241,239,232,${twinkle})`, step);
+      }
     }
 
     // Lune
@@ -148,7 +182,7 @@ export class Renderer {
     ctx.arc(mx + 4, my - 3, 8, 0, Math.PI * 2);
     ctx.fill();
 
-    // Bat-signal : faisceau + ellipse + chauve-souris
+    // Bat-signal
     const sx = W * 0.42 + Math.sin(e.time * 0.4) * 10;
     const sy = Math.round(Math.max(44, groundY * 0.18));
     ctx.fillStyle = "rgba(241,239,232,0.05)";
@@ -168,38 +202,43 @@ export class Renderer {
       [...row].forEach((c, xx) => c === "k" && ctx.fillRect(Math.round(sx - 4 + xx), sy - 2 + yy, 1, 1)),
     );
 
-    // Gratte-ciel lointains
+    // Gratte-ciel lointains, puis immeubles avec fenêtres et panneaux URSSAF
     this.skyline(ctx, W, groundY, d * 0.15, 0, "#121212", 24, 0.55);
-    // Immeubles intermédiaires avec fenêtres
     this.skyline(ctx, W, groundY, d * 0.4, 500, "#1b1b1b", 30, 0.38, true);
 
-    // Toit (sol)
-    ctx.fillStyle = "#202020";
-    ctx.fillRect(-4, groundY, W + 8, H - groundY + 4);
-    ctx.fillStyle = "#3d3d3d";
-    ctx.fillRect(-4, groundY, W + 8, 1);
+    // Toit (sol), avec les trous découpés
+    const holes = e.entities.filter((en) => en.kind === "hole");
+    const groundSpan = (x0: number, x1: number) => {
+      ctx.fillStyle = "#202020";
+      ctx.fillRect(x0, groundY, x1 - x0, H - groundY + 4);
+      ctx.fillStyle = "#3d3d3d";
+      ctx.fillRect(x0, groundY, x1 - x0, 1);
+    };
+    let cursor = -4;
+    for (const hl of holes.sort((a, b) => a.x - b.x)) {
+      const hx = Math.round(hl.x);
+      if (hx > cursor) groundSpan(cursor, hx);
+      // bords du vide
+      ctx.fillStyle = "#e53935";
+      ctx.fillRect(hx - 1, groundY, 1, 3);
+      ctx.fillRect(hx + hl.w, groundY, 1, 3);
+      cursor = Math.max(cursor, hx + hl.w);
+    }
+    if (cursor < W + 4) groundSpan(cursor, W + 4);
     ctx.fillStyle = "#2b2b2b";
     const off = Math.floor(d) % 24;
-    for (let x = -off; x < W; x += 24) ctx.fillRect(x, groundY + 4, 12, 1);
-    // Détails de toit : ventilations et antennes
-    for (let i = Math.floor(d / 140) - 1; i < Math.floor((d + W) / 140) + 1; i++) {
-      const x = Math.round(i * 140 - d + hash(i) * 60);
-      if (hash(i + 3) > 0.5) {
-        ctx.fillStyle = "#2c2c2c";
-        ctx.fillRect(x, groundY + 7, 10, 5);
-        ctx.fillStyle = "#3a3a3a";
-        ctx.fillRect(x + 1, groundY + 8, 8, 1);
-      }
+    for (let x = -off; x < W; x += 24) {
+      if (!holes.some((hl) => x + 12 > hl.x && x < hl.x + hl.w)) ctx.fillRect(x, groundY + 4, 12, 1);
     }
 
     // Entités
-    for (const en of e.entities) this.entity(ctx, en, e.time);
+    for (const en of e.entities) if (en.kind !== "hole") this.entity(ctx, en, e.time);
 
-    // Agent du Ministère : se rapproche à chaque choc
-    const gap = e.status === "over" ? e.heroX - 12 : [-30, 20, 6, -30][e.masks] ?? -30;
+    // Poursuivant(e) : se rapproche à chaque choc
+    const gap = e.status === "over" ? e.heroX - 12 : [-30, 18, 4, -30][e.masks] ?? -30;
     if (gap > -20) {
-      const frame = Math.floor(e.time * 8) % 2 ? this.sprites.agentA : this.sprites.agentB;
-      ctx.drawImage(frame, Math.round(gap), groundY - 16);
+      const img = Math.floor(e.time * 9) % 2 ? this.chaser.runA : this.chaser.runB;
+      ctx.drawImage(img, Math.round(gap), groundY - HERO_H);
     }
 
     // Héros
@@ -209,15 +248,17 @@ export class Renderer {
       let img = this.hero.runA;
       if (h.hurtT > 0 || e.status === "over") img = this.hero.hurt;
       else if (!h.onGround) img = this.hero.jump;
-      else if (e.status === "running") img = Math.floor(e.time * (6 + e.speed / 30)) % 2 ? this.hero.runA : this.hero.runB;
+      else if (e.status === "running")
+        img = Math.floor(e.time * (6 + e.speed / 30)) % 2 ? this.hero.runA : this.hero.runB;
       ctx.drawImage(img, e.heroX, Math.round(h.y));
     }
-    // Ombre
-    ctx.fillStyle = "rgba(0,0,0,0.5)";
-    const air = Math.max(0, groundY - HERO_H - h.y);
-    ctx.fillRect(e.heroX + 3 + Math.min(3, air / 15), groundY, Math.max(4, 9 - air / 10), 1);
+    if (h.y <= groundY - HERO_H + 1) {
+      ctx.fillStyle = "rgba(0,0,0,0.5)";
+      const air = Math.max(0, groundY - HERO_H - h.y);
+      ctx.fillRect(e.heroX + 3 + Math.min(3, air / 15), groundY, Math.max(4, 9 - air / 10), 1);
+    }
 
-    // Particules
+    // Particules et textes flottants
     for (const p of this.particles) {
       p.life -= dt;
       p.vy += 160 * dt;
@@ -234,7 +275,6 @@ export class Renderer {
     }
     this.floats = this.floats.filter((f) => f.life > 0);
 
-    // Ralenti : voile doré
     if (e.slowT > 0) {
       ctx.fillStyle = `rgba(242,193,78,${0.06 + 0.03 * Math.sin(e.time * 10)})`;
       ctx.fillRect(-4, -4, W + 8, H + 8);
@@ -261,7 +301,6 @@ export class Renderer {
         break;
       case "clock": {
         ctx.drawImage(this.sprites.clock, x, y);
-        // aiguille qui tourne
         const a = t * 4;
         ctx.fillStyle = "#e53935";
         ctx.fillRect(Math.round(x + 6 + Math.cos(a) * 3), Math.round(y + 5 + Math.sin(a) * 3), 1, 1);
@@ -290,7 +329,7 @@ export class Renderer {
     color: string,
     unit: number,
     maxRatio: number,
-    windows = false,
+    detailed = false,
   ) {
     const first = Math.floor(scroll / unit) - 1;
     const last = Math.floor((scroll + W) / unit) + 1;
@@ -302,7 +341,7 @@ export class Renderer {
       ctx.fillStyle = color;
       ctx.fillRect(x, top, bw, bh);
       if (hash(i + seed + 11) > 0.7) ctx.fillRect(x + Math.floor(bw / 2), top - 6, 1, 6); // antenne
-      if (!windows) continue;
+      if (!detailed) continue;
       for (let wy = top + 4; wy < groundY - 4; wy += 5) {
         for (let wx = x + 3; wx < x + bw - 3; wx += 4) {
           const v = hash((wx - x) * 7 + (wy - top) * 13 + i * 31);
@@ -311,6 +350,22 @@ export class Renderer {
             ctx.fillRect(wx, wy, 2, 2);
           }
         }
+      }
+      // Panneau publicitaire URSSAF sur certains toits
+      if (hash(i * 5 + 77) > 0.8) {
+        const label = URSSAF_SIGNS[Math.floor(hash(i + 3) * URSSAF_SIGNS.length)];
+        const tw = textWidth(label);
+        const pw = tw + 6;
+        const px = x + Math.round((bw - pw) / 2);
+        const py = top - 14;
+        ctx.fillStyle = "#2a2a2a";
+        ctx.fillRect(px + 3, py + 9, 1, 5);
+        ctx.fillRect(px + pw - 4, py + 9, 1, 5);
+        ctx.fillStyle = "#1d3f8f";
+        ctx.fillRect(px, py, pw, 9);
+        ctx.fillStyle = "#3d64c4";
+        ctx.fillRect(px, py, pw, 1);
+        pixelText(ctx, label, px + 3, py + 2, "#e8e6df");
       }
     }
   }
