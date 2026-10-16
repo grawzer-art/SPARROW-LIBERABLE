@@ -6,23 +6,23 @@ import { DONATIONS } from "@/config";
 import { BatSignal } from "./DailyQuote";
 import { Toast } from "./Overlays";
 
-const TARIFS = [
-  { eur: "2 €", label: "Un café de patience", note: "Effet estimé : 4 minutes de calme." },
-  { eur: "5 €", label: "Recharge de moral", note: "Valable jusqu'au prochain lundi." },
-  { eur: "10 €", label: "Kebab de soutien", note: "Sauce blanche comprise. Oignons négociables." },
-  { eur: "20 €", label: "Entretien du masque", note: "Le latex ne se lave pas tout seul." },
-  { eur: "50 €", label: "Carburant de la Batmobile", note: "Trottinette électrique, batterie fatiguée." },
+const TARIFS: { eur: string; amount?: number; label: string; note: string }[] = [
+  { eur: "2 €", amount: 2, label: "Un café de patience", note: "Effet estimé : 4 minutes de calme." },
+  { eur: "5 €", amount: 5, label: "Recharge de moral", note: "Valable jusqu'au prochain lundi." },
+  { eur: "10 €", amount: 10, label: "Kebab de soutien", note: "Sauce blanche comprise. Oignons négociables." },
+  { eur: "20 €", amount: 20, label: "Entretien du masque", note: "Le latex ne se lave pas tout seul." },
+  { eur: "50 €", amount: 50, label: "Carburant de la Batmobile", note: "Trottinette électrique, batterie fatiguée." },
   { eur: "?? €", label: "Montant libre", note: "Le Chevalier Noir ne juge pas. Le calendrier, si." },
 ];
 
-/** 0650026203 → 06 50 02 62 03 */
-const formatPhone = (s: string) => (/^0\d{9}$/.test(s) ? s.replace(/(\d{2})(?=\d)/g, "$1 ") : s);
+/** Lien PayPal.me, avec montant prérempli si fourni. */
+const paypalLink = (base: string, amount?: number) => (amount ? `${base.replace(/\/$/, "")}/${amount}EUR` : base);
 
 export function DonPage() {
-  const { weroId, weroUrl, paypal } = DONATIONS;
+  const { paypal } = DONATIONS;
+  const handle = paypal.replace(/^https?:\/\/(www\.)?paypal\.me\//i, "").replace(/\/$/, "");
   const [toastText, setToastText] = useState<string | null>(null);
   const [qr, setQr] = useState("");
-  const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const toast = useCallback((m: string) => {
@@ -41,22 +41,6 @@ export function DonPage() {
       .then(setQr)
       .catch(() => setQr(""));
   }, []);
-
-  const copy = async (amount?: string) => {
-    try {
-      await navigator.clipboard.writeText(weroId);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-      toast(
-        amount
-          ? `Numéro copié. Montant retenu : ${amount}. Direction l'appli Wero.`
-          : "Numéro copié. Ouvrez Wero → Envoyer → collez le numéro.",
-      );
-    } catch {
-      toast(`Numéro Wero : ${formatPhone(weroId)}`);
-    }
-    navigator.vibrate?.(30);
-  };
 
   const share = async () => {
     const url = `${window.location.origin}/don`;
@@ -102,49 +86,42 @@ export function DonPage() {
           Gotham ne se protège pas toute seule. Le masque s&apos;use, la cape se froisse, et le moral se négocie au kebab.
         </p>
 
-        {weroId && (
-          <section className="wero reveal" style={{ ["--d" as string]: "0.5s" }} aria-labelledby="wero-title">
+        {paypal && (
+          <section className="wero reveal" style={{ ["--d" as string]: "0.5s" }} aria-labelledby="pp-title">
             <div className="wero__head mono">
-              <span id="wero-title">COORDONNÉES WERO</span>
+              <span id="pp-title">COORDONNÉES PAYPAL</span>
               <span className="red">● ACTIF</span>
             </div>
-            <button type="button" className="wero__num" onClick={() => copy()} aria-label={`Copier le numéro ${formatPhone(weroId)}`}>
-              {formatPhone(weroId)}
-            </button>
+            <p className="wero__num wero__num--handle">@{handle}</p>
             <p className="wero__who mono">BÉNÉFICIAIRE : LE CHEVALIER NOIR (ALIAS SPARROW)</p>
-            <button type="button" className="btn btn--primary wero__copy" onClick={() => copy()}>
-              {copied ? "✓ Numéro copié" : "Copier le numéro"}
-            </button>
-            {weroUrl && (
-              <a className="btn wero__copy" href={weroUrl} target="_blank" rel="noopener noreferrer">
-                Ouvrir le lien Wero
-              </a>
-            )}
+            <a className="btn btn--primary wero__copy" href={paypal} target="_blank" rel="noopener noreferrer">
+              Donner via PayPal
+            </a>
             <ol className="install__steps mono wero__steps">
-              <li><span>Copier le numéro ci-dessus.</span></li>
-              <li><span>Ouvrir l&apos;appli de <b>votre banque</b> (ou l&apos;appli <b>Wero</b>).</span></li>
-              <li><span>Aller dans <b>Wero → Envoyer</b>, coller le numéro.</span></li>
-              <li><span>Choisir un montant du barème ci-dessous. Valider. Ressentir de la fierté.</span></li>
+              <li><span>Toucher <b>Donner via PayPal</b>, ou un montant du barème ci-dessous.</span></li>
+              <li><span>PayPal s&apos;ouvre (appli ou site), montant déjà rempli.</span></li>
+              <li><span>Choisir <b>« Entre proches »</b> pour éviter les frais.</span></li>
+              <li><span>Valider. Ressentir de la fierté.</span></li>
             </ol>
           </section>
-        )}
-
-        {paypal && (
-          <a className="btn btn--primary donp__paypal reveal" href={paypal} target="_blank" rel="noopener noreferrer">
-            Donner via PayPal
-          </a>
         )}
 
         <section className="tarifs reveal" aria-labelledby="tarifs-title">
           <header className="section-head">
             <span className="section-head__num mono">B</span>
             <h2 id="tarifs-title" className="section-head__title">Barème officiel</h2>
-            <span className="section-head__meta mono">TOUCHER = COPIER</span>
+            <span className="section-head__meta mono">TOUCHER = PAYER</span>
           </header>
           <ul className="tarifs__list">
             {TARIFS.map((t) => (
               <li key={t.eur}>
-                <button type="button" className="tarif" onClick={() => copy(t.eur)} disabled={!weroId}>
+                <a
+                  className="tarif"
+                  href={paypalLink(paypal, t.amount)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => toast(t.amount ? `Direction PayPal : ${t.eur} pré-remplis. Merci pour Gotham.` : "Direction PayPal. Le montant, c'est toi qui vois.")}
+                >
                   <span className="tarif__eur">{t.eur}</span>
                   <span className="tarif__txt">
                     <b>{t.label}</b>
@@ -153,7 +130,7 @@ export function DonPage() {
                   <span className="tarif__go mono" aria-hidden="true">
                     →
                   </span>
-                </button>
+                </a>
               </li>
             ))}
           </ul>
@@ -174,7 +151,7 @@ export function DonPage() {
 
         <footer className="foot mono">
           <p>
-            Don 100 % volontaire, entre potes. Le paiement se fait dans votre appli bancaire via Wero : cette page ne collecte
+            Don 100 % volontaire, entre potes. Le paiement se fait chez PayPal : cette page ne collecte
             aucune donnée et ne voit passer aucun euro.
           </p>
           <p>Montant collecté : information classifiée. Rappel : les dons ne raccourcissent pas le compteur. Nous avons vérifié.</p>
