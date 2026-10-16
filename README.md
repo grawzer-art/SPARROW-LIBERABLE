@@ -21,6 +21,8 @@ Application web installable (PWA) : compte à rebours cinématographique, à la 
 | Archives du suspect | Galerie tactile avec légendes, emplacements réservés |
 | Capsule 2031 | Onglet dédié `/capsule` : coffre-fort animé, scanner biométrique, lettres au Sparrow de 2031 (stockage local + sauvegardes), archives annuelles 2027 → 2031. Voir `docs/CAPSULE.md` |
 | Filtre Sparrow | Onglet `/filtre` : masque du Chevalier Noir + barbe rousse en direct (caméra ou photo importée), plusieurs visages, photo-affiche à partager. Détection du visage dans le téléphone (MediaPipe, hébergé dans `public/mediapipe`) |
+| Onglet JEU | Écran de choix `/jeu` : L'Évasion de Sparrow (`/jeu/evasion`) ou le Sparrowgotchi (`/jeu/sparrowgotchi`) |
+| Sparrowgotchi | Tamagotchi de Sparrow : 5 jauges (faim, humeur, énergie, forme, gaming), frites / salade / Dofus / repos express / rafraîchir / parler, événements aléatoires, temps réel sauvegardé sur le téléphone. Répliques dans `src/lib/gotchi/lines.ts` |
 | Salle d'arcade | Mini jeu rétro « L'Évasion de Sparrow » (page `/jeu`) : deux persos, record local, défi à partager |
 | Pièces des témoins | Les potes déposent des photos du suspect (code des potes requis), galerie + vue agrandie |
 | Don pour le Chevalier Noir | Encart + page dédiée `/don` : numéro Wero à copier, barème humoristique, QR code de la page |
