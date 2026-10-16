@@ -462,7 +462,7 @@ export function cacheSpot(s: State, now: number, worldW: number): { x: number; y
   const day = parisDay(now);
   if (s.cacheDay === day) return null;
   const r = seeded(`cache:${day}`);
-  return { x: 8 + Math.floor(r() * (worldW - 16)), y: 46 + Math.floor(r() * 10) };
+  return { x: 8 + Math.floor(r() * (worldW - 16)), y: 53 + Math.floor(r() * 8) };
 }
 
 export function findCache(s0: State, now: number, rand: Rand = Math.random): Result | null {

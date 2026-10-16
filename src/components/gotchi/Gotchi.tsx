@@ -32,15 +32,22 @@ import {
   type State,
 } from "@/lib/gotchi/engine";
 import { ITEMS, titleFor, xpToNext, type Slot } from "@/lib/gotchi/items";
+import { playLine, roomLine, type PlayLine } from "@/lib/gotchi/dialogue";
 import { missionDef } from "@/lib/gotchi/missions";
+import { restorePos, type Interactable, type ObjectId } from "@/lib/gotchi/room";
 import { load, save } from "@/lib/storage";
 import { Chiptune } from "../game/audio";
 import { Toast } from "../Overlays";
 import { FarmGame, type FarmSummary } from "./FarmGame";
+import { Joystick } from "./Joystick";
 import { ROOMS, VIEW_H, VIEW_W, World, WORLD_W, type Activity } from "./world";
 
 const KEY = "sp.gotchi.v1"; // même clé qu'en v1 : la progression existante est migrée, jamais effacée
 const SOUND_KEY = "sp.gotchi.sound";
+const POS_KEY = "sp.gotchi.pos";
+
+/** Objets qui déclenchent une vraie action du jeu. */
+const OBJ_ACTION: Partial<Record<ObjectId, Action>> = { friteuse: "frites", table: "salade", canape: "sieste", douche: "douche" };
 
 const ACTIONS: { id: Action; icon: string; label: string }[] = [
   { id: "frites", icon: "🍟", label: "Frites" },
@@ -112,6 +119,8 @@ export function Gotchi() {
   const [farming, setFarming] = useState(false);
   const [room, setRoom] = useState(2);
   const [legend, setLegend] = useState(false);
+  const [near, setNear] = useState<Interactable | "cache" | null>(null);
+  const playStats = useRef({ bumps: 0, walked: 0, rooms: new Set<number>(), manual: false, lastLine: 0 });
 
   const toast = useCallback((m: string) => {
     setToastText(m);
@@ -170,7 +179,7 @@ export function Gotchi() {
   // Chargement + rattrapage du temps passé (migration v1 → v2 transparente)
   useEffect(() => {
     reduced.current = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-    world.current = new World();
+    world.current = new World(restorePos(load<unknown>(POS_KEY, null)));
     const t = Date.now();
     const raw = load<unknown>(KEY, null);
     const before = raw ? restore(raw, t) : newState(t);
@@ -210,11 +219,29 @@ export function Gotchi() {
       } else commit(ensureMissions(tick(s, t), t));
       const w = world.current;
       if (w) setRoom(w.room);
-      if (queue.current.length && w && !w.busy && t - lastSay.current > 4500) perform(queue.current.shift()!);
+      if (queue.current.length && w && !w.busy && !w.manual && t - lastSay.current > 4500) perform(queue.current.shift()!);
+      if (w) {
+        save(POS_KEY, w.pos);
+        // Répliques selon ce que fait vraiment le joueur (rythme limité).
+        const ps = playStats.current;
+        let kind: PlayLine | "room" | null = null;
+        if (w.manual && !ps.manual) kind = "start";
+        else if (w.bumps - ps.bumps >= 2) kind = "bump";
+        else if (w.walked - ps.walked > 700) kind = "long";
+        else if (w.manual && !ps.rooms.has(w.room)) kind = "room";
+        ps.manual = w.manual;
+        if (w.manual) ps.rooms.add(w.room);
+        if (kind && t - ps.lastLine > 20_000 && t - lastSay.current > 6000 && !w.busy) {
+          ps.lastLine = t;
+          ps.bumps = w.bumps;
+          ps.walked = w.walked;
+          say(kind === "room" ? roomLine(w.room, s.said) : playLine(kind, s.said));
+        } else if (kind === "bump") ps.bumps = w.bumps;
+      }
     }, 1000);
     const ev = setInterval(() => {
       const s = stateRef.current;
-      if (!s || document.visibilityState !== "visible" || world.current?.busy || queue.current.length) return;
+      if (!s || document.visibilityState !== "visible" || world.current?.busy || world.current?.manual || queue.current.length) return;
       const r = randomEvent(s, Date.now());
       if (r) {
         commit(r.state);
@@ -233,6 +260,54 @@ export function Gotchi() {
       document.removeEventListener("visibilitychange", onVis);
     };
   }, [commit, perform, say]);
+
+  // Objet à portée (bouton d'action contextuel)
+  useEffect(() => {
+    const id = setInterval(() => {
+      const w = world.current;
+      const s = stateRef.current;
+      if (!w || !s) return;
+      const n: Interactable | "cache" | null = w.nearCache(cacheSpot(s, Date.now(), WORLD_W)) ? "cache" : w.near();
+      setNear((prev) => (prev === n ? prev : n));
+    }, 150);
+    return () => clearInterval(id);
+  }, []);
+
+  // Clavier (ordinateur) : flèches / ZQSD / WASD, Entrée ou Espace pour l'action
+  useEffect(() => {
+    const keys = new Set<string>();
+    const sync = () => {
+      const w = world.current;
+      if (!w) return;
+      const has = (...k: string[]) => k.some((x) => keys.has(x));
+      w.input = {
+        x: (has("arrowright", "d") ? 1 : 0) - (has("arrowleft", "q", "a") ? 1 : 0),
+        y: (has("arrowdown", "s") ? 1 : 0) - (has("arrowup", "z", "w") ? 1 : 0),
+      };
+    };
+    const down = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLButtonElement) return;
+      const k = e.key.toLowerCase();
+      if (["arrowup", "arrowdown", "arrowleft", "arrowright", "z", "q", "s", "d", "w", "a"].includes(k)) {
+        keys.add(k);
+        sync();
+        e.preventDefault();
+      } else if (k === "enter" || k === " " || k === "e") {
+        document.querySelector<HTMLButtonElement>(".gt-pad__a")?.click();
+        e.preventDefault();
+      }
+    };
+    const up = (e: KeyboardEvent) => {
+      keys.delete(e.key.toLowerCase());
+      sync();
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+    };
+  }, []);
 
   // Effet machine à écrire sur la bulle
   useEffect(() => {
@@ -330,6 +405,35 @@ export function Gotchi() {
     say("Session terminée. Je suis épuisé, mais riche. Enfin, riche en Frit'pièces.");
   };
 
+  const collect = () => {
+    const s = stateRef.current;
+    if (!s) return;
+    const r = findCache(s, Date.now());
+    if (r) {
+      commit(r.state);
+      say(r.line);
+      announce(r.notes);
+    }
+  };
+
+  /** Utiliser un objet : il y marche, puis l'action se joue (ou le mini-jeu s'ouvre). */
+  const interact = (o: Interactable) => {
+    const w = world.current;
+    const s = stateRef.current;
+    if (!w || !s) return;
+    const a = OBJ_ACTION[o.id];
+    if (a) return doAction(a);
+    if (o.id === "pc") {
+      if (!canFarm(s, Date.now())) {
+        w.goTo("pc", () => say("Le PC est en panne. Je le fixe du regard, ça va le réparer."), reduced.current);
+        return;
+      }
+      w.goTo("pc", () => setTimeout(openFarm, reduced.current ? 0 : 450), reduced.current);
+      return;
+    }
+    w.goTo(o.id, () => say(playLine(o.id as PlayLine, s.said)), reduced.current);
+  };
+
   const onCanvas = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const s = stateRef.current;
     const w = world.current;
@@ -338,21 +442,23 @@ export function Gotchi() {
     const px = ((e.clientX - rect.left) / rect.width) * VIEW_W;
     const py = ((e.clientY - rect.top) / rect.height) * VIEW_H;
     const t = Date.now();
-    const what = w.hit(px, py, { cache: cacheSpot(s, t, WORLD_W) });
-    if (what === "cache") {
-      const r = findCache(s, t);
-      if (r) {
-        commit(r.state);
-        say(r.line);
-        announce(r.notes);
-      }
-    } else if (what === "pc") openFarm();
-    else if (what === "frigo") say("Le frigo. Il contient surtout de l'espoir et une sauce de 2023.");
-    else if (what === "sparrow") doAction("parler");
+    const spot = cacheSpot(s, t, WORLD_W);
+    const what = w.hit(px, py, { cache: spot });
+    if (what.kind === "cache" && spot) w.goTo(spot, collect, reduced.current);
+    else if (what.kind === "object") interact(what.obj);
+    else if (what.kind === "sparrow") doAction("parler");
+    else if (what.kind === "floor") w.goTo(what.pos, undefined, reduced.current);
+  };
+
+  /** Bouton d'action contextuel (A). */
+  const actionA = () => {
+    if (near === "cache") collect();
+    else if (near) interact(near);
+    else doAction("parler");
   };
 
   const goRoom = (i: number) => {
-    world.current?.goRoom(i);
+    world.current?.goRoom(i, reduced.current);
     setRoom(i);
   };
 
@@ -486,7 +592,7 @@ export function Gotchi() {
             height={VIEW_H}
             className="gt-screen__canvas"
             onPointerDown={onCanvas}
-            aria-label="L'appartement de Sparrow. Touche Sparrow pour lui parler, le PC pour farmer."
+            aria-label="L'appartement de Sparrow. Touche un objet ou un endroit pour qu'il y aille, ou Sparrow pour lui parler."
             role="img"
           />
           <div className="gt-screen__status mono">
@@ -494,14 +600,29 @@ export function Gotchi() {
             {state && <span>J+{ageJours(state, t)}</span>}
           </div>
         </div>
-        <nav className="gt-rooms mono" aria-label="Pièces">
+        <div className="gt-pad">
+          <Joystick
+            onMove={(x, y) => {
+              if (world.current) world.current.input = { x, y };
+            }}
+          />
+          <div className="gt-pad__side">
+            <p className="gt-pad__ctx mono" aria-live="polite">
+              {near === "cache" ? "Objet caché !" : near ? near.label : "Approche-toi d'un objet"}
+            </p>
+            <button type="button" className={`gt-pad__a${near ? " is-ready" : ""}`} onClick={actionA}>
+              <span aria-hidden="true">A</span>
+              <em className="mono">{near === "cache" ? "Ramasser" : near ? "Utiliser" : "Parler"}</em>
+            </button>
+          </div>
+        </div>
+        <nav className="gt-rooms mono" aria-label="Aller dans une pièce">
           {ROOMS.map((r, i) => (
             <button key={r.id} type="button" className={room === i ? "is-on" : ""} onClick={() => goRoom(i)}>
               {r.label}
             </button>
           ))}
         </nav>
-        <p className="gt-hint mono">Touche le PC pour une session de farm · cherche l&apos;objet caché qui brille.</p>
 
         <section className="gt-stats" aria-label="Jauges">
           {STATS.map(({ id, label }) => {

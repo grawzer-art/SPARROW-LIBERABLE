@@ -1,46 +1,45 @@
 /**
- * SPARROWGOTCHI 2.0 — l'appartement de Sparrow (rendu canvas pixel art).
+ * SPARROWGOTCHI 3.0 — l'appartement de Sparrow (rendu canvas pixel art).
  *
  * Quatre pièces côte à côte (Chambre, Coin gaming, Salon, Cuisine) ; la caméra suit
- * Sparrow. Il se déplace seul, va voir ses meubles selon ses besoins, et chaque action
- * du joueur devient une petite séquence : il marche jusqu'au bon meuble, puis l'anime.
+ * Sparrow. Le joueur le dirige au joystick (collisions avec les meubles) ou touche un
+ * objet / un endroit pour qu'il y aille. Sans contrôle pendant un moment, il reprend
+ * sa vie autonome. Chaque action reste une séquence : il marche jusqu'au meuble, puis l'anime.
  */
 
 import { bake } from "../game/sprites";
 import type { Anim, Mood, Scene } from "@/lib/gotchi/engine";
+import {
+  BACK,
+  R,
+  ROOM_W,
+  START,
+  WALL,
+  WORLD_W,
+  move,
+  nearby,
+  nearestStandable,
+  objectAt,
+  objectById,
+  path,
+  roomOf,
+  type Interactable,
+  type ObjectId,
+  type Pos,
+} from "@/lib/gotchi/room";
 import { CAPE, FURNITURE, HATS, PROPS, sparrow, type Body, type Eyes, type Legs, type Look, type Mouth } from "./sprites";
 
+export { ROOM_W, WORLD_W };
 export const VIEW_W = 112;
 export const VIEW_H = 64;
-export const ROOM_W = 112;
 export const ROOMS = [
   { id: "chambre", label: "Chambre" },
   { id: "gaming", label: "Coin gaming" },
   { id: "salon", label: "Salon" },
   { id: "cuisine", label: "Cuisine" },
 ] as const;
-export const WORLD_W = ROOM_W * ROOMS.length;
-const FLOOR = 58; // y des pieds
-const WALL = 42; // limite mur / sol
-
-type SpotId = "lit" | "douche" | "fenetre" | "pc" | "canape" | "tele" | "frigo" | "friteuse" | "table";
-interface Spot {
-  x: number;
-  face: 1 | -1;
-  pose: "stand" | "assis";
-}
-const R = (i: number, x: number) => i * ROOM_W + x;
-export const SPOTS: Record<SpotId, Spot> = {
-  lit: { x: R(0, 20), face: 1, pose: "assis" },
-  fenetre: { x: R(0, 58), face: 1, pose: "stand" },
-  douche: { x: R(0, 94), face: -1, pose: "stand" },
-  pc: { x: R(1, 42), face: 1, pose: "assis" },
-  tele: { x: R(2, 80), face: 1, pose: "stand" },
-  canape: { x: R(2, 38), face: 1, pose: "assis" },
-  frigo: { x: R(3, 28), face: -1, pose: "stand" },
-  friteuse: { x: R(3, 56), face: 1, pose: "stand" },
-  table: { x: R(3, 88), face: -1, pose: "stand" },
-};
+const BASE = BACK; // ligne de base des meubles collés au mur
+const WALK = 46; // vitesse au joystick (px/s)
 
 /** Ce que fait Sparrow en ce moment (action du joueur, événement ou vie autonome). */
 export type Activity = Anim | "use" | "danse" | "rire" | "panne" | "legendaire";
@@ -48,12 +47,16 @@ export type Activity = Anim | "use" | "danse" | "rire" | "panne" | "legendaire";
 interface Seq {
   act: Activity;
   of?: string;
-  spot: SpotId | null;
+  spot: ObjectId | null;
   phase: "go" | "act";
   t: number;
   dur: number;
   auto: boolean;
+  route: Pos[];
+  /** Réplique à afficher : appelée à l'arrivée, ou tout de suite si la séquence est interrompue. */
   onAct?: () => void;
+  /** Appelée seulement s'il arrive vraiment (ex. ouvrir le mini-jeu au PC). */
+  onArrive?: () => void;
 }
 
 export interface Frame {
@@ -65,7 +68,13 @@ export interface Frame {
   reduced: boolean;
 }
 
-const SCENE_SPOT: Partial<Record<Scene, SpotId>> = {
+export type Hit =
+  | { kind: "cache" }
+  | { kind: "sparrow" }
+  | { kind: "object"; obj: Interactable }
+  | { kind: "floor"; pos: Pos };
+
+const SCENE_SPOT: Partial<Record<Scene, ObjectId>> = {
   frigo: "frigo",
   pc: "pc",
   canape: "canape",
@@ -88,7 +97,7 @@ const SCENE_ACT: Partial<Record<Scene, Activity>> = {
   frigo: "frites",
 };
 
-function spotFor(act: Activity, of?: string): SpotId | null {
+function spotFor(act: Activity, of?: string): ObjectId | null {
   switch (act) {
     case "frites":
     case "gras":
@@ -135,27 +144,64 @@ function z(ctx: CanvasRenderingContext2D, x: number, y: number, s: number) {
 }
 
 export class World {
-  x = SPOTS.canape.x;
+  x: number;
+  y: number;
   dir: 1 | -1 = 1;
-  cam = SPOTS.canape.x - VIEW_W / 2;
+  cam: number;
+  /** Direction du joystick (-1..1). */
+  input = { x: 0, y: 0 };
+  /** Statistiques de déplacement lues par l'interface (répliques contextuelles). */
+  bumps = 0;
+  walked = 0;
   private seq: Seq | null = null;
   private idleUntil = 2;
+  private manualUntil = 0;
+  private moving = false;
+  private wasBlocked = false;
   private t = 0;
   private flash = 0;
   private walkPhase = 0;
+
+  constructor(pos: Pos = START) {
+    this.x = pos.x;
+    this.y = pos.y;
+    this.cam = Math.max(0, Math.min(WORLD_W - VIEW_W, pos.x - VIEW_W / 2));
+  }
 
   get busy() {
     return !!this.seq && !this.seq.auto;
   }
 
+  /** Le joueur l'a dirigé récemment : pas de vie autonome ni d'événement imposé. */
+  get manual() {
+    return this.t < this.manualUntil;
+  }
+
   get room() {
-    return Math.max(0, Math.min(ROOMS.length - 1, Math.floor(this.x / ROOM_W)));
+    return roomOf(this.x);
+  }
+
+  get pos(): Pos {
+    return { x: Math.round(this.x), y: Math.round(this.y) };
+  }
+
+  /** Objet utilisable juste à côté de lui (pour le bouton d'action). */
+  near(): Interactable | null {
+    if (this.seq && !this.seq.auto) return null;
+    return nearby({ x: this.x, y: this.y });
+  }
+
+  nearCache(c: { x: number; y: number } | null) {
+    return !!c && Math.hypot(c.x - this.x, (c.y - this.y) * 1.5) < 13;
+  }
+
+  private route(to: Pos) {
+    return path({ x: this.x, y: this.y }, to);
   }
 
   /** Lance une séquence (action du joueur ou événement). onAct : quand il arrive au meuble. */
   play(act: Activity, opts: { of?: string; scene?: Scene; onAct?: () => void; reduced?: boolean } = {}) {
-    this.seq?.onAct?.(); // la réplique précédente ne doit jamais être perdue
-    this.target = null;
+    this.cancel();
     let a = act;
     let spot = spotFor(act, opts.of);
     if (opts.scene) {
@@ -163,44 +209,77 @@ export class World {
       a = SCENE_ACT[opts.scene] ?? (act === "event" ? "parler" : act);
     }
     if (a === "legendaire") this.flash = 2.2;
-    this.seq = { act: a, of: opts.of, spot, phase: spot ? "go" : "act", t: 0, dur: a === "legendaire" ? 3.2 : 2.6, auto: false, onAct: opts.onAct };
-    if (spot && opts.reduced) this.x = SPOTS[spot].x;
-    if (!spot) this.startAct();
+    const goal = spot ? objectById(spot).stand : null;
+    if (goal && opts.reduced) {
+      this.x = goal.x;
+      this.y = goal.y;
+    }
+    this.seq = {
+      act: a,
+      of: opts.of,
+      spot,
+      phase: goal ? "go" : "act",
+      t: 0,
+      dur: a === "legendaire" ? 3.2 : 2.6,
+      auto: false,
+      route: goal ? this.route(goal) : [],
+      onAct: opts.onAct,
+    };
+    if (!goal || opts.reduced) this.startAct();
+  }
+
+  /** Va jusqu'à un objet (puis onArrive) ou jusqu'à un point du sol. */
+  goTo(target: ObjectId | Pos, onArrive?: () => void, reduced = false) {
+    this.cancel();
+    const obj = typeof target === "string" ? objectById(target) : null;
+    const goal = obj ? obj.stand : nearestStandable(target as Pos);
+    if (reduced) {
+      this.x = goal.x;
+      this.y = goal.y;
+    }
+    this.seq = { act: "use", spot: obj?.id ?? null, phase: "go", t: 0, dur: obj ? 1.4 : 0.1, auto: false, route: this.route(goal), onArrive };
+    if (reduced) this.startAct();
   }
 
   /** Le joueur touche une pièce : Sparrow y va. */
-  goRoom(i: number) {
-    if (this.busy) return;
-    this.seq = { act: "use", spot: null, phase: "go", t: 0, dur: 0.6, auto: true };
-    this.target = R(i, ROOM_W / 2);
+  goRoom(i: number, reduced = false) {
+    this.goTo({ x: R(i, 60), y: 58 }, undefined, reduced);
   }
 
-  private target: number | null = null;
+  /** Interrompt la séquence en cours sans jamais perdre sa réplique. */
+  private cancel() {
+    const s = this.seq;
+    this.seq = null;
+    s?.onAct?.();
+  }
 
   private startAct() {
     const s = this.seq!;
     s.phase = "act";
     s.t = 0;
-    if (s.spot) this.dir = SPOTS[s.spot].face;
-    s.onAct?.();
+    if (s.spot) this.dir = objectById(s.spot).face;
+    const act = s.onAct;
+    const arrive = s.onArrive;
     s.onAct = undefined;
+    s.onArrive = undefined;
+    act?.();
+    arrive?.();
   }
 
   /** Qu'y a-t-il sous ce point (coordonnées canvas) ? */
-  hit(px: number, py: number, f: Pick<Frame, "cache">): "sparrow" | "pc" | "cache" | "frigo" | "canape" | null {
+  hit(px: number, py: number, f: Pick<Frame, "cache">): Hit {
     const wx = px + this.cam;
-    if (f.cache && Math.abs(wx - f.cache.x) < 7 && Math.abs(py - f.cache.y) < 7) return "cache";
-    if (Math.abs(wx - this.x) < 9 && py > FLOOR - 24 && py <= FLOOR + 2) return "sparrow";
-    if (wx > R(1, 46) && wx < R(1, 70) && py > 20 && py < FLOOR) return "pc";
-    if (wx > R(3, 8) && wx < R(3, 22) && py > 30) return "frigo";
-    if (wx > R(2, 26) && wx < R(2, 50) && py > 44) return "canape";
-    return null;
+    if (f.cache && Math.abs(wx - f.cache.x) < 7 && Math.abs(py - f.cache.y) < 7) return { kind: "cache" };
+    if (Math.abs(wx - this.x) < 8 && py > this.y - 22 && py <= this.y + 2) return { kind: "sparrow" };
+    const obj = objectAt(wx, py);
+    if (obj) return { kind: "object", obj };
+    return { kind: "floor", pos: { x: wx, y: Math.max(py, WALL + 6) } };
   }
 
   /** Vie autonome : il va voir ses meubles selon son état. */
   private brain(mood: Mood) {
     const r = Math.random();
-    let spot: SpotId | null = null;
+    let spot: ObjectId | null = null;
     if (mood === "dofus" || mood === "focus" || mood === "rage") spot = "pc";
     else if (mood === "gras" || mood === "creve") spot = "canape";
     else if (mood === "affame" || mood === "crise") spot = r < 0.6 ? "frigo" : null;
@@ -211,38 +290,73 @@ export class World {
     else if (r < 0.6) spot = "fenetre";
     else if (r < 0.67) spot = "tele";
     else if (r < 0.72) spot = "lit";
-    if (spot) {
-      this.seq = { act: "use", spot, phase: "go", t: 0, dur: 3 + Math.random() * 4, auto: true };
-    } else {
-      this.target = Math.max(8, Math.min(WORLD_W - 8, this.x + (Math.random() - 0.5) * 90));
-      this.seq = { act: "use", spot: null, phase: "go", t: 0, dur: 1, auto: true };
-    }
+    const goal = spot
+      ? objectById(spot).stand
+      : nearestStandable({ x: this.x + (Math.random() - 0.5) * 90, y: 50 + Math.random() * 12 });
+    this.seq = { act: "use", spot, phase: "go", t: 0, dur: spot ? 3 + Math.random() * 4 : 0.1, auto: true, route: this.route(goal) };
   }
 
   private update(dt: number, f: Frame) {
     this.t += dt;
     this.flash = Math.max(0, this.flash - dt);
-    const s = this.seq;
+    this.moving = false;
     const lazy = f.mood === "gras" || f.mood === "creve";
-    if (!s) {
-      if (this.t > this.idleUntil) this.brain(f.mood);
-    } else if (s.phase === "go") {
-      const tx = s.spot ? SPOTS[s.spot].x : (this.target ?? this.x);
-      const dist = tx - this.x;
-      const speed = (s.auto ? 22 : Math.abs(dist) > 120 ? 110 : 55) * (lazy ? 0.6 : 1);
-      if (Math.abs(dist) < 1.2) {
-        this.x = tx;
-        this.target = null;
-        if (s.spot || !s.auto) this.startAct();
-        else this.endSeq();
-      } else {
-        this.dir = dist > 0 ? 1 : -1;
-        this.x += Math.sign(dist) * Math.min(Math.abs(dist), speed * dt);
-        this.walkPhase += dt * (speed > 50 ? 12 : 7);
+    const ix = this.input.x;
+    const iy = this.input.y;
+    const mag = Math.hypot(ix, iy);
+
+    if (mag > 0.15) {
+      // Contrôle manuel : il obéit (en traînant un peu des pieds s'il est Fritoman).
+      if (this.seq) this.cancel();
+      this.manualUntil = this.t + 14;
+      const sp = WALK * Math.min(1, mag) * (lazy ? 0.7 : 1);
+      const dx = (ix / mag) * sp * dt * Math.min(1, mag);
+      const dy = (iy / mag) * sp * dt * Math.min(1, mag) * 0.75;
+      const r = move({ x: this.x, y: this.y }, dx, dy);
+      const moved = Math.hypot(r.pos.x - this.x, r.pos.y - this.y);
+      if (r.blocked && moved < 0.05 && !this.wasBlocked) this.bumps += 1;
+      this.wasBlocked = r.blocked && moved < 0.05;
+      this.walked += moved;
+      this.x = r.pos.x;
+      this.y = r.pos.y;
+      if (Math.abs(ix) > 0.2) this.dir = ix > 0 ? 1 : -1;
+      if (moved > 0) {
+        this.moving = true;
+        this.walkPhase += dt * 9;
       }
     } else {
-      s.t += dt;
-      if (s.t >= s.dur) this.endSeq();
+      this.wasBlocked = false;
+      const s = this.seq;
+      if (!s) {
+        if (this.t > this.idleUntil && !this.manual) this.brain(f.mood);
+      } else if (s.phase === "go") {
+        const next = s.route[0];
+        if (!next) {
+          if (s.spot || !s.auto) this.startAct();
+          else this.endSeq();
+        } else {
+          const dx = next.x - this.x;
+          const dy = next.y - this.y;
+          const dist = Math.hypot(dx, dy);
+          const total = s.route.reduce((a, p, i) => a + Math.hypot(p.x - (i ? s.route[i - 1].x : this.x), p.y - (i ? s.route[i - 1].y : this.y)), 0);
+          const speed = (s.auto ? 22 : total > 120 ? 110 : 55) * (lazy ? 0.6 : 1);
+          if (dist < 1) {
+            this.x = next.x;
+            this.y = next.y;
+            s.route.shift();
+          } else {
+            const k = Math.min(dist, speed * dt) / dist;
+            this.x += dx * k;
+            this.y += dy * k;
+            if (Math.abs(dx) > 0.3) this.dir = dx > 0 ? 1 : -1;
+            this.moving = true;
+            this.walkPhase += dt * (speed > 50 ? 12 : 7);
+          }
+        }
+      } else {
+        s.t += dt;
+        if (s.t >= s.dur) this.endSeq();
+      }
     }
     const camTarget = Math.max(0, Math.min(WORLD_W - VIEW_W, this.x - VIEW_W / 2));
     this.cam = f.reduced ? camTarget : this.cam + (camTarget - this.cam) * Math.min(1, dt * 4);
@@ -261,8 +375,24 @@ export class World {
     ctx.save();
     ctx.translate(-Math.round(this.cam), 0);
     this.drawRooms(ctx, f);
+    // Profondeur : le canapé et la table sont au milieu de la pièce.
+    const front = this.y < 57;
+    if (!front) this.drawFloorItems(ctx);
     this.drawSparrow(ctx, f);
+    if (front) this.drawFloorItems(ctx);
+    if (this.seq?.act === "douche" && this.seq.phase === "act") {
+      ctx.fillStyle = "#9fb4c8";
+      for (let i = 0; i < 6; i++) ctx.fillRect(R(0, 90) + i * 2, Math.round(((this.t * 34 + i * 7) % 18) + 33), 1, 2);
+    }
     if (f.cache && Math.floor(this.t * 3) % 3 !== 0) ctx.drawImage(prop("eclat"), f.cache.x - 2, f.cache.y - 2);
+    // Repère discret de l'objet à portée
+    const n = this.near();
+    if (n && !this.seq && Math.floor(this.t * 2) % 2 === 0) {
+      ctx.fillStyle = "#f2c14e";
+      const cx = Math.round((n.tap.x1 + n.tap.x2) / 2);
+      ctx.fillRect(cx - 1, n.tap.y1 - 4, 3, 1);
+      ctx.fillRect(cx, n.tap.y1 - 3, 1, 1);
+    }
     ctx.restore();
     if (this.flash > 0 && !f.reduced) {
       ctx.fillStyle = `rgba(242,193,78,${Math.min(0.55, this.flash / 4)})`;
@@ -272,6 +402,11 @@ export class World {
         ctx.drawImage(prop("etoile"), Math.round(VIEW_W / 2 + Math.cos(a) * 40 - 3), Math.round(26 + Math.sin(a * 1.3) * 18));
       }
     }
+  }
+
+  private drawFloorItems(ctx: CanvasRenderingContext2D) {
+    ctx.drawImage(prop("canape"), R(2, 28), 54);
+    ctx.drawImage(fur("plan"), R(3, 80), 54);
   }
 
   private drawRooms(ctx: CanvasRenderingContext2D, f: Frame) {
@@ -318,9 +453,9 @@ export class World {
     px("#090909", R(0, 76), 19, 5, 1);
     px("#090909", R(0, 76), 21, 3, 1);
     // Table de nuit + lampe
-    px("#a8692e", R(0, 32), FLOOR - 7, 7, 7);
-    px("#f2c14e", R(0, 33), FLOOR - 12, 5, 3);
-    px("#3b3b3b", R(0, 35), FLOOR - 9, 1, 2);
+    px("#a8692e", R(0, 32), BASE - 7, 7, 7);
+    px("#f2c14e", R(0, 33), BASE - 12, 5, 3);
+    px("#3b3b3b", R(0, 35), BASE - 9, 1, 2);
     // Coin gaming : étagère à figurines + bande LED
     px("#3b3b3b", R(1, 12), 28, 22, 2);
     px("#e53935", R(1, 14), 24, 3, 4);
@@ -331,8 +466,8 @@ export class World {
     px("#090909", R(2, 44), 12, 18, 12);
     px("#1b1b29", R(2, 45), 13, 16, 10);
     px("#f2c14e", R(2, 50), 16, 6, 4);
-    px("#3b3b3b", R(2, 16), FLOOR - 26, 1, 26);
-    px("#f2c14e", R(2, 13), FLOOR - 30, 7, 4);
+    px("#3b3b3b", R(2, 16), BASE - 26, 1, 26);
+    px("#f2c14e", R(2, 13), BASE - 30, 7, 4);
     // Cuisine : faïence, étagère à bocaux, hotte
     ctx.fillStyle = "rgba(255,255,255,0.05)";
     for (let y = 24; y < WALL - 2; y += 4) ctx.fillRect(R(3, 24), y, 86, 1);
@@ -345,16 +480,9 @@ export class World {
     px("#5a5a6e", R(3, 50), 14, 6, 8);
     const deco = new Set(f.deco);
     // ── Chambre
-    ctx.drawImage(fur("lit"), R(0, 6), FLOOR - 6);
+    ctx.drawImage(fur("lit"), R(0, 6), BASE - 6);
     ctx.drawImage(fur("fenetre"), R(0, 52), 12);
-    ctx.drawImage(fur("douche"), R(0, 88), FLOOR - 20);
-    if (this.seq?.act === "douche" && this.seq.phase === "act") {
-      for (let i = 0; i < 6; i++) {
-        const dy = ((t * 34 + i * 7) % 18) + 38;
-        ctx.fillStyle = "#9fb4c8";
-        ctx.fillRect(R(0, 89) + i * 2, Math.round(dy), 1, 2);
-      }
-    }
+    ctx.drawImage(fur("douche"), R(0, 88), BASE - 20);
     // ── Coin gaming
     if (deco.has("dec-neons")) {
       ctx.globalAlpha = 0.6 + Math.sin(t * 3) * 0.2;
@@ -362,37 +490,35 @@ export class World {
       ctx.globalAlpha = 1;
     }
     if (deco.has("dec-poster")) ctx.drawImage(fur("poster"), R(1, 14), 12);
-    ctx.drawImage(fur("bureau"), R(1, 46), FLOOR - 14);
+    ctx.drawImage(fur("bureau"), R(1, 46), BASE - 14);
     if (f.pcBroken) {
-      ctx.drawImage(fur("ecranNoir"), R(1, 52) + 1, FLOOR - 13);
-      ctx.drawImage(prop("vapeur"), R(1, 56), FLOOR - 22 - (Math.floor(t * 4) % 2));
+      ctx.drawImage(fur("ecranNoir"), R(1, 52) + 1, BASE - 13);
+      ctx.drawImage(prop("vapeur"), R(1, 56), BASE - 22 - (Math.floor(t * 4) % 2));
     } else if (Math.floor(t * 2) % 2) {
       ctx.fillStyle = "#e53935";
-      ctx.fillRect(R(1, 60), FLOOR - 11, 2, 1);
+      ctx.fillRect(R(1, 60), BASE - 11, 2, 1);
     }
     if (deco.has("dec-dofrite")) {
-      ctx.drawImage(fur("oeuf"), R(1, 86), FLOOR - 16 - (Math.floor(t * 2) % 2));
-      if (Math.floor(t * 3) % 4 === 0) ctx.drawImage(prop("eclat"), R(1, 92), FLOOR - 20);
+      ctx.drawImage(fur("oeuf"), R(1, 86), BASE - 16 - (Math.floor(t * 2) % 2));
+      if (Math.floor(t * 3) % 4 === 0) ctx.drawImage(prop("eclat"), R(1, 92), BASE - 20);
     }
     // ── Salon
-    if (deco.has("dec-tapis")) ctx.drawImage(fur("tapis"), R(2, 26), FLOOR + 1);
-    ctx.drawImage(prop("canape"), R(2, 28), FLOOR - 5);
-    ctx.drawImage(fur("tele"), R(2, 78), FLOOR - 11);
+    if (deco.has("dec-tapis")) ctx.drawImage(fur("tapis"), R(2, 26), 60);
+    ctx.drawImage(fur("tele"), R(2, 78), BASE - 11);
     if (Math.floor(t * 5) % 3 === 0) {
       ctx.fillStyle = "#9fb4c8";
-      ctx.fillRect(R(2, 81), FLOOR - 8, 8, 1);
+      ctx.fillRect(R(2, 81), BASE - 8, 8, 1);
     }
-    if (deco.has("dec-plante")) ctx.drawImage(fur("plante"), R(2, 98), FLOOR - 8);
+    if (deco.has("dec-plante")) ctx.drawImage(fur("plante"), R(2, 98), BASE - 8);
     // ── Cuisine
-    ctx.drawImage(fur("frigo"), R(3, 8), FLOOR - 20);
+    ctx.drawImage(fur("frigo"), R(3, 8), BASE - 20);
     if (this.seq?.spot === "frigo" && this.seq.phase === "act") {
       ctx.fillStyle = "#f2c14e";
-      ctx.fillRect(R(3, 9), FLOOR - 19, 10, 4);
+      ctx.fillRect(R(3, 9), BASE - 19, 10, 4);
     }
-    ctx.drawImage(fur("plan"), R(3, 44), FLOOR - 6);
-    ctx.drawImage(fur(deco.has("dec-friteuse") ? "friteuseOr" : "friteuse"), R(3, 48), FLOOR - 12);
-    if (Math.floor(t * 2) % 2) ctx.drawImage(prop("vapeur"), R(3, 50), FLOOR - 19);
-    ctx.drawImage(fur("plan"), R(3, 80), FLOOR - 6);
+    ctx.drawImage(fur("plan"), R(3, 44), BASE - 6);
+    ctx.drawImage(fur(deco.has("dec-friteuse") ? "friteuseOr" : "friteuse"), R(3, 48), BASE - 12);
+    if (Math.floor(t * 2) % 2) ctx.drawImage(prop("vapeur"), R(3, 50), BASE - 19);
   }
 
   private drawSparrow(ctx: CanvasRenderingContext2D, f: Frame) {
@@ -401,9 +527,9 @@ export class World {
     const fast = Math.floor(t * 8) % 2;
     const frame = Math.floor(t * 3) % 2;
     const acting = s?.phase === "act" ? s : null;
-    const walking = s?.phase === "go";
+    const walking = this.moving;
     const act = acting?.act;
-    const atSpot = acting?.spot ? SPOTS[acting.spot] : null;
+    const atSpot = acting?.spot ? objectById(acting.spot) : null;
 
     let eyes: Eyes = "lunettes";
     let mouth: Mouth = "neutre";
@@ -573,7 +699,7 @@ export class World {
 
     const sx = Math.round(this.x - 8 + (shake ? (fast ? shake : -shake) : 0));
     const seated = legs === "assis";
-    const sy = FLOOR - 20 - bob + (seated ? 2 : 0);
+    const sy = Math.round(this.y) - 20 - bob + (seated ? 2 : 0);
 
     if (f.look.tenue === "ten-cape") ctx.drawImage(img("cape", () => CAPE, flip), sx, sy + 15);
     const key = `h:${eyes}:${mouth}:${body}:${legs}:${f.look.lunettes}:${f.look.tenue}:${f.look.barbe ? 1 : 0}`;
@@ -586,7 +712,7 @@ export class World {
       ctx.fillRect(sx + 13, sy + 11, 2, 4);
     }
     // Chaise de bureau devant ses jambes
-    if (atPc && seated) ctx.drawImage(img("chaise", () => FURNITURE.chaise, true), sx + 8, FLOOR - 7);
+    if (atPc && seated) ctx.drawImage(img("chaise", () => FURNITURE.chaise, true), sx + 8, Math.round(this.y) - 7);
 
     for (const [k, px, py] of fx) ctx.drawImage(prop(k), sx + px, sy + py);
 
