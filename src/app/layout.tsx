@@ -4,7 +4,9 @@ import "@fontsource/ibm-plex-mono/latin-400.css";
 import "@fontsource/ibm-plex-mono/latin-500.css";
 import "@fontsource/ibm-plex-mono/latin-700.css";
 import "./globals.css";
+import "./nav.css";
 import { SwRegister } from "@/components/SwRegister";
+import { BottomNav } from "@/components/BottomNav";
 import { APP_NAME, SHORT_NAME } from "@/config";
 
 const description = "Dossier classifié SP-2031. Compte à rebours officiel (et totalement fictif) jusqu'au 12 octobre 2031.";
@@ -55,6 +57,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         {children}
+        <BottomNav />
         <SwRegister />
       </body>
     </html>
