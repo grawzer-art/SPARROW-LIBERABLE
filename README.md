@@ -19,6 +19,7 @@ Application web installable (PWA) : compte à rebours cinématographique, à la 
 | Citations du jour | Une réplique de Batman + une de Kaamelott par jour (minuit, heure de Paris) + note du Ministère |
 | Rapport d'analyse | Secondes, réveils, lundis, week-ends, Noëls restants (calculs réels) + estimations signalées |
 | Archives du suspect | Galerie tactile avec légendes, emplacements réservés |
+| Salle d'arcade | Mini jeu rétro « L'Évasion de Sparrow » (page `/jeu`) : deux persos, record local, défi à partager |
 | Pièces des témoins | Les potes déposent des photos du suspect (code des potes requis), galerie + vue agrandie |
 | Don pour le Chevalier Noir | Encart + page dédiée `/don` : numéro Wero à copier, barème humoristique, QR code de la page |
 | Diffusion | Partage du lien, fiche image (PNG 1080×1350), QR code, instructions d'installation |
@@ -30,6 +31,12 @@ Application web installable (PWA) : compte à rebours cinématographique, à la 
 - Toucher 3 fois **STATUT** ou **N° SP-2031** → surprises.
 - Caps symboliques annoncés une fois : 1 500, 1 000, 500, 100, 30, 7 jours, dernières 24 h (le compteur passe au rouge).
 - Bouton **Effets : activés/désactivés** en bas de page ; la préférence système « réduire les animations » est respectée.
+
+### L'Évasion de Sparrow (`/jeu`)
+Jeu de course 8-bit sur les toits de Gotham. Toucher = sauter (double saut possible).
+Calendriers, horloges et lundis volants coûtent un masque (3 vies) ; l'agent du Ministère se rapproche à chaque choc.
+Kebab = −5 jours, masque = +1 vie, sablier = ralenti. But : faire tomber le compteur de 1 826 à 0 (≈ 5 min sans faute).
+Code : `src/components/game/` (moteur testé dans `tests/game.test.ts`, sprites en texte dans `sprites.ts`).
 
 ### Tester le final sans attendre 5 ans
 Ajouter à l'adresse : `?simuler=2031-10-11T23:59:50` (heure de Paris). Un bandeau « MODE SIMULATION » s'affiche.

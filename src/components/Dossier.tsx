@@ -8,6 +8,7 @@ import { formatClock, initClock, remaining } from "@/lib/time";
 import { load, save, sessionFlag } from "@/lib/storage";
 import { useNow } from "@/lib/useNow";
 import { Archives } from "./Archives";
+import { ArcadeTeaser } from "./ArcadeTeaser";
 import { Countdown } from "./Countdown";
 import { DailyQuote } from "./DailyQuote";
 import { Donation } from "./Donation";
@@ -188,6 +189,7 @@ export function Dossier() {
           <DailyQuote t={t} />
           <Report r={r} t={t} />
           <Archives />
+          <ArcadeTeaser />
           <Temoins toast={toast} />
           <Donation />
           <ShareSection toast={toast} />

@@ -154,7 +154,7 @@ function TemoinsImpl({ toast }: { toast: (m: string) => void }) {
   return (
     <section className="tem reveal" aria-labelledby="tem-title">
       <header className="section-head">
-        <span className="section-head__num mono">06</span>
+        <span className="section-head__num mono">07</span>
         <h2 id="tem-title" className="section-head__title">Pièces des témoins</h2>
         <span className="section-head__meta mono">{pics.length ? `${pics.length} PIÈCE${pics.length > 1 ? "S" : ""}` : "DÉPÔT"}</span>
       </header>

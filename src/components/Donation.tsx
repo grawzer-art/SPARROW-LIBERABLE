@@ -7,7 +7,7 @@ function DonationImpl() {
   return (
     <section className="don reveal" aria-labelledby="don-title">
       <header className="section-head">
-        <span className="section-head__num mono">07</span>
+        <span className="section-head__num mono">08</span>
         <h2 id="don-title" className="section-head__title">Don pour le Chevalier Noir</h2>
       </header>
 
