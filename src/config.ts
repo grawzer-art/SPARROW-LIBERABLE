@@ -30,5 +30,5 @@ export const SHORT_NAME = "SPARROW";
 export const DONATIONS: { paypal: string; weroUrl: string; weroId: string } = {
   paypal: "",
   weroUrl: "",
-  weroId: "",
+  weroId: "0650026203",
 };

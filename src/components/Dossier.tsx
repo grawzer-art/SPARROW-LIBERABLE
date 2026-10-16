@@ -189,7 +189,7 @@ export function Dossier() {
           <Report r={r} t={t} />
           <Archives />
           <Temoins toast={toast} />
-          <Donation toast={toast} />
+          <Donation />
           <ShareSection toast={toast} />
 
           <footer className="foot mono">

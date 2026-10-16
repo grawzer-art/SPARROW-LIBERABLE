@@ -1208,6 +1208,80 @@ a {
   font-variant-numeric: tabular-nums;
 }
 
+.quote__label {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 8px;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  font-weight: 700;
+  color: var(--steel);
+}
+
+.quote__label + .kaa,
+.quote__card + .quote__label {
+  margin-top: 22px;
+}
+
+.kaa {
+  position: relative;
+  margin: 0;
+  padding: 18px 16px 14px 52px;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 20px 40px -20px rgba(0, 0, 0, 0.9);
+  transform: rotate(0.4deg);
+  animation: reveal 0.9s var(--ease) both;
+}
+
+.kaa__sword {
+  position: absolute;
+  left: 16px;
+  top: 18px;
+  width: 22px;
+  height: 58px;
+  color: var(--red);
+}
+
+.kaa__text {
+  margin: 0;
+}
+
+.kaa__text p {
+  margin: 0;
+  font-family: var(--display);
+  font-size: clamp(22px, 6.6vw, 30px);
+  line-height: 1.08;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+
+.kaa__src {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  margin-top: 12px;
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(9, 9, 9, 0.6);
+}
+
+.kaa__src .red {
+  font-weight: 700;
+}
+
+.kaa__note {
+  margin: 12px 0 0;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(9, 9, 9, 0.3);
+  font-size: 12px;
+}
+
+.kaa__note b {
+  color: var(--red-deep);
+}
+
 /* ─── Pièces des témoins ─── */
 
 .tem__rules {
@@ -1427,6 +1501,18 @@ a {
   color: var(--red);
 }
 
+.don__link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.don__cta {
+  width: 100%;
+  min-height: 56px;
+  font-size: 13px;
+}
+
 .don__actions {
   display: grid;
   gap: 8px;
@@ -1450,6 +1536,198 @@ a {
   margin: 14px 0 0;
   font-size: 10.5px;
   color: var(--steel);
+}
+
+/* ─── Page de don ─── */
+
+.donp__nav {
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--steel);
+}
+
+.donp__nav a {
+  color: var(--paper);
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.donp__pre {
+  margin: 22px 0 0;
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  font-weight: 700;
+  color: var(--red);
+}
+
+.donp__title {
+  margin-top: 8px;
+}
+
+.donp__t1 {
+  font-size: 21.4cqi;
+  color: var(--paper);
+}
+
+.donp__t2 {
+  margin-top: 0.08em;
+  font-size: 17.2cqi;
+  color: var(--red);
+  text-shadow: 0 0 34px rgba(229, 57, 53, 0.35);
+}
+
+.donp__signal {
+  margin: 22px auto 0;
+  width: 150px;
+}
+
+.donp__signal .quote__signal {
+  width: 100%;
+  margin: 0;
+}
+
+.donp__lead {
+  margin: 18px 0 0;
+  font-family: var(--display);
+  font-size: 22px;
+  line-height: 1.1;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.wero {
+  margin-top: 28px;
+  padding: 16px;
+  border: 2px solid var(--paper);
+  background:
+    repeating-linear-gradient(-45deg, transparent 0 14px, rgba(229, 57, 53, 0.05) 14px 15px),
+    var(--ink-2);
+  box-shadow: 0 0 60px -20px rgba(229, 57, 53, 0.5);
+}
+
+.wero__head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  font-weight: 700;
+  color: var(--steel);
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.wero__num {
+  display: block;
+  width: 100%;
+  margin: 18px 0 6px;
+  font-family: var(--display);
+  font-size: clamp(40px, 13.4vw, 72px);
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-align: center;
+  color: var(--paper);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.wero__who {
+  margin: 0 0 16px;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-align: center;
+  color: var(--steel);
+}
+
+.wero__copy {
+  width: 100%;
+  min-height: 56px;
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.wero__copy + .wero__copy {
+  margin-top: 8px;
+}
+
+.wero__steps {
+  margin-top: 16px;
+}
+
+.donp__paypal {
+  width: 100%;
+  margin-top: 12px;
+  min-height: 56px;
+  text-decoration: none;
+}
+
+.tarifs {
+  margin-top: 40px;
+}
+
+.tarifs__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+
+.tarif {
+  display: grid;
+  grid-template-columns: 74px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 4px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  transition: background 0.2s;
+}
+
+.tarif:active {
+  background: rgba(229, 57, 53, 0.12);
+}
+
+.tarif__eur {
+  font-family: var(--display);
+  font-size: 30px;
+  color: var(--red);
+  line-height: 1;
+}
+
+.tarif__txt {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tarif__txt b {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 19px;
+  text-transform: uppercase;
+  line-height: 1.1;
+}
+
+.tarif__txt small {
+  font-size: 11px;
+  color: var(--steel);
+}
+
+.tarif__go {
+  color: var(--steel);
+}
+
+.donp__share {
+  margin-top: 36px;
+}
+
+.donp__sharebtn {
+  width: 100%;
+  margin-top: 8px;
 }
 
 /* ─── Boutons ─── */

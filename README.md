@@ -16,11 +16,11 @@ Application web installable (PWA) : compte à rebours cinématographique, à la 
 | Temps restant | Jours / heures / minutes / secondes, chiffres animés, recalés à chaque seconde (pas de dérive) |
 | Progression | Barre réelle 12.10.2026 → 12.10.2031 + pourcentage écoulé |
 | Fil de surveillance | 40 bulletins humoristiques aléatoires, tapés façon terminal |
-| Citation du jour | Une réplique de Batman par jour (change à minuit, heure de Paris) + note du Ministère |
+| Citations du jour | Une réplique de Batman + une de Kaamelott par jour (minuit, heure de Paris) + note du Ministère |
 | Rapport d'analyse | Secondes, réveils, lundis, week-ends, Noëls restants (calculs réels) + estimations signalées |
 | Archives du suspect | Galerie tactile avec légendes, emplacements réservés |
 | Pièces des témoins | Les potes déposent des photos du suspect (code des potes requis), galerie + vue agrandie |
-| Don pour le Chevalier Noir | Boutons PayPal / Wero (liens externes, l'appli ne collecte rien) |
+| Don pour le Chevalier Noir | Encart + page dédiée `/don` : numéro Wero à copier, barème humoristique, QR code de la page |
 | Diffusion | Partage du lien, fiche image (PNG 1080×1350), QR code, instructions d'installation |
 | Grand final | Écran spécial à zéro : confettis, photo finale, verdict, partage |
 
@@ -40,7 +40,7 @@ Autres exemples : `?simuler=2030-06-01` (cap des 500 jours), `?simuler=2031-10-1
 - **Heure de fin** : `src/config.ts` → `END.time` (ex. `"14:30"`). Commit → Vercel redéploie.
 - **Messages** : `src/data/messages.ts` (ajouter une ligne suffit).
 - **Caps** : `src/data/milestones.ts`.
-- **Citations du jour** : `src/data/quotes.ts` (une par jour, dans l'ordre, puis la liste recommence).
+- **Citations du jour** : `src/data/quotes.ts` (Batman) et `src/data/kaamelott.ts` (Kaamelott) — une par jour, dans l'ordre, puis la liste recommence.
 - **Liens de don** : `src/config.ts` → `DONATIONS` (`paypal`, `weroUrl`, `weroId`). Une valeur vide masque le bouton.
   Attention : ces informations sont visibles publiquement.
 

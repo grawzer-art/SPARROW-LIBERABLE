@@ -3,9 +3,10 @@
  * Fichiers statiques : cache d'abord, mis à jour en arrière-plan.
  * Changer VERSION force la purge des anciens caches.
  */
-const VERSION = "sp2031-v3";
+const VERSION = "sp2031-v4";
 const PRECACHE = [
   "/",
+  "/don",
   "/manifest.webmanifest",
   "/icons/icon-192.png",
   "/icons/apple-touch-icon.png",
@@ -40,14 +41,23 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.startsWith("/api/")) return;
 
   if (req.mode === "navigate") {
+    // Une entrée de cache par page (sans les paramètres d'URL).
+    const key = url.pathname.replace(/\/$/, "") || "/";
     event.respondWith(
       fetch(req)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(VERSION).then((c) => c.put("/", copy));
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(VERSION).then((c) => c.put(key, copy));
+          }
           return res;
         })
-        .catch(() => caches.match("/").then((r) => r || Response.error())),
+        .catch(() =>
+          caches
+            .match(key)
+            .then((r) => r || caches.match("/"))
+            .then((r) => r || Response.error()),
+        ),
     );
     return;
   }
