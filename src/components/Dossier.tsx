@@ -18,6 +18,7 @@ import { Portrait } from "./Portrait";
 import { Progress } from "./Progress";
 import { Report } from "./Report";
 import { ShareSection } from "./ShareSection";
+import { Temoins } from "./Temoins";
 
 const simulated = typeof window !== "undefined" && initClock(window.location.search);
 
@@ -187,6 +188,7 @@ export function Dossier() {
           <DailyQuote t={t} />
           <Report r={r} t={t} />
           <Archives />
+          <Temoins toast={toast} />
           <Donation toast={toast} />
           <ShareSection toast={toast} />
 

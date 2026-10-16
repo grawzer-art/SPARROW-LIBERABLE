@@ -3,7 +3,7 @@
  * Fichiers statiques : cache d'abord, mis à jour en arrière-plan.
  * Changer VERSION force la purge des anciens caches.
  */
-const VERSION = "sp2031-v2";
+const VERSION = "sp2031-v3";
 const PRECACHE = [
   "/",
   "/manifest.webmanifest",
@@ -37,6 +37,7 @@ self.addEventListener("fetch", (event) => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith("/api/")) return;
 
   if (req.mode === "navigate") {
     event.respondWith(

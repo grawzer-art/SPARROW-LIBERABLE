@@ -353,6 +353,7 @@ a {
 .archives,
 .share,
 .quote,
+.tem,
 .don {
   margin-top: 46px;
 }
@@ -1205,6 +1206,176 @@ a {
 .quote__next b {
   color: var(--paper);
   font-variant-numeric: tabular-nums;
+}
+
+/* ─── Pièces des témoins ─── */
+
+.tem__rules {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--red);
+  background: var(--ink-2);
+  font-size: 12px;
+  color: var(--paper-2);
+}
+
+.tem__rules b {
+  color: var(--paper);
+}
+
+.tem__cta {
+  width: 100%;
+  min-height: 56px;
+}
+
+.tem__code {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--line-strong);
+}
+
+.tem__code label {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  font-weight: 700;
+}
+
+.tem__coderow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.tem__coderow input {
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 16px;
+  letter-spacing: 0.2em;
+  border-radius: 0;
+}
+
+.tem__code small {
+  font-size: 10.5px;
+}
+
+.tem__empty {
+  margin: 14px 0 0;
+  font-size: 12px;
+  color: var(--steel);
+  text-align: center;
+}
+
+.tem__grid {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 12px;
+}
+
+.tem__item {
+  position: relative;
+  padding: 6px 6px 24px;
+  background: var(--paper);
+  box-shadow: 0 14px 28px -14px rgba(0, 0, 0, 0.9);
+}
+
+.tem__item:nth-child(odd) {
+  transform: rotate(-1.2deg);
+}
+
+.tem__item:nth-child(even) {
+  transform: rotate(1deg);
+}
+
+.tem__thumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: var(--ink-3);
+}
+
+.tem__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: grayscale(1) contrast(1.12);
+}
+
+.tem__tag,
+.tem__date {
+  position: absolute;
+  bottom: 6px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--ink);
+}
+
+.tem__tag {
+  left: 7px;
+}
+
+.tem__date {
+  right: 7px;
+  color: var(--red);
+}
+
+.tem__more {
+  width: 100%;
+  margin-top: 14px;
+}
+
+.tem__admin {
+  margin: 10px 0 0;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--red);
+  text-align: center;
+}
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 92;
+  display: grid;
+  place-items: center;
+  padding: calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 16px);
+  background: rgba(9, 9, 9, 0.96);
+  animation: alertIn 0.25s both;
+}
+
+.lightbox figure {
+  margin: 0;
+  width: min(100%, 520px);
+}
+
+.lightbox img {
+  width: 100%;
+  max-height: 68dvh;
+  object-fit: contain;
+  border: 8px solid var(--paper);
+  background: var(--paper);
+}
+
+.lightbox figcaption {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--paper-2);
+}
+
+.lightbox__row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 /* ─── Don pour le Chevalier Noir ─── */

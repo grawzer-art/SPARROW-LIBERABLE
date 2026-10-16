@@ -3,7 +3,7 @@
 Application web installable (PWA) : compte à rebours cinématographique, à la seconde près, jusqu'au
 **12 octobre 2031, 00:00 (heure de Paris)**. Projet indépendant, fait pour les potes. Document fictif, sans valeur juridique.
 
-- 100 % statique (Next.js en export statique) : pas de serveur, pas de base de données, pas de compte.
+- Pages pré-générées (statiques), sans compte ni base de données. Une seule petite route d'API sert au dépôt de photos par les potes (stockage Vercel Blob, gratuit en Hobby).
 - Tous les téléphones visent le même instant absolu (`2031-10-11T22:00:00Z`), quelle que soit la date d'installation.
 - Fonctionne hors ligne après la première visite (service worker).
 
@@ -19,6 +19,7 @@ Application web installable (PWA) : compte à rebours cinématographique, à la 
 | Citation du jour | Une réplique de Batman par jour (change à minuit, heure de Paris) + note du Ministère |
 | Rapport d'analyse | Secondes, réveils, lundis, week-ends, Noëls restants (calculs réels) + estimations signalées |
 | Archives du suspect | Galerie tactile avec légendes, emplacements réservés |
+| Pièces des témoins | Les potes déposent des photos du suspect (code des potes requis), galerie + vue agrandie |
 | Don pour le Chevalier Noir | Boutons PayPal / Wero (liens externes, l'appli ne collecte rien) |
 | Diffusion | Partage du lien, fiche image (PNG 1080×1350), QR code, instructions d'installation |
 | Grand final | Écran spécial à zéro : confettis, photo finale, verdict, partage |
@@ -42,6 +43,20 @@ Autres exemples : `?simuler=2030-06-01` (cap des 500 jours), `?simuler=2031-10-1
 - **Citations du jour** : `src/data/quotes.ts` (une par jour, dans l'ordre, puis la liste recommence).
 - **Liens de don** : `src/config.ts` → `DONATIONS` (`paypal`, `weroUrl`, `weroId`). Une valeur vide masque le bouton.
   Attention : ces informations sont visibles publiquement.
+
+## Activer le dépôt de photos par les potes (une seule fois, depuis l'iPhone)
+
+1. Vercel → projet → onglet **Storage** → **Create Database** → **Blob** → nom `sparrow-temoins` → **Create**,
+   puis **Connect** au projet (environnements Production + Preview). Vercel crée `BLOB_READ_WRITE_TOKEN` tout seul.
+2. Projet → **Settings → Environment Variables**, ajouter :
+   - `UPLOAD_CODE` = le code à donner aux potes (ex. `gotham2031`) ;
+   - `ADMIN_CODE` = votre code secret à vous (permet de supprimer des photos).
+3. **Deployments** → dernier déploiement → **⋯ → Redeploy**.
+
+Utilisation : section « Pièces des témoins » → *Déposer une photo du suspect* → saisir le code (retenu sur le téléphone).
+Les photos sont redimensionnées et réencodées sur le téléphone avant envoi (métadonnées GPS supprimées), 3 Mo max, 300 photos max.
+Aucune modération automatique : avec `ADMIN_CODE`, ouvrir une photo → *Détruire la pièce*.
+Les photos déposées sont accessibles publiquement à quiconque a le lien de l'appli.
 
 ## Ajouter une photo (depuis l'iPhone)
 

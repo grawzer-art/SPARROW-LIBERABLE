@@ -20,7 +20,7 @@ function DonationImpl({ toast }: { toast: (m: string) => void }) {
   return (
     <section className="don reveal" aria-labelledby="don-title">
       <header className="section-head">
-        <span className="section-head__num mono">06</span>
+        <span className="section-head__num mono">07</span>
         <h2 id="don-title" className="section-head__title">Don pour le Chevalier Noir</h2>
       </header>
 

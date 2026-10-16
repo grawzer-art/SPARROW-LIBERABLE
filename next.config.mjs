@@ -1,7 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Site 100 % statique : aucun serveur, aucune base de données.
-  output: "export",
+  // Pages pré-générées (statiques) + une petite route d'API pour les photos des témoins.
   images: { unoptimized: true },
   trailingSlash: false,
   reactStrictMode: true,
