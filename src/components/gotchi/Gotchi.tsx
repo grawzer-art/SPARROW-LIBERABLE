@@ -1,35 +1,52 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { TROPHIES } from "@/lib/gotchi/achievements";
 import {
   COOLDOWN,
   STATS,
-  absenceReport,
   act,
   ageJours,
+  buy,
+  cacheSpot,
+  canFarm,
+  catchUp,
+  claim,
+  claimable,
   cooldownLeft,
+  ensureMissions,
+  equipAndCheck,
+  farmReward,
+  findCache,
+  isEquipped,
   mood as moodOf,
   newState,
   randomEvent,
   restore,
   tick,
   type Action,
+  type FarmResult,
   type Mood,
+  type Note,
   type Result,
   type State,
 } from "@/lib/gotchi/engine";
+import { ITEMS, titleFor, xpToNext, type Slot } from "@/lib/gotchi/items";
+import { missionDef } from "@/lib/gotchi/missions";
 import { load, save } from "@/lib/storage";
 import { Chiptune } from "../game/audio";
 import { Toast } from "../Overlays";
-import { GotchiRenderer, LCD_H, LCD_W, type Anim } from "./render";
+import { FarmGame, type FarmSummary } from "./FarmGame";
+import { ROOMS, VIEW_H, VIEW_W, World, WORLD_W, type Activity } from "./world";
 
-const KEY = "sp.gotchi.v1";
+const KEY = "sp.gotchi.v1"; // même clé qu'en v1 : la progression existante est migrée, jamais effacée
+const SOUND_KEY = "sp.gotchi.sound";
 
 const ACTIONS: { id: Action; icon: string; label: string }[] = [
   { id: "frites", icon: "🍟", label: "Frites" },
   { id: "salade", icon: "🥗", label: "Salade" },
   { id: "dofus", icon: "🎮", label: "Dofus" },
-  { id: "sieste", icon: "🛋️", label: "Repos express" },
+  { id: "sieste", icon: "🛋️", label: "Micro-sieste" },
   { id: "douche", icon: "🚿", label: "Rafraîchir" },
   { id: "parler", icon: "💬", label: "Parler" },
 ];
@@ -40,24 +57,48 @@ const MOOD_LABEL: Record<Mood, string> = {
   affame: "RÉCLAME DES FRITES",
   creve: "ÉPUISÉ (NIE TOUT)",
   deprime: "DÉPRIMÉ",
-  gras: "MODE FRITE",
+  gras: "FRITOMAN",
   focus: "ULTRA FOCUS",
   rage: "EN RAGE",
   dofus: "SESSION DOFUS",
+  boude: "BOUDE",
   degout: "DÉGOÛTÉ",
   crise: "CRISE DRAMATIQUE",
 };
 
-const ANIM_LEN = 2.4;
+const SLOTS: { id: Slot; label: string }[] = [
+  { id: "lunettes", label: "Lunettes" },
+  { id: "tenue", label: "Tenues" },
+  { id: "tete", label: "Têtes" },
+  { id: "deco", label: "Déco" },
+];
+
+type Sheet = "missions" | "sac" | "trophees" | "journal" | "options" | null;
+
+interface Queued {
+  line: string;
+  anim: Activity;
+  scene?: Result["scene"];
+  rarity?: Result["rarity"];
+  notes: Note[];
+}
+
+const hhmm = (t: number) =>
+  new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(
+    new Date(t),
+  );
 
 export function Gotchi() {
   const canvas = useRef<HTMLCanvasElement>(null);
   const stateRef = useRef<State | null>(null);
-  const animRef = useRef<{ anim: Anim; start: number; refusOf?: string } | null>(null);
-  const renderer = useRef(new GotchiRenderer());
+  const world = useRef<World | null>(null);
   const audio = useRef(new Chiptune());
+  const queue = useRef<Queued[]>([]);
+  const lastSay = useRef(0);
+  const reduced = useRef(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const lineTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const fileInput = useRef<HTMLInputElement>(null);
 
   const [state, setState] = useState<State | null>(null);
   const [now, setNow] = useState(0);
@@ -66,11 +107,16 @@ export function Gotchi() {
   const [delta, setDelta] = useState<{ key: number; d: Result["delta"] } | null>(null);
   const [sound, setSound] = useState(false);
   const [toastText, setToastText] = useState<string | null>(null);
+  const [sheet, setSheet] = useState<Sheet>(null);
+  const [slot, setSlot] = useState<Slot>("lunettes");
+  const [farming, setFarming] = useState(false);
+  const [room, setRoom] = useState(2);
+  const [legend, setLegend] = useState(false);
 
   const toast = useCallback((m: string) => {
     setToastText(m);
     clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToastText(null), 2800);
+    toastTimer.current = setTimeout(() => setToastText(null), 3200);
   }, []);
 
   const commit = useCallback((s: State) => {
@@ -80,39 +126,74 @@ export function Gotchi() {
   }, []);
 
   const say = useCallback((text: string) => {
+    lastSay.current = Date.now();
     setLine(text);
     setTyped(0);
     clearTimeout(lineTimer.current);
     lineTimer.current = setTimeout(() => setLine(null), Math.max(4500, text.length * 70));
   }, []);
 
-  const play = useCallback((anim: Anim, refusOf?: string) => {
-    animRef.current = { anim, start: performance.now(), refusOf };
-  }, []);
+  const announce = useCallback(
+    (notes: Note[]) => {
+      if (!notes.length) return;
+      toast(notes.map((n) => n.txt).join(" · "));
+      const au = audio.current;
+      if (notes.some((n) => n.kind === "level")) {
+        au.milestone();
+        navigator.vibrate?.([30, 40, 30, 40, 60]);
+      } else if (notes.some((n) => n.kind === "drop" || n.kind === "trophy")) au.win();
+      else au.coin();
+    },
+    [toast],
+  );
 
-  // Chargement + rattrapage du temps passé
+  /** Joue une séquence dans l'appartement ; la réplique arrive quand il est au bon meuble. */
+  const perform = useCallback(
+    (q: Queued, of?: string) => {
+      const w = world.current;
+      const show = () => {
+        say(q.line);
+        announce(q.notes);
+        if (q.rarity === "legendaire") {
+          setLegend(true);
+          setTimeout(() => setLegend(false), 2600);
+          audio.current.win();
+          navigator.vibrate?.([60, 40, 60, 40, 120]);
+        }
+      };
+      if (!w) return show();
+      w.play(q.anim, { of, scene: q.scene, onAct: show, reduced: reduced.current });
+    },
+    [announce, say],
+  );
+
+  // Chargement + rattrapage du temps passé (migration v1 → v2 transparente)
   useEffect(() => {
+    reduced.current = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    world.current = new World();
     const t = Date.now();
     const raw = load<unknown>(KEY, null);
     const before = raw ? restore(raw, t) : newState(t);
-    let after = tick(before, t);
-    const report = raw ? absenceReport(before, after, t) : null;
-    if (!raw) say("Salut. Je suis Sparrow. Tu me dois des frites.");
-    else if (report) say(report);
-    else {
+    const back = raw ? catchUp(before, t) : null;
+    let after = back ? back.state : ensureMissions(tick(before, t), t);
+    if (!raw) say("Salut. Je suis Sparrow. Bienvenue dans mon appart. Tu me dois des frites.");
+    else if (back) {
+      say(back.welcome);
+      for (const e of back.events) queue.current.push({ line: e.line, anim: e.anim, scene: e.scene, rarity: e.rarity, notes: e.notes });
+    } else {
       const ev = randomEvent(after, t);
-      if (ev) {
+      if (ev && ev.anim !== "parler") {
         after = ev.state;
-        say(ev.line);
-        play(ev.anim as Anim);
-      } else say("Ah, te revoilà. J'avais pas remarqué que t'étais parti.");
+        queue.current.push({ line: ev.line, anim: ev.anim, scene: ev.scene, rarity: ev.rarity, notes: ev.notes });
+      }
+      say(ev?.anim === "parler" ? ev.line : "Ah, te revoilà. J'avais pas remarqué que t'étais parti.");
     }
     commit(after);
     setNow(t);
-    const snd = load<boolean>("sp.gotchi.sound", false);
+    const snd = load<boolean>(SOUND_KEY, false);
     setSound(snd);
     audio.current.enabled = snd;
-  }, [commit, play, say]);
+  }, [commit, say]);
 
   // Le temps passe pendant que l'écran est ouvert ; événements aléatoires
   useEffect(() => {
@@ -121,34 +202,29 @@ export function Gotchi() {
       if (!s || document.visibilityState !== "visible") return;
       const t = Date.now();
       setNow(t);
-      const after = tick(s, t);
-      // Retour après une absence (l'appli était en arrière-plan) : on raconte ce qui s'est passé.
-      const rep = absenceReport(s, after, t);
-      commit(after);
-      if (rep) say(rep);
+      const back = catchUp(s, t);
+      if (back) {
+        commit(back.state);
+        say(back.welcome);
+        for (const e of back.events) queue.current.push({ line: e.line, anim: e.anim, scene: e.scene, rarity: e.rarity, notes: e.notes });
+      } else commit(ensureMissions(tick(s, t), t));
+      const w = world.current;
+      if (w) setRoom(w.room);
+      if (queue.current.length && w && !w.busy && t - lastSay.current > 4500) perform(queue.current.shift()!);
     }, 1000);
     const ev = setInterval(() => {
       const s = stateRef.current;
-      if (!s || document.visibilityState !== "visible" || animRef.current) return;
+      if (!s || document.visibilityState !== "visible" || world.current?.busy || queue.current.length) return;
       const r = randomEvent(s, Date.now());
       if (r) {
         commit(r.state);
-        say(r.line);
-        play(r.anim as Anim);
+        queue.current.push({ line: r.line, anim: r.anim, scene: r.scene, rarity: r.rarity, notes: r.notes });
         if (r.anim === "crise") navigator.vibrate?.([80, 60, 80]);
       }
     }, 38_000);
     const onVis = () => {
       const s = stateRef.current;
-      if (!s) return;
-      if (document.visibilityState === "hidden") save(KEY, tick(s, Date.now()));
-      else {
-        const t = Date.now();
-        const after = tick(s, t);
-        const rep = absenceReport(s, after, t);
-        commit(after);
-        if (rep) say(rep);
-      }
+      if (s && document.visibilityState === "hidden") save(KEY, tick(s, Date.now()));
     };
     document.addEventListener("visibilitychange", onVis);
     return () => {
@@ -156,7 +232,7 @@ export function Gotchi() {
       clearInterval(ev);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [commit, play, say]);
+  }, [commit, perform, say]);
 
   // Effet machine à écrire sur la bulle
   useEffect(() => {
@@ -165,30 +241,32 @@ export function Gotchi() {
     return () => clearTimeout(id);
   }, [line, typed]);
 
-  // Rendu de l'écran LCD
+  // Rendu du monde
   useEffect(() => {
     const cv = canvas.current;
     const ctx = cv?.getContext("2d");
     if (!cv || !ctx) return;
     let raf = 0;
-    const t0 = performance.now();
+    let last = performance.now();
     const frame = (n: number) => {
       const s = stateRef.current;
-      if (s) {
-        const a = animRef.current;
-        let animT = 0;
-        if (a) {
-          animT = (n - a.start) / 1000;
-          if (animT > ANIM_LEN) animRef.current = null;
-        }
-        renderer.current.draw(ctx, {
-          mood: moodOf(s, Date.now()),
-          anim: animRef.current?.anim ?? null,
-          refusOf: animRef.current?.refusOf,
-          animT,
-          t: (n - t0) / 1000,
-        });
+      const w = world.current;
+      if (s && w) {
+        const t = Date.now();
+        w.draw(
+          ctx,
+          {
+            mood: moodOf(s, t),
+            look: { lunettes: s.equip.lunettes, tenue: s.equip.tenue, tete: s.equip.tete, barbe: s.level >= 6 },
+            deco: s.equip.deco,
+            pcBroken: s.pcBrokenUntil > t,
+            cache: cacheSpot(s, t, WORLD_W),
+            reduced: reduced.current,
+          },
+          (n - last) / 1000,
+        );
       }
+      last = n;
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
@@ -207,21 +285,150 @@ export function Gotchi() {
     const r = act(s, a, t);
     commit(r.state);
     setNow(t);
-    say(r.line);
-    play(r.anim as Anim, r.anim === "refus" ? a : undefined);
     setDelta({ key: t, d: r.delta });
+    perform({ line: r.line, anim: r.anim, notes: r.notes }, a);
     const au = audio.current;
-    if (r.anim === "refus" || r.anim === "rage") au.hit();
-    else if (r.anim === "drop") au.win();
+    if (r.anim === "refus" || r.anim === "rage" || r.anim === "boude") au.hit();
+    else if (r.anim === "drop" || r.anim === "victoire" || r.anim === "miracle") au.win();
+    else if (r.anim === "gras") au.power();
     else if (a === "frites" || a === "salade") au.coin();
     else au.jump(false);
     navigator.vibrate?.(r.anim === "refus" || r.anim === "rage" ? [40, 40, 40] : 15);
   };
 
+  const openFarm = () => {
+    const s = stateRef.current;
+    if (!s) return;
+    const t = Date.now();
+    if (!canFarm(s, t)) {
+      toast(`PC en panne. Réparation dans ${Math.ceil((s.pcBrokenUntil - t) / 60_000)} min.`);
+      return;
+    }
+    setSheet(null);
+    setFarming(true);
+  };
+
+  const onFarmFinish = useCallback(
+    (r: FarmResult): FarmSummary => {
+      const s = stateRef.current!;
+      const res = farmReward(s, r, Date.now());
+      commit(res.state);
+      return {
+        coins: res.coins,
+        xp: res.xp,
+        drop: res.drop?.name ?? null,
+        record: res.record,
+        notes: res.notes.filter((n) => n.kind !== "drop").map((n) => n.txt),
+      };
+    },
+    [commit],
+  );
+
+  const closeFarm = () => {
+    setFarming(false);
+    world.current?.play("victoire", { of: "dofus", reduced: reduced.current });
+    say("Session terminée. Je suis épuisé, mais riche. Enfin, riche en Frit'pièces.");
+  };
+
+  const onCanvas = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const s = stateRef.current;
+    const w = world.current;
+    if (!s || !w) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const px = ((e.clientX - rect.left) / rect.width) * VIEW_W;
+    const py = ((e.clientY - rect.top) / rect.height) * VIEW_H;
+    const t = Date.now();
+    const what = w.hit(px, py, { cache: cacheSpot(s, t, WORLD_W) });
+    if (what === "cache") {
+      const r = findCache(s, t);
+      if (r) {
+        commit(r.state);
+        say(r.line);
+        announce(r.notes);
+      }
+    } else if (what === "pc") openFarm();
+    else if (what === "frigo") say("Le frigo. Il contient surtout de l'espoir et une sauce de 2023.");
+    else if (what === "sparrow") doAction("parler");
+  };
+
+  const goRoom = (i: number) => {
+    world.current?.goRoom(i);
+    setRoom(i);
+  };
+
+  const doClaim = (id: string) => {
+    const s = stateRef.current;
+    if (!s) return;
+    const r = claim(s, id, Date.now());
+    if (!r) return;
+    commit(r.state);
+    announce(r.notes);
+  };
+
+  const doBuy = (id: string) => {
+    const s = stateRef.current;
+    if (!s) return;
+    const r = buy(s, id, Date.now());
+    if (r.ok) {
+      commit(r.state);
+      audio.current.coin();
+    } else audio.current.hit();
+    toast(r.msg);
+  };
+
+  const doEquip = (id: string) => {
+    const s = stateRef.current;
+    if (!s) return;
+    const r = equipAndCheck(s, id, Date.now());
+    commit(r.state);
+    announce(r.notes);
+  };
+
+  const exportSave = async () => {
+    const s = stateRef.current;
+    if (!s) return;
+    const json = JSON.stringify({ app: "sparrowgotchi", v: 2, exported: Date.now(), state: s }, null, 1);
+    const name = `sparrowgotchi-${new Date().toISOString().slice(0, 10)}.json`;
+    const file = typeof File !== "undefined" ? new File([json], name, { type: "application/json" }) : null;
+    try {
+      if (file && navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: "Sauvegarde Sparrowgotchi" });
+        return;
+      }
+    } catch {
+      /* partage annulé : on propose le téléchargement */
+    }
+    const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    toast("Sauvegarde exportée.");
+  };
+
+  const importSave = async (f: File | undefined) => {
+    if (!f) return;
+    try {
+      const data = JSON.parse(await f.text());
+      const raw = data && typeof data === "object" && "state" in data ? data.state : data;
+      if (!raw || typeof raw !== "object" || !("stats" in raw)) throw new Error("format");
+      if (!window.confirm("Remplacer le Sparrow actuel par cette sauvegarde ?")) return;
+      const t = Date.now();
+      commit(ensureMissions(tick(restore(raw, t), t), t));
+      say("Je me sens… importé. C'est bizarre, mais j'ai toujours faim.");
+      toast("Sauvegarde importée.");
+    } catch {
+      toast("Fichier illisible. Ce n'est pas une sauvegarde Sparrowgotchi.");
+    } finally {
+      if (fileInput.current) fileInput.current.value = "";
+    }
+  };
+
   const reset = () => {
-    if (!window.confirm("Adopter un nouveau Sparrow ? L'actuel sera rendu au Ministère du Calendrier.")) return;
-    const s = newState(Date.now());
-    commit(s);
+    if (!window.confirm("Adopter un nouveau Sparrow ? Niveau, objets et trophées seront perdus. (Exporte d'abord ta sauvegarde !)")) return;
+    commit(ensureMissions(newState(Date.now()), Date.now()));
+    setSheet(null);
     say("Nouveau Sparrow, mêmes exigences. Frites, s'il te plaît.");
   };
 
@@ -229,14 +436,18 @@ export function Gotchi() {
     const v = !sound;
     setSound(v);
     audio.current.enabled = v;
-    save("sp.gotchi.sound", v);
+    save(SOUND_KEY, v);
     if (v) audio.current.coin();
   };
 
-  const m = state ? moodOf(state, now || Date.now()) : "neutre";
+  const t = now || Date.now();
+  const m = state ? moodOf(state, t) : "neutre";
+  const toClaim = state ? claimable(state) : 0;
+  const need = state ? xpToNext(state.level) : 1;
+  const trophyCount = state ? Object.keys(state.trophies).length : 0;
 
   return (
-    <div className="gt">
+    <div className={`gt${legend ? " is-legend" : ""}`}>
       <header className="gt-bar mono">
         <a href="/jeu">← JEUX</a>
         <span className="gt-bar__title">SPARROWGOTCHI</span>
@@ -246,6 +457,19 @@ export function Gotchi() {
       </header>
 
       <main className="gt-main">
+        {state && (
+          <div className="gt-prog mono">
+            <span className="gt-prog__lvl">NIV {state.level}</span>
+            <div className="gt-prog__xp" role="meter" aria-label="Expérience" aria-valuemin={0} aria-valuemax={need} aria-valuenow={state.xp}>
+              <i style={{ transform: `scaleX(${state.xp / need})` }} />
+              <span>{titleFor(state.level)}</span>
+            </div>
+            <span className="gt-prog__coins" aria-label={`${state.coins} Frit'pièces`}>
+              🍟 {state.coins}
+            </span>
+          </div>
+        )}
+
         <div className="gt-bubble-wrap" aria-live="polite">
           {line && (
             <p className="gt-bubble" key={line}>
@@ -255,33 +479,29 @@ export function Gotchi() {
           )}
         </div>
 
-        <div className={`gt-egg gt-egg--${m}`}>
-          <div className="gt-egg__top mono">
-            <span>SP-2031</span>
-            <span className="gt-egg__led" />
-          </div>
-          <div className="gt-lcd">
-            <canvas
-              ref={canvas}
-              width={LCD_W}
-              height={LCD_H}
-              className="gt-lcd__canvas"
-              onClick={() => doAction("parler")}
-              aria-label="Sparrow, toucher pour lui parler"
-              role="img"
-            />
-            <div className="gt-lcd__status mono">
-              <span>{MOOD_LABEL[m]}</span>
-              {state && <span>J+{ageJours(state, now || Date.now())}</span>}
-            </div>
-          </div>
-          <p className="gt-egg__brand">SPARROWGOTCHI</p>
-          <div className="gt-egg__keys" aria-hidden="true">
-            <i />
-            <i />
-            <i />
+        <div className={`gt-screen gt-screen--${m}`}>
+          <canvas
+            ref={canvas}
+            width={VIEW_W}
+            height={VIEW_H}
+            className="gt-screen__canvas"
+            onPointerDown={onCanvas}
+            aria-label="L'appartement de Sparrow. Touche Sparrow pour lui parler, le PC pour farmer."
+            role="img"
+          />
+          <div className="gt-screen__status mono">
+            <span>{MOOD_LABEL[m]}</span>
+            {state && <span>J+{ageJours(state, t)}</span>}
           </div>
         </div>
+        <nav className="gt-rooms mono" aria-label="Pièces">
+          {ROOMS.map((r, i) => (
+            <button key={r.id} type="button" className={room === i ? "is-on" : ""} onClick={() => goRoom(i)}>
+              {r.label}
+            </button>
+          ))}
+        </nav>
+        <p className="gt-hint mono">Touche le PC pour une session de farm · cherche l&apos;objet caché qui brille.</p>
 
         <section className="gt-stats" aria-label="Jauges">
           {STATS.map(({ id, label }) => {
@@ -310,7 +530,7 @@ export function Gotchi() {
 
         <section className="gt-actions" aria-label="Actions">
           {ACTIONS.map((a) => {
-            const left = state ? cooldownLeft(state, a.id, now || Date.now()) : 0;
+            const left = state ? cooldownLeft(state, a.id, t) : 0;
             return (
               <button key={a.id} type="button" className="gt-act" onClick={() => doAction(a.id)} disabled={!state}>
                 <span className="gt-act__icon" aria-hidden="true">
@@ -323,45 +543,220 @@ export function Gotchi() {
           })}
         </section>
 
-        {state && (
-          <section className="gt-file mono" aria-label="Dossier">
-            <p className="gt-file__title">DOSSIER DU SUJET</p>
-            <dl>
-              <div>
-                <dt>Adopté depuis</dt>
-                <dd>{ageJours(state, now || Date.now())} j</dd>
-              </div>
-              <div>
-                <dt>Portions de frites</dt>
-                <dd>{state.counters.frites}</dd>
-              </div>
-              <div>
-                <dt>Salades acceptées</dt>
-                <dd>{state.counters.salade}</dd>
-              </div>
-              <div>
-                <dt>Sessions Dofus</dt>
-                <dd>{state.counters.dofus}</dd>
-              </div>
-              <div>
-                <dt>Siestes refusées</dt>
-                <dd>{state.counters.siestesRefusees}</dd>
-              </div>
-              <div>
-                <dt>Crises dramatiques</dt>
-                <dd>{state.counters.crises}</dd>
-              </div>
-            </dl>
-            <p className="gt-file__note">
-              Sauvegardé sur ce téléphone. Sparrow vit sa vie même quand l&apos;appli est fermée. Il ne meurt jamais : il
-              fait juste des crises.
-            </p>
-            <button type="button" className="btn btn--ghost btn--sm" onClick={reset}>
-              Adopter un nouveau Sparrow
-            </button>
-          </section>
-        )}
+        <nav className="gt-menu mono" aria-label="Menus">
+          <button type="button" onClick={openFarm}>
+            🖥️<span>Farm</span>
+          </button>
+          <button type="button" onClick={() => setSheet("missions")}>
+            📋<span>Missions</span>
+            {toClaim > 0 && <b className="gt-badge">{toClaim}</b>}
+          </button>
+          <button type="button" onClick={() => setSheet("sac")}>
+            🎒<span>Sac</span>
+          </button>
+          <button type="button" onClick={() => setSheet("trophees")}>
+            🏆<span>Trophées</span>
+          </button>
+          <button type="button" onClick={() => setSheet("journal")}>
+            📰<span>Journal</span>
+          </button>
+          <button type="button" onClick={() => setSheet("options")}>
+            ⚙️<span>Options</span>
+          </button>
+        </nav>
       </main>
+
+      {sheet && state && (
+        <div className="gt-sheet-wrap" onClick={() => setSheet(null)}>
+          <section className="gt-sheet" role="dialog" aria-modal="true" aria-label={sheet} onClick={(e) => e.stopPropagation()}>
+            <header className="gt-sheet__head mono">
+              <span>
+                {sheet === "missions" && "MISSIONS DU JOUR"}
+                {sheet === "sac" && `SAC & BOUTIQUE · 🍟 ${state.coins} FP`}
+                {sheet === "trophees" && `TROPHÉES · ${trophyCount}/${TROPHIES.length}`}
+                {sheet === "journal" && "JOURNAL DE SPARROW"}
+                {sheet === "options" && "OPTIONS"}
+              </span>
+              <button type="button" onClick={() => setSheet(null)} aria-label="Fermer">
+                ✕
+              </button>
+            </header>
+            <div className="gt-sheet__body">
+              {sheet === "missions" && (
+                <>
+                  <p className="gt-sheet__note mono">Trois missions par jour, renouvelées à minuit. Rien n&apos;est perdu si tu ne les fais pas.</p>
+                  {state.missions.list.map((mi) => {
+                    const d = missionDef(mi.id);
+                    if (!d) return null;
+                    const done = mi.progress >= d.n;
+                    return (
+                      <div key={mi.id} className={`gt-row${mi.claimed ? " is-done" : ""}`}>
+                        <div className="gt-row__main">
+                          <p className="gt-row__title">{d.txt}</p>
+                          <div className="gt-row__bar">
+                            <i style={{ transform: `scaleX(${Math.min(1, mi.progress / d.n)})` }} />
+                          </div>
+                          <p className="gt-row__meta mono">
+                            {Math.min(mi.progress, d.n)}/{d.n} · +{d.coins} FP · +{d.xp} XP
+                          </p>
+                        </div>
+                        {mi.claimed ? (
+                          <span className="gt-row__tag mono">ENCAISSÉ</span>
+                        ) : (
+                          <button type="button" className="btn btn--sm" disabled={!done} onClick={() => doClaim(mi.id)}>
+                            {done ? "Encaisser" : "En cours"}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+
+              {sheet === "sac" && (
+                <>
+                  <div className="gt-tabs mono" role="tablist">
+                    {SLOTS.map((s) => (
+                      <button key={s.id} type="button" role="tab" aria-selected={slot === s.id} className={slot === s.id ? "is-on" : ""} onClick={() => setSlot(s.id)}>
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                  {ITEMS.filter((it) => it.slot === slot).map((it) => {
+                    const owned = state.owned.includes(it.id);
+                    const on = isEquipped(state, it.id);
+                    if (it.rare && !owned)
+                      return (
+                        <div key={it.id} className="gt-row is-locked">
+                          <div className="gt-row__main">
+                            <p className="gt-row__title">??? Objet rare</p>
+                            <p className="gt-row__meta mono">Uniquement en drop : farm, événements…</p>
+                          </div>
+                        </div>
+                      );
+                    return (
+                      <div key={it.id} className={`gt-row${on ? " is-on" : ""}${it.rare ? " is-rare" : ""}`}>
+                        <div className="gt-row__main">
+                          <p className="gt-row__title">
+                            {it.name}
+                            {it.rare && <em className="mono"> RARE</em>}
+                          </p>
+                          <p className="gt-row__meta">{it.desc}</p>
+                        </div>
+                        {owned ? (
+                          it.price === 0 && !it.rare && it.slot !== "deco" && on ? (
+                            <span className="gt-row__tag mono">PORTÉ</span>
+                          ) : (
+                            <button type="button" className={`btn btn--sm${on ? " btn--ghost" : ""}`} onClick={() => doEquip(it.id)} disabled={on && it.slot !== "deco"}>
+                              {on ? (it.slot === "deco" ? "Retirer" : "Porté") : it.slot === "deco" ? "Installer" : "Équiper"}
+                            </button>
+                          )
+                        ) : (
+                          <button type="button" className="btn btn--sm" onClick={() => doBuy(it.id)} disabled={state.level < it.level}>
+                            {state.level < it.level ? `Niv ${it.level}` : `${it.price} FP`}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+
+              {sheet === "trophees" &&
+                TROPHIES.map((tr) => {
+                  const got = state.trophies[tr.id];
+                  const hidden = tr.secret && !got;
+                  return (
+                    <div key={tr.id} className={`gt-row${got ? " is-on" : " is-locked"}`}>
+                      <div className="gt-row__main">
+                        <p className="gt-row__title">{hidden ? "??? Trophée secret" : tr.name}</p>
+                        <p className="gt-row__meta">{hidden ? "Continue à vivre ta vie de Sparrow. Ça viendra." : tr.desc}</p>
+                      </div>
+                      <span className="gt-row__tag mono">{got ? "✓" : `+${tr.coins}`}</span>
+                    </div>
+                  );
+                })}
+
+              {sheet === "journal" &&
+                (state.journal.length ? (
+                  [...state.journal].reverse().map((j, i) => (
+                    <div key={`${j.t}-${i}`} className={`gt-log gt-log--${j.kind}`}>
+                      <span className="mono">{hhmm(j.t)}</span>
+                      <p>{j.txt}</p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="gt-sheet__note mono">Rien pour l&apos;instant. Sparrow vit sa vie, reviens plus tard.</p>
+                ))}
+
+              {sheet === "options" && (
+                <>
+                  <div className="gt-opts">
+                    <button type="button" className="btn btn--sm" onClick={toggleSound}>
+                      Son : {sound ? "activé" : "coupé"}
+                    </button>
+                    <button type="button" className="btn btn--sm" onClick={exportSave}>
+                      Exporter la sauvegarde
+                    </button>
+                    <button type="button" className="btn btn--sm" onClick={() => fileInput.current?.click()}>
+                      Importer une sauvegarde
+                    </button>
+                    <input ref={fileInput} type="file" accept="application/json,.json" hidden onChange={(e) => importSave(e.target.files?.[0])} />
+                  </div>
+                  <dl className="gt-dossier mono">
+                    <div>
+                      <dt>Adopté depuis</dt>
+                      <dd>{ageJours(state, t)} j</dd>
+                    </div>
+                    <div>
+                      <dt>Portions de frites</dt>
+                      <dd>{state.counters.frites}</dd>
+                    </div>
+                    <div>
+                      <dt>Fritoman</dt>
+                      <dd>{state.counters.fritoman}</dd>
+                    </div>
+                    <div>
+                      <dt>Salades acceptées / refusées</dt>
+                      <dd>
+                        {state.counters.salade} / {state.counters.saladeRefus}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Sessions de farm · record</dt>
+                      <dd>
+                        {state.counters.farms} · {state.bestFarm}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Siestes refusées</dt>
+                      <dd>{state.counters.siestesRefusees}</dd>
+                    </div>
+                    <div>
+                      <dt>Événements vécus</dt>
+                      <dd>{state.counters.events}</dd>
+                    </div>
+                    <div>
+                      <dt>Crises dramatiques</dt>
+                      <dd>{state.counters.crises}</dd>
+                    </div>
+                  </dl>
+                  <p className="gt-sheet__note mono">
+                    Sauvegarde locale, sur ce téléphone uniquement. Sparrow vit sa vie même quand l&apos;appli est fermée. Il ne meurt jamais : il boude, au pire.
+                  </p>
+                  <button type="button" className="btn btn--ghost btn--sm" onClick={reset}>
+                    Adopter un nouveau Sparrow
+                  </button>
+                </>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {farming && state && (
+        <FarmGame audio={audio.current} best={state.bestFarm} reduced={reduced.current} onFinish={onFarmFinish} onClose={closeFarm} />
+      )}
       <Toast text={toastText} />
     </div>
   );
