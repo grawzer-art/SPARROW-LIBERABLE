@@ -1,0 +1,53 @@
+{
+  "_lisezmoi": "Éditions spéciales datées (heure de Paris). La « une » remplace celle du jour. Les éditions DERNIÈRE MINUTE des paliers du compte à rebours sont générées automatiquement (voir src/lib/gazette/edition.ts).",
+  "editions": [
+    {
+      "date": "2026-10-16",
+      "nom": "ÉDITION INAUGURALE",
+      "bandeau": "N° 1 · Tirage : un exemplaire, photocopié 68 millions de fois",
+      "une": { "id": "es-2026-10-16", "rubrique": "sparrow", "tampon": "EXCLUSIF", "titre": "La Gazette du Chaos paraît pour la première fois. La rédaction annonce déjà un démenti", "chapo": "Notre journal s'engage à ne publier que des informations fausses, vérifiées par personne." }
+    },
+    {
+      "date": "2026-12-25",
+      "nom": "ÉDITION DE NOËL",
+      "bandeau": "Supplément gratuit : la dinde vous juge",
+      "une": { "id": "es-2026-12-25", "rubrique": "france", "tampon": "URGENT", "titre": "Le Père Noël annonce une livraison « entre le 24 décembre et le 12 octobre 2031 »", "chapo": "Le transporteur évoque « un léger retard dû à la conjoncture ». Les rennes sont en grève." }
+    },
+    {
+      "date": "2027-01-01",
+      "nom": "ÉDITION DU NOUVEL AN",
+      "bandeau": "Gueule de bois nationale · Ouverture des pharmacies en continu",
+      "une": { "id": "es-2027-01-01", "rubrique": "sparrow", "tampon": "À LA UNE", "titre": "2027 commence. Le calendrier rappelle discrètement qu'il en reste encore quatre" }
+    },
+    {
+      "date": "2027-10-12",
+      "nom": "ÉDITION SPÉCIALE SPARROW · AN I",
+      "bandeau": "Un an de dossier · La rédaction a mis une bougie sur le compteur",
+      "une": { "id": "es-2027-10-12", "rubrique": "sparrow", "tampon": "EXCLUSIF", "titre": "Un an déjà : Sparrow fête l'événement en fixant le compteur pendant six heures", "chapo": "Le compteur, imperturbable, a décliné toute interview." }
+    },
+    {
+      "date": "2028-10-12",
+      "nom": "ÉDITION SPÉCIALE SPARROW · AN II",
+      "bandeau": "Deux ans · Le Ministère du Calendrier se félicite de sa régularité",
+      "une": { "id": "es-2028-10-12", "rubrique": "sparrow", "tampon": "RÉVÉLATION", "titre": "Deux ans de dossier : Sparrow réclame le remboursement du 29 février" }
+    },
+    {
+      "date": "2029-10-12",
+      "nom": "ÉDITION SPÉCIALE SPARROW · AN III",
+      "bandeau": "Trois ans · Plus de la moitié du chemin, moins de la moitié de la patience",
+      "une": { "id": "es-2029-10-12", "rubrique": "sparrow", "tampon": "À LA UNE", "titre": "Trois ans : Sparrow annonce qu'il a dépassé la moitié. Le calendrier demande des preuves" }
+    },
+    {
+      "date": "2030-10-12",
+      "nom": "ÉDITION SPÉCIALE SPARROW · AN IV",
+      "bandeau": "Quatre ans · Les potes commencent à préparer les confettis",
+      "une": { "id": "es-2030-10-12", "rubrique": "sparrow", "tampon": "URGENT", "titre": "Plus qu'un an : Sparrow commence à faire ses valises. Il ne sait pas encore pour où" }
+    },
+    {
+      "date": "2031-10-12",
+      "nom": "ÉDITION HISTORIQUE",
+      "bandeau": "Date symbolique atteinte · Tirage exceptionnel · Les potes en larmes (de rire)",
+      "une": { "id": "es-2031-10-12", "rubrique": "sparrow", "tampon": "EXCLUSIF", "titre": "C'est fait : après 1 826 jours, le calendrier capitule", "chapo": "Le compteur a rendu son verdict symbolique. Sparrow est libérable. La rédaction, elle, ne l'est toujours pas." }
+    }
+  ]
+}

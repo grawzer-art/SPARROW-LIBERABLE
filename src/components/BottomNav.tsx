@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 
-const TABS = [
+const TABS: { href: string; label: string; short?: string; icon: React.ReactNode }[] = [
   {
     href: "/",
     label: "Accueil",
@@ -27,12 +27,27 @@ const TABS = [
   {
     href: "/capsule",
     label: "Capsule 2031",
+    short: "Capsule",
     icon: (
       <>
         <rect x="3.5" y="4" width="17" height="15" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
         <circle cx="12" cy="11.5" r="3.6" fill="none" stroke="currentColor" strokeWidth="1.8" />
         <path d="M12 8v1.4M12 13.6V15M8.5 11.5h1.4M14.1 11.5h1.4M6 19v1.5M18 19v1.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
       </>
+    ),
+  },
+  {
+    href: "/gazette",
+    label: "Gazette",
+    icon: (
+      <path
+        d="M4 5h13v14H6a2 2 0 0 1-2-2zM17 9h3v8a2 2 0 0 1-2 2h-1M7 8.5h7M7 12h7M7 15.5h4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     ),
   },
   {
@@ -59,7 +74,8 @@ export function BottomNav() {
             <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
               {t.icon}
             </svg>
-            <span className="mono">{t.label}</span>
+            <span className="mono tabbar__long">{t.label}</span>
+            {t.short && <span className="mono tabbar__short">{t.short}</span>}
           </a>
         );
       })}

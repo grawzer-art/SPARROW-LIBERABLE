@@ -20,6 +20,7 @@ Application web installable (PWA) : compte à rebours cinématographique, à la 
 | Rapport d'analyse | Secondes, réveils, lundis, week-ends, Noëls restants (calculs réels) + estimations signalées |
 | Archives du suspect | Galerie tactile avec légendes, emplacements réservés |
 | Capsule 2031 | Onglet dédié `/capsule` : coffre-fort animé, scanner biométrique, lettres au Sparrow de 2031 (stockage local + sauvegardes), archives annuelles 2027 → 2031. Voir `docs/CAPSULE.md` |
+| La Gazette du Chaos | Onglet `/gazette` : journal satirique (75 titres, 5 rubriques, brèves, éditions quotidiennes, archives, favoris, partage, image « une », Flash spécial, éditions spéciales). Voir `docs/GAZETTE.md` |
 | Salle d'arcade | Mini jeu rétro « L'Évasion de Sparrow » (page `/jeu`) : deux persos, record local, défi à partager |
 | Pièces des témoins | Les potes déposent des photos du suspect (code des potes requis), galerie + vue agrandie |
 | Don pour le Chevalier Noir | Encart + page dédiée `/don` : numéro Wero à copier, barème humoristique, QR code de la page |
@@ -44,7 +45,7 @@ avec l'en-tête `x-code: <ADMIN_CODE>` et `{ "name": "PSEUDO" }`.
 Code : `src/components/game/` (moteur testé dans `tests/game.test.ts`, sprites en texte dans `sprites.ts`).
 
 ### Navigation
-Barre d'onglets en bas de chaque page : Accueil · Jeu · Capsule 2031 · Don.
+Barre d'onglets en bas de chaque page : Accueil · Jeu · Capsule 2031 · Gazette · Don.
 
 ### Tester le final sans attendre 5 ans
 Ajouter à l'adresse : `?simuler=2031-10-11T23:59:50` (heure de Paris). Un bandeau « MODE SIMULATION » s'affiche.
