@@ -13,6 +13,8 @@ export const TILE = 16;
 
 export type MapId = "quartier" | "cite" | "maison-chou" | "herboristerie" | "armurerie" | "restaurant" | "egouts" | "palais";
 
+export const MAP_IDS: MapId[] = ["quartier", "cite", "maison-chou", "herboristerie", "armurerie", "restaurant", "egouts", "palais"];
+
 /** Ambiance : règle l'éclairage (nuit, crépuscule, intérieur, souterrain, palais). */
 export type Region = "nuit" | "crepuscule" | "interieur" | "egout" | "palais";
 
@@ -75,6 +77,8 @@ export interface Prop {
   open?: (r: Rpg) => boolean;
   /** Caché (ni dessiné, ni bloquant) selon l'avancement. */
   hidden?: (r: Rpg) => boolean;
+  /** État visuel seulement (coffre ouvert, vanne tournée) : ne change pas les collisions. */
+  on?: (r: Rpg) => boolean;
   /** Variante de couleur / de forme. */
   variant?: number;
 }
@@ -172,6 +176,8 @@ const BLOCK: Ground[] = ["eau", "mur", "eaux-usees"];
 const solidCache = new WeakMap<MapDef, boolean[][]>();
 
 const dynamic = (p: Prop) => !!(p.open || p.hidden);
+/** Élément redessiné à chaque image (son aspect dépend de l'avancement). */
+export const animated = (p: Prop) => !!(p.open || p.hidden || p.on);
 
 function staticSolid(m: MapDef): boolean[][] {
   let g = solidCache.get(m);
@@ -237,6 +243,12 @@ const EXAMINABLE = new Set([
   "bibliotheque",
   "tonneau",
   "pancarte",
+  "armoire",
+  "fontaine-seche",
+  "caisse",
+  "cuve",
+  "grille",
+  "table",
 ]);
 
 export interface Thing {

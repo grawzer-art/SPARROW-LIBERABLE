@@ -230,6 +230,8 @@ export const CONSUMABLES: Record<string, Consumable> = {
   "part-pizza": { id: "part-pizza", name: "Part de pizza", desc: "Rend 50 % des PV et soigne les états.", price: 45, use: { healPct: 50, cleanse: true } },
   "sauce-piquante": { id: "sauce-piquante", name: "Sauce piquante", desc: "Attaque +2 jusqu'à la fin du combat.", price: 40, use: { stage: { stat: "atk", n: 2 } } },
   ketchup: { id: "ketchup", name: "Ketchup de rappel", desc: "Relève un équipier K.O. avec 50 % de ses PV.", price: 80, use: { revive: 50 }, ko: true },
+  tisane: { id: "tisane", name: "Tisane de persil", desc: "Rend 20 PV et soigne les états. Goût : jardin.", price: 15, use: { heal: 20, cleanse: true } },
+  soupe: { id: "soupe", name: "Soupe du jour", desc: "Rend 60 PV. Le jour en question n'est pas précisé.", price: 35, use: { heal: 60 } },
 };
 
 export interface Equipment {
@@ -252,9 +254,28 @@ export const EQUIPMENT: Record<string, Equipment> = {
 };
 
 /** Boutiques : ce qu'elles vendent (consommables puis équipements). */
-export const SHOPS: Record<string, { name: string; keeper: string; items: string[] }> = {
-  herboristerie: { name: "Herboristerie Persil", keeper: "Madame Persil", items: ["frites", "part-pizza", "sauce-piquante", "ketchup", "bracelet-sel"] },
-  armurerie: { name: "Armurerie du Navet", keeper: "Maître Navet", items: ["mega-cornet", "manette-pro", "sweat-epais", "spatule", "tablier"] },
+export const SHOPS: Record<string, { name: string; keeper: string; items: string[]; hello: string; bye: string }> = {
+  herboristerie: {
+    name: "Herboristerie Persil",
+    keeper: "Madame Persil",
+    items: ["tisane", "soupe", "sauce-piquante", "ketchup", "bracelet-sel"],
+    hello: "Bienvenue ! Tout est vert, bio et légal. Surtout légal.",
+    bye: "Revenez quand vous voulez. Et mangez vos légumes. On ne sait jamais qui écoute.",
+  },
+  armurerie: {
+    name: "Armurerie du Navet",
+    keeper: "Maître Navet",
+    items: ["manette-pro", "sweat-epais", "spatule", "tablier"],
+    hello: "Des armes ? Des armures ? Tout est garanti sans friture.",
+    bye: "Bonne chance. Évite de te battre contre le Roi. Ou alors gagne.",
+  },
+  "marche-cache": {
+    name: "Marché caché",
+    keeper: "Frida la Friteuse",
+    items: ["frites", "mega-cornet", "part-pizza", "ketchup"],
+    hello: "Chut… Ici on vend ce qui croustille. Paiement en FP, discrétion comprise.",
+    bye: "Tu ne m'as jamais vue. Moi non plus.",
+  },
 };
 
 export const isEquipment = (id: string) => id in EQUIPMENT;

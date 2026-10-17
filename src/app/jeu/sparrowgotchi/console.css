@@ -1378,3 +1378,161 @@
     min-height: 24px;
   }
 }
+
+/* Boutique */
+
+.shop {
+  position: absolute;
+  inset: 6px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+  color: #090909;
+  background: var(--paper);
+  border: 3px double #090909;
+  box-shadow: 0 0 0 2px var(--paper), 3px 3px 0 2px var(--red);
+  animation: gbIn 0.15s var(--ease) both;
+}
+
+.shop__top,
+.cook__top {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.shop__top b {
+  color: var(--red-deep);
+}
+
+.shop__list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+}
+
+.shop__list button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  padding: 0 2px;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: left;
+  color: #090909;
+}
+
+.shop__list button.is-on {
+  background: rgba(229, 57, 53, 0.12);
+}
+
+.shop__list button.is-dear b {
+  color: #9a948a;
+}
+
+.shop__name {
+  flex: 1;
+}
+
+.shop__list small {
+  font-size: 9.5px;
+  color: #6a6a74;
+}
+
+.shop__desc {
+  margin: 0;
+  padding-top: 4px;
+  border-top: 1px dashed #b9b3a5;
+  font-size: 11px;
+  color: #3a3a44;
+  min-height: 2.6em;
+}
+
+.shop__msg {
+  margin: 0;
+  font-size: 11.5px;
+  min-height: 2.6em;
+}
+
+.shop__msg span {
+  font-weight: 700;
+  color: var(--red-deep);
+}
+
+/* Mini-jeu de cuisine */
+
+.cook {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  background: #000;
+}
+
+.cook__top {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  right: 6px;
+  padding: 4px 8px;
+  color: #090909;
+  background: var(--paper);
+  border: 2px solid #090909;
+}
+
+.cook__dots {
+  position: absolute;
+  top: 40px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+}
+
+.cook__dots i {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #090909;
+  border-radius: 50%;
+  background: #f4eee0;
+}
+
+.cook__dots i.is-parfait { background: #3ccf6a; }
+.cook__dots i.is-bien { background: #f2c14e; }
+.cook__dots i.is-pale { background: #ddd2a4; }
+.cook__dots i.is-brule { background: #3a2a1a; }
+
+.cook__panel {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 4px;
+  min-height: 84px;
+  padding: 8px 10px;
+  text-align: left;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #090909;
+  background: var(--paper);
+  border: 3px double #090909;
+  box-shadow: 0 0 0 2px var(--paper), 3px 3px 0 2px var(--red);
+}
+
+.cook__panel b {
+  display: block;
+  font-size: 13px;
+  color: var(--red-deep);
+}
+
+.cook__panel b.is-parfait { color: #1f8a4a; }
+.cook__panel b.is-brule,
+.cook__panel b.is-pale { color: #8a5a22; }

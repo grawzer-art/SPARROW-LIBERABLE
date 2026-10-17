@@ -9,7 +9,8 @@
  * sont dessinés à chaque image par overworld.ts. Palette de nuit unique pour toute la carte.
  */
 
-import { TILE, type Ground, type MapDef, type Prop } from "@/lib/rpg/mapdef";
+import { TILE, animated, type Ground, type MapDef, type Prop } from "@/lib/rpg/mapdef";
+import { LIVE_KINDS, paintGround2, paintProp2, type Kit } from "./tiles2";
 import { hash, pixelText, textWidth } from "./pixel";
 
 type Ctx = CanvasRenderingContext2D;
@@ -221,9 +222,11 @@ function paintGround(ctx: Ctx, tx: number, ty: number) {
     case "eau":
       px(ctx, P.water, X, Y, TILE, TILE);
       break;
+    default:
+      paintGround2(ctx, k, tx, ty, kit());
   }
   // Bordures douces : l'herbe déborde un peu sur les surfaces voisines
-  if (!isGrassy(k) && k !== "eau") {
+  if (!isGrassy(k) && k !== "eau" && k !== "mur") {
     const edges: [number, number, (i: number) => [number, number]][] = [
       [0, -1, (i) => [i, 0]],
       [0, 1, (i) => [i, 15]],
@@ -316,7 +319,18 @@ function building(ctx: Ctx, p: Prop) {
   const roofH = b.roof === "plat" ? 20 : 30;
   const fY = Y + roofH;
   const fH = H - roofH;
-  const wall = b.style === "brique" ? [P.brick, P.brickD, P.brickL] : b.style === "boutique" ? [P.teal, P.tealD, "#376877"] : b.style === "enduit" ? [P.blue, P.blueD, "#546890"] : [P.plaster, P.plasterD, "#c8b79c"];
+  const wall =
+    b.style === "brique"
+      ? [P.brick, P.brickD, P.brickL]
+      : b.style === "boutique"
+        ? [P.teal, P.tealD, "#376877"]
+        : b.style === "enduit"
+          ? [P.blue, P.blueD, "#546890"]
+          : b.style === "palais"
+            ? ["#d8d0c0", "#b8ae98", "#ece6d8"]
+            : b.style === "echoppe"
+              ? ["#7a5232", "#5a3a22", "#8e6440"]
+              : [P.plaster, P.plasterD, "#c8b79c"];
 
   // Ombre portée au sol
   px(ctx, P.shadow, X + 2, Y + H, W, 3);
@@ -332,6 +346,11 @@ function building(ctx: Ctx, p: Prop) {
   } else {
     for (let y = fY; y < Y + H; y++) for (let x = X; x < X + W; x++) if (hash(x, y, 16) < 0.04) px(ctx, wall[1], x, y);
     if (b.style === "maison") for (let x = X + 6; x < X + W; x += 12) px(ctx, P.woodD, x, fY, 2, fH); // colombages
+    if (b.style === "echoppe") for (let y = fY + 3; y < Y + H; y += 5) px(ctx, wall[1], X, y, W, 1); // planches
+    if (b.style === "palais") for (let x = X + 4; x < X + W; x += 20) {
+      px(ctx, "#ece6d8", x, fY, 6, fH); // colonnes
+      px(ctx, "#b8ae98", x + 5, fY, 1, fH);
+    }
   }
   // Soubassement
   px(ctx, P.stoneD, X, Y + H - 4, W, 4);
@@ -348,7 +367,8 @@ function building(ctx: Ctx, p: Prop) {
     px(ctx, P.metalL, X + W - 14, Y + 3, 1, 10);
     px(ctx, P.metalL, X + W - 17, Y + 5, 7, 1);
   } else {
-    const [c, d, l] = b.roof === "tuiles" ? [P.tile, P.tileD, P.tileL] : [P.slate, P.slateD, P.slateL];
+    const [c, d, l] =
+      b.roof === "tuiles" ? [P.tile, P.tileD, P.tileL] : b.roof === "vert" ? ["#3f7a35", "#2c5a26", "#5a9a45"] : b.roof === "dome" ? ["#2f7d3a", "#1f5a2a", "#e8b830"] : [P.slate, P.slateD, P.slateL];
     px(ctx, c, X - 2, Y, W + 4, roofH);
     for (let y = Y + 3; y < Y + roofH - 2; y += 4) {
       px(ctx, d, X - 2, y, W + 4, 1);
@@ -357,11 +377,20 @@ function building(ctx: Ctx, p: Prop) {
     }
     px(ctx, l, X - 2, Y, W + 4, 2); // faîtage
     px(ctx, "#1a1b28", X - 2, Y + roofH - 2, W + 4, 2); // gouttière
-    // Cheminée
-    const cx = X + W - 18;
-    px(ctx, P.brickD, cx, Y - 6, 8, 10);
-    px(ctx, P.brick, cx + 1, Y - 5, 6, 8);
-    px(ctx, P.stone, cx - 1, Y - 7, 10, 2);
+    if (b.roof === "dome") {
+      // Coupole dorée et drapeau du Roi
+      blob(ctx, X + W / 2, Y + 4, 12, "#a87a18");
+      blob(ctx, X + W / 2, Y + 4, 11, "#e8b830");
+      px(ctx, "#f8dc70", X + W / 2 - 6, Y - 4, 4, 3);
+      px(ctx, P.metalD, X + W / 2, Y - 18, 1, 12);
+      px(ctx, "#2f7d3a", X + W / 2 + 1, Y - 18, 8, 5);
+    } else {
+      // Cheminée
+      const cx = X + W - 18;
+      px(ctx, P.brickD, cx, Y - 6, 8, 10);
+      px(ctx, P.brick, cx + 1, Y - 5, 6, 8);
+      px(ctx, P.stone, cx - 1, Y - 7, 10, 2);
+    }
     if (b.style === "maison") {
       // Lucarne ronde
       blob(ctx, X + W / 2, Y + 14, 5, P.frame);
@@ -403,7 +432,7 @@ function building(ctx: Ctx, p: Prop) {
   }
   // Porte
   const dy = Y + H - 16;
-  if (b.style === "brique") {
+  if (b.style === "brique" || b.style === "palais") {
     px(ctx, P.frame, doorX + 1, dy - 1, 14, 17);
     px(ctx, P.winLit, doorX + 2, dy, 12, 12);
     px(ctx, P.winHi, doorX + 2, dy, 12, 2);
@@ -419,7 +448,7 @@ function building(ctx: Ctx, p: Prop) {
   }
   // Auvent
   if (b.awning) {
-    const [a1, a2] = b.awning === "rouge" ? [P.red, P.white] : ["#2e7d4f", P.white];
+    const [a1, a2] = b.awning === "rouge" ? [P.red, P.white] : b.awning === "jaune" ? ["#e8b830", P.white] : ["#2e7d4f", P.white];
     const ax = b.style === "boutique" ? X + 1 : doorX - 4;
     const aw = b.style === "boutique" ? W - 2 : 24;
     const ay = b.style === "boutique" ? Y + H - 24 : dy - 6;
@@ -716,6 +745,9 @@ export interface Layers {
   lights: Light[];
 }
 
+/** Outils prêtés au tileset du chapitre 2. */
+const kit = (): Kit => ({ px, blob, shadow: shadowEllipse, light: (l) => LIGHTS.push(l), map: CUR });
+
 export function buildLayers(map: MapDef): Layers {
   CUR = map;
   LIGHTS = [];
@@ -771,7 +803,8 @@ export function buildLayers(map: MapDef): Layers {
       case "barriere":
         break; // animés : dessinés à chaque image
       default:
-        smallProp(b, p);
+        if (LIVE_KINDS.has(p.kind) || animated(p)) break; // redessinés à chaque image (overworld.ts)
+        if (!paintProp2(b, t, p, kit())) smallProp(b, p);
     }
   }
   return { base, top, lights: LIGHTS };

@@ -7,7 +7,7 @@
  * Ce fichier contient le chapitre 1 (Quartier 404) et l'aiguillage vers les autres chapitres.
  */
 
-import { CH2 } from "./ch2";
+import { CH2, CH2_CARD } from "./ch2";
 import { flag, has, isDone, status, type Effect, type Rpg } from "./quest";
 import { pick, type Chapter, type Conversation, type Rule, type ThingTalk } from "./talk";
 
@@ -395,6 +395,26 @@ export function afterBattle(id: string, r: Rpg): Conversation | null {
       effects: [{ kind: "quest", id: "frites-perdues" }],
     };
   return CH2.afterBattle?.(id, r) ?? null;
+}
+
+/** Scène enchaînée après un dialogue (`then: { kind: "scene" }`). */
+export const scene = (id: string): Conversation | null => CH2.scene(id);
+
+/** Après un mini-jeu lancé depuis un dialogue. */
+export const afterMinigame = (id: string, ok: boolean, r: Rpg): Conversation | null => CH2.afterMinigame(id, ok, r);
+
+/** Étapes de quête liées à une zone (on y entre pour la première fois ou non). */
+export function zoneEffects(zone: string): Effect[] {
+  if (zone === "place") return [step("explorer")];
+  if (zone === "station") return [step("station")];
+  return CH2.zoneEffects(zone);
+}
+
+/** Carte de fin de chapitre (quêtes principales seulement). */
+export function chapterCard(quest: string): string[] | null {
+  if (quest === Q) return ["CHAPITRE 1 TERMINÉ", "LA VILLE FIGÉE", "+120 XP · +150 FP", "Objet : Fragment d'horloge n°1", "La barrière du Centre-ville s'est levée…"];
+  if (quest === "frites-perdues") return CH2_CARD;
+  return null;
 }
 
 /** Après une défaite (on s'est retiré pour se préparer). */

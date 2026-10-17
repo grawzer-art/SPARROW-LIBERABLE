@@ -9,7 +9,9 @@
 
 import {
   TILE,
+  animated,
   isOpen,
+  shown,
   npcsOf,
   solidAt,
   step,
@@ -27,6 +29,7 @@ import {
 import type { Rpg } from "@/lib/rpg/state";
 import { charSprite, type Dir, type Frame } from "./actors";
 import { lightSprite, pixelText } from "./pixel";
+import { LIVE_KINDS, drawLive, drawMuck } from "./tiles2";
 import { buildLayers, drawBarrier, drawClockFace, drawCore, drawFountainWater, drawGate, drawWater, propOf, type Layers, type Light } from "./tiles";
 
 export const OW_W = 240;
@@ -118,8 +121,12 @@ export class Overworld {
   /** Après une fuite ou une retraite : pas de nouveau repérage tant que Sparrow reste en vue. */
   private calm = false;
 
+  /** Éléments redessinés à chaque image (coffres, vannes, courants, grilles). */
+  private readonly live: MapDef["props"];
+
   constructor(map: MapDef, start: Tile & { dir: Facing }, rpg: Rpg) {
     this.map = map;
+    this.live = map.props.filter((p) => (LIVE_KINDS.has(p.kind) || animated(p)) && p.kind !== "portail" && p.kind !== "barriere");
     this.rpg = rpg;
     this.x = start.x;
     this.y = start.y;
@@ -200,6 +207,12 @@ export class Overworld {
     const front = step(this.tile, this.dir);
     const npc = this.npcAt(front);
     if (npc) return { kind: "npc", id: npc.def.id };
+    // Comme dans les boutiques des RPG portables : on parle au marchand par-dessus le comptoir.
+    const counter = thingAt(this.map, front, this.rpg);
+    if (counter?.prop.kind === "comptoir") {
+      const keeper = this.npcAt(step(front, this.dir));
+      if (keeper) return { kind: "npc", id: keeper.def.id };
+    }
     const door = warpAt(this.map, front);
     if (door) return { kind: "door", door };
     const th = thingAt(this.map, front, this.rpg);
@@ -511,6 +524,8 @@ export class Overworld {
     for (const p of propOf(this.map, "portail")) drawGate(ctx, p, isOpen(p, r), ox, oy);
     for (const p of propOf(this.map, "barriere")) drawBarrier(ctx, p, isOpen(p, r), this.t, ox, oy);
     for (const p of propOf(this.map, "transfo")) drawCore(ctx, p, this.t, ox, oy, calm);
+    if (this.map.region === "egout") drawMuck(ctx, this.map, this.t, ox, oy);
+    for (const p of this.live) if (shown(p, r)) drawLive(ctx, p, isOpen(p, r) || !!p.on?.(r), this.t, ox, oy);
 
     // Personnages triés par profondeur
     const actors: { y: number; draw: () => void }[] = [];

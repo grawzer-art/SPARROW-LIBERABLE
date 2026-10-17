@@ -1,11 +1,13 @@
 /** RPG — registre des cartes de l'aventure et reprise de la position sauvegardée. */
 
 import { restoreOn, type Facing, type MapDef, type MapId, type Tile } from "./mapdef";
+import { CH2_MAPS } from "./cite";
 import { QUARTIER } from "./quartier";
 import type { Rpg } from "./state";
 
 export const MAPS: Partial<Record<MapId, MapDef>> = {
   quartier: QUARTIER,
+  ...Object.fromEntries(CH2_MAPS.map((m) => [m.id, m])),
 };
 
 export const mapOf = (id: string): MapDef | null => MAPS[id as MapId] ?? null;

@@ -9,9 +9,13 @@
 
 import { bakeRows, type Palette } from "./pixel";
 
+/** Même pose pour les 3 images (personnage qui sautille au lieu de marcher). */
+const same = (rows: string[]): Record<"down" | "up" | "side", string[][]> => ({ down: [rows, rows, rows], up: [rows, rows, rows], side: [rows, rows, rows] });
+
 export type Dir = "down" | "up" | "side";
 export type Frame = 0 | 1 | 2; // repos, pas A, pas B
-export type CharId = "sparrow" | "nico" | "bouchon" | "raymond" | "inconnu" | "chevalier" | "brocoli";
+/** Identifiant de sprite (voir DEFS). */
+export type CharId = string;
 
 interface Def {
   pal: Palette;
@@ -44,7 +48,7 @@ const TORSO: Record<Dir, string[]> = {
   side: [".....KCCCCCK....", "....KCCCCCCSK...", "....KCcCCCCSK...", "....KCCCCCCKK...", "....KPPPPPPK...."],
 };
 
-const DEFS: Record<CharId, Def> = {
+const DEFS: Record<string, Def> = {
   sparrow: {
     pal: { K: "#1b1626", H: "#8a4b22", h: "#6b3a1a", S: "#e9b18a", s: "#c98b66", G: "#101010", W: "#9fb4c8", B: "#c4521f", b: "#93370f", r: "#6e2410", C: "#3b3b3b", c: "#2a2a2a", P: "#1c1c22", p: "#141418", F: "#f1efe8" },
     head: {
@@ -400,6 +404,239 @@ const DEFS: Record<CharId, Def> = {
     },
   },
 };
+
+// ─── Chapitre 2 : la Cité des Frites Perdues ───
+
+/** Variante d'un personnage existant (même silhouette, autre palette). */
+const variant = (base: string, pal: Palette): Def => ({ ...DEFS[base], pal: { ...DEFS[base].pal, ...pal } });
+
+Object.assign(DEFS, {
+  "gerard": {
+    pal: {"K": "#1b1626", "W": "#f8f4e8", "w": "#d8d4cc", "Y": "#f2c14e", "y": "#c9952e", "L": "#f8dc8c", "E": "#1b1626", "M": "#8e1b1b", "R": "#d23a3a", "P": "#f4eee0", "F": "#1b1626"},
+    head: {
+      down: [
+        "....KKKKKKKK....",
+        "...KWWWWWWWWK...",
+        "...KWWWWWWwwK...",
+        "....KKKKKKKK....",
+        ".....KLYYYyK....",
+        ".....KLEYEyK....",
+        ".....KLYYYyK....",
+        ".....KLMMYyK....",
+        ".....KLYYYyK....",
+        ".....KLYYYyK....",
+      ],
+      up: [
+        "....KKKKKKKK....",
+        "...KWWWWWWWWK...",
+        "...KWWWWWWwwK...",
+        "....KKKKKKKK....",
+        ".....KLYYYyK....",
+        ".....KLYYYyK....",
+        ".....KLYYYyK....",
+        ".....KLYYYyK....",
+        ".....KLYYYyK....",
+        ".....KLYYYyK....",
+      ],
+      side: [
+        "....KKKKKKKK....",
+        "...KWWWWWWWWK...",
+        "...KWWWWWWwwK...",
+        "....KKKKKKKK....",
+        ".....KLYYYyK....",
+        ".....KLYYEyK....",
+        ".....KLYYYyK....",
+        ".....KLYYMyK....",
+        ".....KLYYYyK....",
+        ".....KLYYYyK....",
+      ],
+    },
+    torso: { down: ["..KK.KLYYYyK.KK.", "..KYKKLYYYyKKYK.", "...KYKLYYYyKYK..", "....KKLYYYyKK...", "....KRPRPRPRK..."], up: ["..KK.KLYYYyK.KK.", "..KYKKLYYYyKKYK.", "...KYKLYYYyKYK..", "....KKLYYYyKK...", "....KRPRPRPRK..."], side: ["......KLYYyK....", ".....KYLYYyK....", "....KYKLYYyK....", ".....KKLYYyK....", "....KRPRPRPRK..."] },
+    legs: same(["....KPRPRPRPK...", "....KRPRPRPRK...", ".....KPRPRPK....", ".....KRPRPRK....", "......KKKKK....."]),
+  },
+  "roi": {
+    pal: {"K": "#1b1626", "G": "#7fbf5a", "g": "#5c9a3e", "L": "#a8db7c", "Y": "#e8b830", "y": "#a87a18", "R": "#c62828", "B": "#2e7dd2", "E": "#1b1626", "W": "#f8f4e8", "C": "#5b2b86", "c": "#3f1d60", "A": "#e8b830", "P": "#5b2b86", "p": "#3f1d60", "F": "#1b1626", "S": "#7fbf5a"},
+    head: {
+      down: [
+        "....KYKYYKYK....",
+        "....KYYRBRYK....",
+        "...KKyyyyyyKK...",
+        "..KGLGGGGGGgGK..",
+        "..KGGWEGGWEGgK..",
+        "..KLGGGGGGGGgK..",
+        "..KGGGKKKKGGgK..",
+        "..KgGGGGGGGGgK..",
+        "...KggGGGGggK...",
+        "....KKKKKKKK....",
+      ],
+      up: [
+        "....KYKYYKYK....",
+        "....KYYYYYYK....",
+        "...KKyyyyyyKK...",
+        "..KGLGGGGGGgGK..",
+        "..KGGGGLGGGGgK..",
+        "..KLGGGGGGGGgK..",
+        "..KGGGGGGGGGgK..",
+        "..KgGGGGGGGGgK..",
+        "...KggGGGGggK...",
+        "....KKKKKKKK....",
+      ],
+      side: [
+        ".....KYKYYKYK...",
+        ".....KYYRYYYK...",
+        "....KKyyyyyyKK..",
+        "...KGLGGGGGGGK..",
+        "...KGGGGGGWEGK..",
+        "...KLGGGGGGGGK..",
+        "...KGGGGGKKKGK..",
+        "...KgGGGGGGGGK..",
+        "....KggGGGGgK...",
+        ".....KKKKKKK....",
+      ],
+    },
+    torso: { down: ["..KCCAGGGGACCK..", "..KCcAGGGGAcCK..", ".KCCcCGGGGCcCCK.", ".KCCCCCCCCCCCCK.", "..KCCCCCCCCCCK.."], up: ["..KCCCCCCCCCCK..", "..KCCCCCCCCCCK..", ".KCCcCCCCCCcCCK.", ".KCCCCCCCCCCCCK.", "..KCCCCCCCCCCK.."], side: ["....KCCAGGGK....", "...KCCcAGGGK....", "...KCCCCGGGK....", "...KCCCCCCCK....", "...KCCCCCCCK...."] },
+    legs: DEFS.bouchon.legs,
+  },
+  "laitue": {
+    pal: {"K": "#14220f", "G": "#7fbf5a", "g": "#5c9a3e", "L": "#a8db7c", "W": "#f8f4e8", "E": "#1b1626", "C": "#5c9a3e", "c": "#3f7a35", "S": "#7fbf5a", "P": "#3f7a35", "p": "#2c5a26", "F": "#2c5a26", "A": "#b6d98a"},
+    head: {
+      down: [
+        "......KGGK......",
+        "....KKGLLGKK....",
+        "...KGLGGGGLGK...",
+        "..KGLGGGGGGLGK..",
+        "..KGGWEGGEWGGK..",
+        "..KLGGGGGGGGgK..",
+        "..KGGGKKKKGGgK..",
+        "..KgLGGGGGGLgK..",
+        "...KgGGGGGGgK...",
+        "....KKKKKKKK....",
+      ],
+      up: [
+        "......KGGK......",
+        "....KKGLLGKK....",
+        "...KGLGGGGLGK...",
+        "..KGLGGgGGGLGK..",
+        "..KGGGgGGgGGGK..",
+        "..KLGGGgGGGGgK..",
+        "..KGGgGGgGGGgK..",
+        "..KgLGGGGGGLgK..",
+        "...KgGGGGGGgK...",
+        "....KKKKKKKK....",
+      ],
+      side: [
+        ".......KGGK.....",
+        ".....KKGLLGK....",
+        "....KGLGGGGLK...",
+        "...KGLGGGGGGLK..",
+        "...KGGGGGWEGGK..",
+        "...KLGGGGGGGGK..",
+        "...KGGGGGKKKGK..",
+        "...KgLGGGGGGLK..",
+        "....KgGGGGGgK...",
+        ".....KKKKKKK....",
+      ],
+    },
+    torso: { down: ["...KCCCCCCCCK.A.", "..KGCCcCCcCCGKA.", "..KGCCCCCCCCGKA.", "..KKCCCCCCCCKKA.", "...KPPPPPPPPK.A."], up: [".A.KCCCCCCCCK...", ".AKGCCCCCCCCGK..", ".AKGCCcCCcCCGK..", ".AKKCCCCCCCCKK..", ".A.KPPPPPPPPK..."], side: [".....KCCCCCK..A.", "....KCCCCCCGK.A.", "....KCcCCCCGK.A.", "....KCCCCCCKK.A.", "....KPPPPPPK..A."] },
+  },
+  "patate": {
+    pal: {"K": "#2a1a0e", "R": "#c62828", "r": "#8e1b1b", "B": "#b98a52", "b": "#8f663a", "W": "#f8f4e8", "E": "#1b1626", "P": "#6b4a2b", "p": "#4c331d", "F": "#4c331d"},
+    head: {
+      down: [
+        "....KKKKKKKK....",
+        "...KRRRRRRRRK...",
+        "..KRRRRRRRRRrK..",
+        "..KBBBBBBBBBBK..",
+        "..KBWEBBBBEWBK..",
+        "..KBBBBbBBBBBK..",
+        "..KBBBKKKKBBBK..",
+        "..KBbBBBBBBbBK..",
+        "..KBBBBBBBBBBK..",
+        "..KBBBBbBBBBBK..",
+      ],
+      up: [
+        "....KKKKKKKK....",
+        "...KRRRRRRRRK...",
+        "..KRRRRRRRRRrK..",
+        "..KBBBBRrBBBBK..",
+        "..KBBBBBBBBBBK..",
+        "..KBBbBBBBBBBK..",
+        "..KBBBBBBBbBBK..",
+        "..KBbBBBBBBbBK..",
+        "..KBBBBBBBBBBK..",
+        "..KBBBBbBBBBBK..",
+      ],
+      side: [
+        "....KKKKKKKK....",
+        "...KRRRRRRRRK...",
+        "..KrRRRRRRRRRK..",
+        "..KBBBBBBBBBBK..",
+        "..KBBBBBBBWEBK..",
+        "..KBBbBBBBBBBK..",
+        "..KBBBBBBKKKBK..",
+        "..KBbBBBBBBbBK..",
+        "..KBBBBBBBBBBK..",
+        "..KBBBBbBBBBBK..",
+      ],
+    },
+    torso: { down: ["..KBBBBBBBBBBK..", "..KBbBBBBBBbBK..", "...KBBBBBBBBK...", "....KKKKKKKK....", "...KPP....PPK..."], up: ["..KBBBBBBBBBBK..", "..KBbBBBBBBbBK..", "...KBBBBBBBBK...", "....KKKKKKKK....", "...KPP....PPK..."], side: ["..KBBBBBBBBBBK..", "..KBbBBBBBBbBK..", "...KBBBBBBBBK...", "....KKKKKKKK....", ".....KPPPPK....."] },
+  },
+  "lili": {
+    pal: {"K": "#120e18", "X": "#6a3a9a", "x": "#4a2670", "H": "#2a1a20", "S": "#f0c9a8", "s": "#d8a684", "E": "#1b1626", "r": "#d86a7a", "A": "#1d1826", "C": "#2a2438", "c": "#1a1626", "P": "#2a2438", "p": "#1a1626", "F": "#120e18"},
+    head: {
+      down: [
+        "....KKKKKKKK....",
+        "...KXXXXXXXXK...",
+        "..KXXXXXXXXXXK..",
+        "..KXxHHHHHHxXK..",
+        "..KXHSSSSSSHXK..",
+        "..KXSESSSSESXK..",
+        "..KXSSSSSSSSXK..",
+        "..KXSSSrrSSSXK..",
+        "...KAAAAAAAAK...",
+        "....KAAAAAAK....",
+      ],
+      up: [
+        "....KKKKKKKK....",
+        "...KXXXXXXXXK...",
+        "..KXXXXXXXXXXK..",
+        "..KXXXXxxXXXXK..",
+        "..KXXXXXXXXXXK..",
+        "..KXXXXXXXXXXK..",
+        "..KxXXXXXXXXxK..",
+        "..KXxXXXXXXxXK..",
+        "...KAAAAAAAAK...",
+        "....KAAAAAAK....",
+      ],
+      side: [
+        ".....KKKKKKK....",
+        "....KXXXXXXXK...",
+        "...KXXXXXXXXXK..",
+        "...KXXXxHHHHSK..",
+        "...KXXXHSSSSSK..",
+        "...KXXXSSSSESK..",
+        "...KXXXSSSSSSK..",
+        "...KXXXSSSSrSK..",
+        "....KAAAAAAAK...",
+        ".....KAAAAAK....",
+      ],
+    },
+    torso: { down: ["..KXCCCCCCCCXK..", "..KSCCCAACCCSK..", "..KSCcCAACcCSK..", "..KKCCCCCCCCKK..", "...KPPPPPPPPK..."], up: ["..KXXXXXXXXXXK..", "..KSXXXXXXXXSK..", "..KSXxXXXXxXSK..", "..KKXXXXXXXXKK..", "...KPPPPPPPPK..."], side: [".....KXCCCCK....", "....KXCCCCCSK...", "....KXCcCCCSK...", "....KXCCCCCKK...", "....KPPPPPPK...."] },
+  },
+});
+
+// Habitants : silhouettes déjà dessinées, avec d'autres couleurs
+Object.assign(DEFS, {
+  carotte: variant("sparrow", { H: "#d8742a", h: "#b05a1e", S: "#e9b18a", G: "#e9b18a", W: "#1b1626", B: "#e9b18a", b: "#c98b66", r: "#8e3a2a", C: "#e07a2a", c: "#b85e1a", P: "#3a4a6a", p: "#2a364e", F: "#2a2026" }),
+  poireau: variant("sparrow", { H: "#e8e4d0", h: "#c8c4b0", G: "#1b1626", W: "#f8f4e8", B: "#e9b18a", b: "#c98b66", r: "#8e3a2a", C: "#5a8a4a", c: "#3f6a35", P: "#2a3a2a", p: "#1f2a1f", F: "#1b1626" }),
+  chou: variant("bouchon", { H: "#6a4a3a", h: "#4a3226", S: "#e8b894", s: "#c8946a", G: "#e8b894", W: "#e8b894", C: "#5f9e4a", c: "#457a35", A: "#f1efe8", P: "#3f6a3a", p: "#2c4a28", r: "#e07a7a" }),
+  tubercule: variant("bouchon", { H: "#ece8f2", h: "#c8c2d4", G: "#8a6a4a", C: "#8a5a3a", c: "#6a4228", A: "#c9a06a", P: "#5a3a28", p: "#46301e" }),
+  panais: variant("raymond", { H: "#e8e4ee", M: "#e8e4ee", S: "#ead2b0", s: "#cab08a", C: "#c8b48a", c: "#a8946a", A: "#8a6a3a", a: "#6a4a28", P: "#4a3a2a", p: "#3a2c1e" }),
+  navet: variant("raymond", { H: "#2a1a14", M: "#2a1a14", S: "#d8946a", s: "#b8764e", C: "#f1e6f4", c: "#cfc0d8", A: "#8a3a9a", a: "#6a2678" }),
+  persil: variant("lili", { X: "#3f8a3a", x: "#2c6a28", H: "#7a4a2a", A: "#f1efe8", C: "#e8e0c8", c: "#c8bfa4", P: "#5a4a3a", p: "#46382a", S: "#f0c9a8" }),
+  frida: variant("nico", { X: "#f4eee0", x: "#d8d0c0", W: "#d23a3a", H: "#c86a2a", S: "#e2a982", C: "#d23a3a", c: "#a82a2a", A: "#f4eee0", P: "#3a3a46", p: "#2a2a34" }),
+  pois: variant("nico", { X: "#5aa83a", x: "#3f7a28", W: "#a8db7c", H: "#4a3a2a", S: "#f0c9a8", s: "#d8a684", C: "#7cc75a", c: "#5aa83a", A: "#f2c14e", P: "#3a5a8a", p: "#2a4466" }),
+});
 
 /** Recoloration de la tenue de Sparrow selon l'objet équipé (même logique que l'appartement). */
 const OUTFIT: Record<string, [string, string]> = {

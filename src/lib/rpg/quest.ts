@@ -114,6 +114,7 @@ export type Effect =
   | { kind: "item"; id: string }
   | { kind: "drop"; id: string }
   | { kind: "flag"; id: string }
+  | { kind: "unflag"; id: string }
   | { kind: "seen"; id: string }
   /** Un compagnon rejoint l'équipe. */
   | { kind: "join"; id: string }
@@ -125,7 +126,7 @@ export type Effect =
   | { kind: "skill"; id: string }
   /** Frit'pièces et expérience. */
   | { kind: "reward"; xp: number; coins: number }
-  /** Une quête est proposée (journal). */
+  /** Une quête est acceptée (journal). */
   | { kind: "quest"; id: string };
 
 export interface Applied {
@@ -148,6 +149,7 @@ export function applyEffects(s0: State, effects: Effect[], now: number): Applied
       notes.push(`Objet obtenu : ${itemDef(e.id)?.name ?? e.id}`);
     } else if (e.kind === "drop") r = { ...r, items: r.items.filter((i) => i !== e.id) };
     else if (e.kind === "flag" && !r.flags.includes(e.id)) r = { ...r, flags: [...r.flags, e.id] };
+    else if (e.kind === "unflag") r = { ...r, flags: r.flags.filter((f) => f !== e.id) };
     else if (e.kind === "seen" && !r.seen.includes(e.id)) r = { ...r, seen: [...r.seen, e.id] };
     else if (e.kind === "join" && MEMBERS[e.id] && !r.party.includes(e.id)) {
       r = { ...r, party: [...r.party, e.id] };
@@ -162,9 +164,9 @@ export function applyEffects(s0: State, effects: Effect[], now: number): Applied
       r = { ...r, skills: [...r.skills, e.id] };
       notes.push(`Nouvelle technique : ${SKILLS[e.id].name} !`);
     } else if (e.kind === "reward") bonus = { xp: bonus.xp + e.xp, coins: bonus.coins + e.coins };
-    else if (e.kind === "quest" && questById(e.id) && !r.quests[e.id]) {
-      r.quests[e.id] = "disponible";
-      notes.push(`Nouvelle quête au journal : ${questById(e.id)!.name}`);
+    else if (e.kind === "quest" && questById(e.id) && (r.quests[e.id] ?? "disponible") === "disponible") {
+      r.quests[e.id] = "active";
+      notes.push(`Nouvelle quête : ${questById(e.id)!.name}`);
     }
     else if (e.kind === "step") {
       const key = `${e.quest}:${e.step}`;
