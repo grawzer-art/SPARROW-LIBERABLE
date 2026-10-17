@@ -83,12 +83,13 @@ export function GameHub() {
             <GotchiFace />
           </div>
           <div className="hub-card__txt">
-            <span className="mono hub-card__tag">JEU 02 · ANIMAL VIRTUEL</span>
-            <h2 className="hub-card__title">Sparrowgotchi</h2>
-            <p className="mono hub-card__desc">Son appart, ses frites, ses sessions de farm. Niveaux, objets, missions et trophées. Il vit même quand tu n&apos;es pas là.</p>
+            <span className="mono hub-card__tag">JEU 02 · RPG + ANIMAL VIRTUEL</span>
+            <h2 className="hub-card__title">SPARROW : 23:59</h2>
+            <p className="mono hub-card__subtitle">L&apos;Élu de la Minute</p>
+            <p className="mono hub-card__desc">Une aventure RPG rétro : combats au tour par tour, compagnons, boss, et le temps figé à 23:59. Et toujours son appart, ses frites et ses sessions de farm.</p>
             <span className="mono hub-card__meta hub-card__meta--live">{gotchi ?? "…"}</span>
           </div>
-          <span className="btn btn--primary hub-card__cta">▶ M&apos;occuper de lui</span>
+          <span className="btn btn--primary hub-card__cta">▶ Jouer</span>
         </a>
       </main>
     </div>

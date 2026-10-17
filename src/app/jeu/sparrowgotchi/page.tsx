@@ -4,8 +4,8 @@ import "./gotchi.css";
 import "./console.css";
 
 export const metadata: Metadata = {
-  title: "Sparrowgotchi — SPARROW",
-  description: "Occupe-toi de Sparrow dans son appart : frites, salade (il refuse), sessions de farm, niveaux, objets et trophées.",
+  title: "SPARROW : 23:59 — L'Élu de la Minute",
+  description: "Une aventure RPG rétro : le temps est figé à 23:59, Sparrow part récupérer les fragments d'horloge. Combats, compagnons, boss… et toujours son appart et ses frites.",
 };
 
 export default function Page() {
