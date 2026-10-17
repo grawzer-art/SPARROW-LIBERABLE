@@ -51,9 +51,16 @@ const KEY = "sp.gotchi.v1"; // même clé depuis la v1 : la progression existant
 const SOUND_KEY = "sp.gotchi.sound";
 const POS_KEY = "sp.gotchi.place";
 const WHERE_KEY = "sp.gotchi.where";
-/** L'appartement (160 × 144) est centré dans l'écran du RPG (240 × 176), comme les intérieurs des RPG portables. */
-const APT_X = (OW_W - VIEW_W) / 2;
-const APT_Y = (OW_H - VIEW_H) / 2;
+/** L'appartement (160 × 144) est centré dans l'écran du RPG, comme les intérieurs des RPG portables. */
+/** Échelle de l'appartement : ×1,5 dès que l'écran est assez haut (la pièce remplit alors la largeur). */
+const aptScale = (h: number) => (h >= VIEW_H * 1.5 ? 1.5 : 1);
+const aptBox = (h: number) => {
+  const k = aptScale(h);
+  return { k, x: Math.round((OW_W - VIEW_W * k) / 2), y: Math.round((h - VIEW_H * k) / 2) };
+};
+/** Hauteur de la vue (pixels de jeu) : elle s'adapte à l'espace libre sur le téléphone. */
+const MIN_VH = 168;
+const MAX_VH = 420;
 
 const MOOD_LABEL: Record<Mood, string> = {
   content: "AU TOP",
@@ -70,7 +77,6 @@ const MOOD_LABEL: Record<Mood, string> = {
   crise: "CRISE",
 };
 
-const GAUGE: Record<string, string> = { satiete: "FAI", humeur: "HUM", energie: "ÉNE", forme: "FOR", fun: "GAM" };
 
 interface Queued {
   line: string;
@@ -100,6 +106,8 @@ const owFrameOf = (s: State, reduced: boolean): OwFrame => ({
 
 export function Gotchi() {
   const canvas = useRef<HTMLCanvasElement>(null);
+  const screenBox = useRef<HTMLDivElement>(null);
+  const viewH = useRef(OW_H);
   const aptCanvas = useRef<HTMLCanvasElement | null>(null);
   const stateRef = useRef<State | null>(null);
   const world = useRef<World | null>(null);
@@ -138,6 +146,24 @@ export function Gotchi() {
   const [conv, setConv] = useState<Conv | null>(null);
   const [fade, setFade] = useState(false);
   const [chapter, setChapter] = useState<string[] | null>(null);
+  const [vh, setVh] = useState(OW_H);
+
+  // L'écran de jeu prend toute la hauteur libre : on montre plus de carte au lieu d'agrandir les pixels.
+  useEffect(() => {
+    const box = screenBox.current;
+    if (!box) return;
+    const fit = () => {
+      const r = box.getBoundingClientRect();
+      if (r.width < 10 || r.height < 10) return;
+      const h = Math.max(MIN_VH, Math.min(MAX_VH, Math.floor((OW_W * r.height) / r.width)));
+      viewH.current = h;
+      setVh(h);
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(box);
+    return () => ro.disconnect();
+  }, []);
   const uiRef = useRef({ menu, page, game, conv: false });
   useEffect(() => {
     uiRef.current = { menu, page, game, conv: !!conv };
@@ -552,6 +578,7 @@ export function Gotchi() {
         const t = Date.now();
         if (whereRef.current === "quartier") {
           ow.current ??= new Overworld();
+          ow.current.setView(OW_W, viewH.current);
           ow.current.draw(ctx, owFrameOf(s, reduced.current), dt);
         } else {
           const actx = aptCanvas.current?.getContext("2d");
@@ -571,11 +598,12 @@ export function Gotchi() {
               dt,
             );
             ctx.imageSmoothingEnabled = false;
+            const ab = aptBox(viewH.current);
             ctx.fillStyle = "#06060a";
-            ctx.fillRect(0, 0, OW_W, OW_H);
+            ctx.fillRect(0, 0, OW_W, viewH.current);
             ctx.fillStyle = "#14121c";
-            ctx.fillRect(APT_X - 3, APT_Y - 3, VIEW_W + 6, VIEW_H + 6);
-            ctx.drawImage(aptCanvas.current!, APT_X, APT_Y);
+            ctx.fillRect(ab.x - 3, ab.y - 3, VIEW_W * ab.k + 6, VIEW_H * ab.k + 6);
+            ctx.drawImage(aptCanvas.current!, ab.x, ab.y, VIEW_W * ab.k, VIEW_H * ab.k);
           }
         }
       }
@@ -752,8 +780,9 @@ export function Gotchi() {
     if (line) setLine(null);
     if (whereRef.current === "quartier") return; // dehors : on explore à la croix
     const rect = e.currentTarget.getBoundingClientRect();
-    const px = ((e.clientX - rect.left) / rect.width) * OW_W - APT_X;
-    const py = ((e.clientY - rect.top) / rect.height) * OW_H - APT_Y;
+    const ab = aptBox(viewH.current);
+    const px = (((e.clientX - rect.left) / rect.width) * OW_W - ab.x) / ab.k;
+    const py = (((e.clientY - rect.top) / rect.height) * viewH.current - ab.y) / ab.k;
     if (px < 0 || py < 0 || px > VIEW_W || py > VIEW_H) return;
     const cache = cacheOf(s, Date.now());
     const h = w.hit(px, py, cache);
@@ -974,112 +1003,101 @@ export function Gotchi() {
 
   return (
     <div className={`gb-wrap${legend ? " is-legend" : ""}`}>
-      <header className="gt-bar mono">
-        <a href="/jeu">← JEUX</a>
-        <span className="gt-bar__title">SPARROWGOTCHI</span>
-        <button type="button" onClick={toggleSound} aria-pressed={sound}>
-          {sound ? "SON ●" : "SON ○"}
-        </button>
-      </header>
-
       <main className="gb">
-        <div className="gb-bezel">
-          <div className="gb-bezel__top mono">
-            <span className="gb-led" aria-hidden="true" />
-            <span>SPARROW·BOY</span>
-            <span className="gb-bezel__mood">{outside ? "QUARTIER 404" : MOOD_LABEL[m]}</span>
-          </div>
-
+        <header className="gb-top mono">
+          <a href="/jeu" className="gb-top__back" aria-label="Retour aux jeux">
+            ‹
+          </a>
           {state && (
-            <div className="gb-hud mono">
-              <span className="gb-hud__lvl">NIV {state.level}</span>
-              <span className="gb-hud__rank">{titleFor(state.level)}</span>
-              <span className="gb-hud__coins">{state.coins} FP</span>
-              <div className="gb-hud__xp" aria-label={`Expérience ${state.xp} sur ${need}`}>
+            <>
+              <span className="gb-top__lvl" aria-label={`Niveau ${state.level}, ${titleFor(state.level)}`}>
+                NIV {state.level}
                 <i style={{ transform: `scaleX(${state.xp / need})` }} />
-              </div>
-              <div className="gb-hud__gauges" aria-label="Jauges">
+              </span>
+              <button type="button" className="gb-top__stats" onClick={() => !conv && openPage("profil")} aria-label="Jauges de Sparrow : ouvrir le profil">
                 {STATS.map(({ id, label }) => {
                   const v = state.stats[id];
                   return (
-                    <span key={id} className={`gb-g${v < 25 ? " is-low" : ""}`} title={label} aria-label={`${label} ${Math.round(v)}`}>
-                      <b>{GAUGE[id]}</b>
-                      <i style={{ transform: `scaleX(${v / 100})` }} />
+                    <span key={id} className={`gb-mini${v < 25 ? " is-low" : ""}`} title={`${label} ${Math.round(v)}`}>
+                      <i style={{ transform: `scaleY(${Math.max(0.06, v / 100)})` }} />
                     </span>
                   );
                 })}
-              </div>
-            </div>
+              </button>
+              <span className="gb-top__place">{outside ? "QUARTIER 404" : MOOD_LABEL[m]}</span>
+              <span className="gb-top__coins">{state.coins} FP</span>
+            </>
           )}
+        </header>
 
-          <div className={`gb-screen gb-screen--${outside ? "rue" : m}`}>
-            <canvas
-              ref={canvas}
-              width={OW_W}
-              height={OW_H}
-              className="gb-screen__canvas"
-              onPointerDown={onCanvas}
-              role="img"
-              aria-label={outside ? "Le Quartier 404, de nuit. Croix pour marcher, A pour parler ou examiner." : "L'appartement de Sparrow. Touche un objet ou un endroit pour qu'il y aille."}
-            />
-            <div className={`gb-fade${fade ? " is-on" : ""}`} aria-hidden="true" />
-            {banner && (
-              <span key={banner} className="gb-banner mono">
-                {banner}
-              </span>
-            )}
-            {menu !== null && (
-              <nav className="gb-menu mono" aria-label="Menu">
-                <p className="gb-menu__title">MENU</p>
-                <div className="gb-menu__grid">
-                  {MENU.map((it, i) => (
-                    <button key={it.id} type="button" className={menu === i ? "is-on" : ""} onClick={() => openPage(it.id)}>
-                      <span className="gb-cursor">{menu === i ? "▶" : ""}</span>
-                      {it.label}
-                      {it.id === "missions" && toClaim > 0 && <b className="gb-badge">{toClaim}</b>}
-                    </button>
-                  ))}
-                </div>
-              </nav>
-            )}
-            {cur && (
-              <button type="button" className="gb-dialog gb-dialog--rpg mono" onClick={advanceConv} aria-live="polite">
-                {cur.who && <span className="gb-dialog__name">{cur.who}</span>}
-                <span className={cur.who ? "" : "gb-dialog__narr"}>{cur.text.slice(0, typed)}</span>
-                <span className="sr-only">{cur.text}</span>
-                {typed >= cur.text.length && (
-                  <i className="gb-dialog__next" aria-hidden="true">
-                    ▼
-                  </i>
-                )}
-              </button>
-            )}
-            {!cur && line && menu === null && (
-              <button type="button" className="gb-dialog mono" onClick={() => (typed < line.length ? setTyped(line.length) : setLine(null))} aria-live="polite">
-                <span>{line.slice(0, typed)}</span>
-                <span className="sr-only">{line}</span>
-                {typed >= line.length && (
-                  <i className="gb-dialog__next" aria-hidden="true">
-                    ▼
-                  </i>
-                )}
-              </button>
-            )}
-            {chapter && (
-              <button type="button" className="gb-chapter mono" onClick={() => setChapter(null)}>
-                {chapter.map((l, i) => (
-                  <span key={l} className={i === 0 ? "gb-chapter__kicker" : i === 1 ? "gb-chapter__title" : ""}>
-                    {l}
-                  </span>
+        <div ref={screenBox} className={`gb-screen gb-screen--${outside ? "rue" : m}`}>
+          <canvas
+            ref={canvas}
+            width={OW_W}
+            height={vh}
+            className="gb-screen__canvas"
+            onPointerDown={onCanvas}
+            role="img"
+            aria-label={outside ? "Le Quartier 404, de nuit. Croix pour marcher, A pour parler ou examiner." : "L'appartement de Sparrow. Touche un objet ou un endroit pour qu'il y aille."}
+          />
+          <div className={`gb-fade${fade ? " is-on" : ""}`} aria-hidden="true" />
+          {banner && (
+            <span key={banner} className="gb-banner mono">
+              {banner}
+            </span>
+          )}
+          {ready && !conv && !line && menu === null && !chapter && (
+            <span className="gb-pill mono" aria-live="polite">
+              <b>A</b> {hint}
+            </span>
+          )}
+          {menu !== null && (
+            <nav className="gb-menu mono" aria-label="Menu">
+              <p className="gb-menu__title">MENU</p>
+              <div className="gb-menu__grid">
+                {MENU.map((it, i) => (
+                  <button key={it.id} type="button" className={menu === i ? "is-on" : ""} onClick={() => openPage(it.id)}>
+                    <span className="gb-cursor">{menu === i ? "▶" : ""}</span>
+                    {it.label}
+                    {it.id === "missions" && toClaim > 0 && <b className="gb-badge">{toClaim}</b>}
+                  </button>
                 ))}
-                <em>A : continuer</em>
-              </button>
-            )}
-          </div>
-
-          <p className={`gb-hint mono${ready ? " is-ready" : ""}`} aria-live="polite">
-            <b>A</b> {hint}
-          </p>
+              </div>
+            </nav>
+          )}
+          {cur && (
+            <button type="button" className="gb-dialog gb-dialog--rpg mono" onClick={advanceConv} aria-live="polite">
+              {cur.who && <span className="gb-dialog__name">{cur.who}</span>}
+              <span className={cur.who ? "" : "gb-dialog__narr"}>{cur.text.slice(0, typed)}</span>
+              <span className="sr-only">{cur.text}</span>
+              {typed >= cur.text.length && (
+                <i className="gb-dialog__next" aria-hidden="true">
+                  ▼
+                </i>
+              )}
+            </button>
+          )}
+          {!cur && line && menu === null && (
+            <button type="button" className="gb-dialog mono" onClick={() => (typed < line.length ? setTyped(line.length) : setLine(null))} aria-live="polite">
+              <span>{line.slice(0, typed)}</span>
+              <span className="sr-only">{line}</span>
+              {typed >= line.length && (
+                <i className="gb-dialog__next" aria-hidden="true">
+                  ▼
+                </i>
+              )}
+            </button>
+          )}
+          {chapter && (
+            <button type="button" className="gb-chapter mono" onClick={() => setChapter(null)}>
+              {chapter.map((l, i) => (
+                <span key={l} className={i === 0 ? "gb-chapter__kicker" : i === 1 ? "gb-chapter__title" : ""}>
+                  {l}
+                </span>
+              ))}
+              <em>A : continuer</em>
+            </button>
+          )}
         </div>
 
         <div className="gb-controls">
@@ -1103,17 +1121,14 @@ export function Gotchi() {
           </div>
           <div className="gb-startsel mono">
             <button type="button" onClick={() => !conv && openPage("jeux")} aria-label="SELECT : mini-jeux">
-              <i />
               SELECT
             </button>
             <button type="button" onClick={toggleMenu} aria-label="START : menu">
-              <i />
               START
               {toClaim > 0 && <b className="gb-badge">{toClaim}</b>}
             </button>
           </div>
         </div>
-        <p className="gb-legend mono">START = MENU · SELECT = MINI-JEUX · B maintenu = courir</p>
       </main>
 
       {page && state && (

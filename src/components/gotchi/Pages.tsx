@@ -480,7 +480,7 @@ export function Page({ page, state, now, sound, room, outside, h, onClose }: Pro
               </button>
             </div>
             <p className="gb-note">
-              Commandes : croix = marcher (B maintenu = courir) · A = parler / utiliser · B = annuler · START = menu. Dans l&apos;appart, toucher l&apos;écran = y aller.
+              <b>Commandes</b> · croix : marcher · B maintenu : courir · A : parler, examiner, utiliser · B : annuler · START : menu · SELECT : mini-jeux · les mini-jauges en haut de l&apos;écran ouvrent le Profil. Dans l&apos;appart, toucher l&apos;écran = y aller.
             </p>
             <p className="gb-note">Sauvegarde locale, sur ce téléphone uniquement. Sparrow vit sa vie même appli fermée. Il ne meurt jamais : il boude, au pire.</p>
             <button type="button" className="gb-btn gb-btn--wide gb-btn--ghost" onClick={h.reset}>

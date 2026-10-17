@@ -52,6 +52,17 @@ Première démonstration jouable de l'aventure : on sort de l'appartement, on ex
   3. Noter leur auteur et leur licence dans ce fichier.
 - **Vue d'ensemble** : avec `?debug`, la fonction `window.__rpg.overview()` exporte la carte complète en PNG (c'est l'image ci-dessus).
 
+## Écran et ergonomie iPhone
+
+- **Écran de jeu adaptatif** : sa largeur reste de 240 pixels de jeu, sa hauteur s'adapte à l'espace libre (de 168 à 420 pixels de jeu). Sur iPhone, on voit donc plus de carte, sans agrandir ni déformer les pixels (`object-fit: contain`). L'appartement passe en ×1,5 dès que la place le permet.
+- **Barre du haut**, sur une seule ligne fine : retour, niveau (avec une barre d'XP de 2 px), 5 mini-jauges, lieu ou humeur, et pièces. Toucher les mini-jauges ouvre le Profil, qui contient le détail.
+- **Aide et son** : l'aide des commandes est dans **Options**, comme le réglage du son. La ligne d'aide permanente a disparu.
+- **Bouton A** : son indication n'apparaît, dans l'écran, que s'il y a quelque chose à faire.
+- **Commandes** :
+  - croix d'environ 190 px, A et B d'environ 84 px avec une zone tactile élargie de 10 px ;
+  - START et SELECT en pilules entre les deux ;
+  - tailles réduites automatiquement sur les écrans bas (iPhone SE, Safari avec ses barres).
+
 ## Contrôles
 
 - **Croix** : 4 directions, case par case, avec animation de marche. **B** maintenu : courir.
