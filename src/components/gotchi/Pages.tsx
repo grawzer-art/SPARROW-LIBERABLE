@@ -165,7 +165,13 @@ export function Page({ page, state, now, sound, room, outside, h, onClose }: Pro
                 <p className="gb-game-title">
                   SPARROW : 23:59 <span>L&apos;Élu de la Minute</span>
                 </p>
-                {QUESTS.filter((q) => q.chapter === 1 || status(s.rpg, q.id) !== "disponible" || (q.id === "frites-perdues" && status(s.rpg, "ville-figee") === "terminee")).map((q) => {
+                {QUESTS.filter(
+                  (q) =>
+                    q.chapter === 1 ||
+                    status(s.rpg, q.id) !== "disponible" ||
+                    (q.id === "frites-perdues" && status(s.rpg, "ville-figee") === "terminee") ||
+                    (q.id === "confrerie" && status(s.rpg, "frites-perdues") === "terminee"),
+                ).map((q) => {
                   const st = status(s.rpg, q.id);
                   const nx = nextStep(s.rpg, q.id);
                   return (
@@ -189,19 +195,23 @@ export function Page({ page, state, now, sound, room, outside, h, onClose }: Pro
                     </div>
                   );
                 })}
-                {status(s.rpg, "ville-figee") !== "terminee" ? (
-                  <div className="gb-card is-locked">
-                    <p className="gb-group__title">CHAPITRE 2 · VERROUILLÉ</p>
-                    <p className="gb-card__rank">Le Centre-ville</p>
-                    <p className="gb-row__meta">Termine « La Ville Figée » pour débloquer la suite.</p>
-                  </div>
-                ) : (
-                  <div className="gb-card is-locked">
-                    <p className="gb-group__title">CHAPITRE 3 · VERROUILLÉ</p>
-                    <p className="gb-card__rank">La Confrérie du Muscle</p>
-                    <p className="gb-row__meta">{status(s.rpg, "frites-perdues") === "terminee" ? "Le prochain chapitre arrive bientôt." : "Termine « La Cité des Frites Perdues » pour débloquer la suite."}</p>
-                  </div>
-                )}
+                {(() => {
+                  const next =
+                    status(s.rpg, "ville-figee") !== "terminee"
+                      ? { n: 2, name: "Le Centre-ville", hint: "Termine « La Ville Figée » pour débloquer la suite." }
+                      : status(s.rpg, "frites-perdues") !== "terminee"
+                        ? { n: 3, name: "La Confrérie du Muscle", hint: "Termine « La Cité des Frites Perdues » pour débloquer la suite." }
+                        : status(s.rpg, "confrerie") !== "terminee"
+                          ? { n: 4, name: "La Voie du Samouraï", hint: "Termine « La Confrérie du Muscle » pour débloquer la suite." }
+                          : { n: 4, name: "La Voie du Samouraï", hint: "Le prochain chapitre arrive bientôt." };
+                  return (
+                    <div className="gb-card is-locked">
+                      <p className="gb-group__title">CHAPITRE {next.n} · VERROUILLÉ</p>
+                      <p className="gb-card__rank">{next.name}</p>
+                      <p className="gb-row__meta">{next.hint}</p>
+                    </div>
+                  );
+                })()}
                 <p className="gb-note">Les quêtes racontent l&apos;aventure. Les missions du jour, elles, restent dans « Missions ».</p>
               </>
             ) : s.journal.length ? (

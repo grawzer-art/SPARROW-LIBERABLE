@@ -352,7 +352,165 @@ function gerardBack(): Raster {
   return r;
 }
 
+
+// ─── Chapitre 3 : la Confrérie du Muscle ───
+
+function sparrowTitan(tenue?: string): Raster {
+  const r = new Raster(56, 56);
+  const [c, cl, cd] = OUTFIT[tenue ?? ""] ?? ["#3b3b3b", "#545454", "#262626"];
+  // Aura dorée
+  r.ball(28, 34, 27, 22, "#f8dc70", undefined, undefined, (x, y) => (x + y) % 3 !== 0 || y > 50);
+  // Dos et épaules énormes (tenue déchirée aux épaules)
+  r.ball(28, 50, 25, 14, c, cl, cd, (_x, y) => y > 55);
+  r.ball(7, 40, 8, 10, "#e9b18a", "#f5c7a3", "#c98b66");
+  r.ball(49, 40, 8, 10, "#e9b18a", "#f5c7a3", "#c98b66");
+  r.ball(7, 36, 5, 4, "#f5c7a3");
+  r.ball(49, 36, 5, 4, "#f5c7a3");
+  r.ball(28, 38, 14, 6, cd, c, "#1c1c1c");
+  // Tête et cheveux dressés
+  r.ball(28, 24, 11, 12, "#8a4b22", "#a8622f", "#6b3a1a");
+  for (const x of [20, 24, 28, 32, 36]) r.line(x, 14, x + (x < 28 ? -2 : x > 28 ? 2 : 0), 7, "#a8622f");
+  r.ball(16.5, 26, 2.5, 3.5, "#e9b18a", "#f5c7a3", "#c98b66");
+  r.ball(39.5, 26, 2.5, 3.5, "#e9b18a", "#f5c7a3", "#c98b66");
+  r.ball(18, 32, 3, 3, "#c4521f", "#d8692f", "#93370f");
+  r.ball(38, 32, 3, 3, "#c4521f", "#d8692f", "#93370f");
+  r.line(17, 22, 24, 22, "#101010");
+  r.line(32, 22, 39, 22, "#101010");
+  r.outline(INK);
+  return r;
+}
+
+function liliBack(): Raster {
+  const r = new Raster(48, 48);
+  // Cape violette et capuche
+  r.ball(24, 42, 17, 11, "#4a2670", "#6a3a9a", "#2e1648", (_x, y) => y > 47);
+  r.ball(9, 39, 4, 7, "#2a2438", "#3a3450", "#1a1626");
+  r.ball(39, 39, 4, 7, "#2a2438", "#3a3450", "#1a1626");
+  r.ball(24, 20, 11, 13, "#6a3a9a", "#8a5aba", "#4a2670");
+  r.line(24, 9, 24, 30, "#4a2670");
+  // Écharpe sombre
+  r.ball(24, 32, 10, 3, "#1d1826", "#2a2438", "#120e18");
+  r.line(30, 33, 34, 42, "#1d1826");
+  // Dagues croisées à la ceinture
+  r.line(14, 44, 22, 40, "#c8d0ff");
+  r.line(34, 44, 26, 40, "#c8d0ff");
+  r.outline(INK);
+  return r;
+}
+
+function haltere(): Raster {
+  const r = new Raster(48, 48);
+  // Deux disques et une barre, avec un visage sur la barre
+  r.ball(9, 26, 8, 16, "#4a505a", "#7d8590", "#2a2e36");
+  r.ball(39, 26, 8, 16, "#4a505a", "#7d8590", "#2a2e36");
+  r.ball(9, 26, 3, 6, "#2a2e36");
+  r.ball(39, 26, 3, 6, "#2a2e36");
+  r.rect(15, 21, 18, 10, "#a3abb5");
+  r.rect(15, 21, 18, 2, "#c9ccd2");
+  r.rect(15, 29, 18, 2, "#7d8590");
+  eyes(r, 18, 23, 8, "fache");
+  r.rect(21, 28, 6, 1, INK);
+  r.set(3, 15, "#c9ccd2");
+  r.set(33, 15, "#c9ccd2");
+  // Petits pieds
+  r.ball(9, 43, 4, 2, "#2a2e36");
+  r.ball(39, 43, 4, 2, "#2a2e36");
+  r.outline(INK);
+  return r;
+}
+
+function proteinator(): Raster {
+  const r = new Raster(52, 52);
+  // Shaker géant : couvercle, gobelet, mousse qui déborde
+  r.ball(26, 9, 13, 5, "#c62828", "#e04848", "#8e1b1b");
+  r.rect(22, 1, 8, 5, "#c62828");
+  r.rect(13, 12, 26, 34, "#e8e2d4");
+  r.rect(13, 12, 4, 34, "#ffffff");
+  r.rect(35, 12, 4, 34, "#c9c1ae");
+  r.rect(15, 22, 22, 22, "#8a5a3a");
+  r.rect(15, 22, 22, 3, "#a87a50");
+  for (const [x, y] of [
+    [11, 14],
+    [40, 16],
+    [12, 20],
+  ])
+    r.ball(x, y, 3, 3, "#f8f4e8", "#ffffff", "#d8d4cc");
+  for (let y = 26; y < 44; y += 4) r.rect(36, y, 3, 1, "#7d8590");
+  eyes(r, 18, 28, 10, "fache", 3);
+  r.rect(21, 36, 10, 3, INK);
+  r.rect(22, 36, 8, 1, "#f8f4e8");
+  // Bras musclés
+  r.ball(7, 32, 5, 6, "#e9b18a", "#f5c7a3", "#c98b66");
+  r.ball(45, 32, 5, 6, "#e9b18a", "#f5c7a3", "#c98b66");
+  r.rect(17, 46, 6, 4, "#2a2a32");
+  r.rect(29, 46, 6, 4, "#2a2a32");
+  r.outline(INK);
+  return r;
+}
+
+function moine(): Raster {
+  const r = new Raster(48, 48);
+  // Moine du Gain : crâne rasé, bandeau rouge, kimono, bras croisés
+  r.ball(24, 40, 15, 11, "#e8e0c8", "#f8f4e8", "#c8bfa4", (_x, y) => y > 47);
+  r.line(24, 30, 24, 47, "#c8bfa4");
+  r.rect(10, 41, 28, 3, "#1b1626");
+  r.ball(24, 18, 9, 10, "#e2a982", "#f0c09a", "#c48a62");
+  r.rect(15, 12, 18, 3, "#c62828");
+  r.line(33, 13, 37, 17, "#c62828");
+  eyes(r, 19, 17, 7, "fache");
+  r.rect(21, 24, 6, 1, INK);
+  r.ball(12, 34, 6, 4, "#e2a982", "#f0c09a", "#c48a62");
+  r.ball(36, 34, 6, 4, "#e2a982", "#f0c09a", "#c48a62");
+  r.rect(14, 34, 20, 4, "#e2a982");
+  r.outline(INK);
+  return r;
+}
+
+function gonflax(max: boolean): Raster {
+  const r = new Raster(60, 60);
+  const skin = max ? ["#e07a5a", "#f09a7a", "#b8563a"] : ["#d8946a", "#ecae86", "#b8764e"];
+  // Torse énorme, débardeur, bras en V
+  r.ball(30, 44, 22, 15, skin[0], skin[1], skin[2], (_x, y) => y > 59);
+  r.ball(8, 34, 9, 12, skin[0], skin[1], skin[2]);
+  r.ball(52, 34, 9, 12, skin[0], skin[1], skin[2]);
+  r.ball(6, 24, 6, 6, skin[0], skin[1], skin[2]);
+  r.ball(54, 24, 6, 6, skin[0], skin[1], skin[2]);
+  r.rect(18, 36, 24, 20, max ? "#8e1b1b" : "#c62828");
+  r.rect(18, 36, 24, 2, max ? "#a82a2a" : "#e04848");
+  pixelText(r, "GAIN", 22, 43);
+  // Tête, moustache, bandeau, sifflet
+  r.ball(30, 20, 10, 11, skin[0], skin[1], skin[2]);
+  r.rect(20, 11, 20, 3, max ? "#f2c14e" : "#2e7dd2");
+  eyes(r, 24, 18, 8, max ? "rage" : "fache", 2);
+  r.rect(24, 25, 13, 2, "#3a2a20");
+  r.rect(27, 28, 6, 1, INK);
+  r.line(30, 31, 30, 38, "#e8b830");
+  r.ball(30, 39, 2, 2, "#e8b830");
+  if (max) {
+    // Veines et vapeur
+    r.line(6, 30, 9, 38, "#8e1b1b");
+    r.line(53, 30, 50, 38, "#8e1b1b");
+    r.line(18, 6, 15, 1, "#f8f4e8");
+    r.line(42, 6, 45, 1, "#f8f4e8");
+  }
+  r.outline(INK);
+  return r;
+}
+
+/** Lettres claires sur le débardeur de Gonflax (police 3 × 5 minimaliste). */
+function pixelText(r: Raster, t: string, x: number, y: number) {
+  const F: Record<string, string[]> = { G: ["011", "100", "101", "101", "011"], A: ["010", "101", "111", "101", "101"], I: ["111", "010", "010", "010", "111"], N: ["101", "111", "111", "111", "101"] };
+  [...t].forEach((ch, i) => F[ch]?.forEach((row, yy) => [...row].forEach((b, xx) => b === "1" && r.set(x + i * 4 + xx, y + yy, "#f8f4e8"))));
+}
+
 const PAINT: Record<string, (tenue?: string) => Raster> = {
+  "sparrow-titan": sparrowTitan,
+  lili: liliBack,
+  haltere,
+  proteinator,
+  moine,
+  gonflax: () => gonflax(false),
+  "gonflax-max": () => gonflax(true),
   brocoli,
   patate,
   laitue,
@@ -367,7 +525,7 @@ const cache = new Map<string, HTMLCanvasElement>();
 
 /** Sprite de combat (mis en cache). */
 export function battler(id: string, tenue?: string): HTMLCanvasElement {
-  const k = `${id}:${id === "sparrow" ? (tenue ?? "") : ""}`;
+  const k = `${id}:${id.startsWith("sparrow") ? (tenue ?? "") : ""}`;
   let c = cache.get(k);
   if (!c) {
     c = (PAINT[id] ?? PAINT.brocoli)(tenue).canvas();

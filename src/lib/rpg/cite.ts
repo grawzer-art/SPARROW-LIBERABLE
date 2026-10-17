@@ -18,8 +18,9 @@ export const vannesOk = (r: Rpg) => flag(r, "vanne-1") && !flag(r, "vanne-2") &&
 function cite(): MapDef {
   const M = makeMap("cite", "Cité des Frites Perdues", 40, 32, "crepuscule", "pave");
   const { fill, add, def } = M;
-  // Remparts
+  // Remparts (avec la porte nord vers le Mont Biscotto)
   fill("mur", 0, 0, 39, 0);
+  fill("chemin", 33, 0, 34, 2);
   fill("mur", 0, 0, 0, 31);
   fill("mur", 39, 0, 39, 31);
   fill("mur", 0, 31, 18, 31);
@@ -97,6 +98,7 @@ function cite(): MapDef {
     add({ kind: "arbre", x, y, w: 2, h: 2, solidRows: 1 });
   add({ kind: "buisson", x: 34, y: 3, w: 1, h: 1 });
   add({ kind: "panneau", x: 29, y: 7, w: 1, h: 1, text: "JARDIN ROYAL" });
+  add({ kind: "panneau", x: 32, y: 1, w: 1, h: 1, text: "MONT BISCOTTO" });
   // Sud
   for (const [x, y] of [
     [1, 29],
@@ -123,6 +125,8 @@ function cite(): MapDef {
     { id: "friterie", at: { x: 35, y: 16 }, to: { map: "restaurant", x: 7, y: 8, dir: "up" }, needs: (r) => flag(r, "porte-secrete"), lockedKey: "porte-secrete" },
     { id: "maison-sud", at: { x: 33, y: 26 }, to: null, text: "On entend quelqu'un manger du céleri en pleurant." },
     { id: "grange", at: { x: 4, y: 26 }, to: null, text: "Fermé. Une étiquette : « RÉSERVE DE POIREAUX — PROPRIÉTÉ DU ROI »." },
+    { id: "nord-1", at: { x: 33, y: 0 }, dir: "up", to: { map: "sentier", x: 11, y: 38, dir: "up" }, needs: (r) => r.quests["frites-perdues"] === "terminee", lockedKey: "porte-nord" },
+    { id: "nord-2", at: { x: 34, y: 0 }, dir: "up", to: { map: "sentier", x: 12, y: 38, dir: "up" }, needs: (r) => r.quests["frites-perdues"] === "terminee", lockedKey: "porte-nord" },
     { id: "palais", at: { x: 19, y: 6 }, to: { map: "palais", x: 12, y: 15, dir: "up" }, needs: roiVaincu, lockedKey: "palais-porte" },
   );
   def.spawn = { x: 19, y: 30, dir: "up" };

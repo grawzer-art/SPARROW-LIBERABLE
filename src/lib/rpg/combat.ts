@@ -10,7 +10,7 @@
  * Chaque tour renvoie une liste d'événements que l'écran de combat anime un par un.
  */
 
-import { BATTLES, CONSUMABLES, EQUIPMENT, FOES, MEMBERS, MOVES, SKILLS, type BattleDef, type Foe, type Move, type Stat, type StatusId } from "./bestiary";
+import { BATTLES, CONSUMABLES, EQUIPMENT, FOES, MEMBERS, MOVES, SKILLS, TITAN_MOVES, type BattleDef, type Foe, type Move, type Stat, type StatusId } from "./bestiary";
 
 // ─── Hasard reproductible (tests, rejouabilité) ───
 
@@ -49,6 +49,8 @@ export interface Fighter {
   /** Phase de boss atteinte (index dans `phases`, −1 = aucune). */
   phase: number;
   foe?: string;
+  /** Transformation en cours (SPARROW TITAN) et statistiques d'origine. */
+  form?: { turns: number; base: { atk: number; def: number; spd: number; maxHp: number; moves: string[]; sprite: string } } | null;
 }
 
 export interface Team {
@@ -57,6 +59,8 @@ export interface Team {
   gear: Partial<Record<"arme" | "armure" | "accessoire", string>>;
   skills: string[];
   bag: Record<string, number>;
+  /** Durée de SPARROW TITAN (3 tours, 4 si le Sparrowgotchi est déjà au stade Titan). */
+  titanTurns?: number;
 }
 
 const stat = (g: [number, number], lv: number) => Math.round(g[0] + g[1] * (lv - 1));
@@ -116,7 +120,7 @@ export const foeLevel = (f: Foe, level: number) => Math.max(f.lv[0], Math.min(f.
 export function makeFoe(id: string, level: number): Fighter {
   const f = FOES[id];
   const lv = foeLevel(f, level);
-  const k = 1 + 0.1 * (lv - f.lv[0]);
+  const k = 1 + 0.07 * (lv - f.lv[0]);
   const maxHp = Math.round(f.hp * k);
   return {
     id,
@@ -158,9 +162,13 @@ export interface Battle {
   fleeTries: number;
   /** Objets utilisés (à retirer du sac à la fin). */
   used: Record<string, number>;
+  /** SPARROW TITAN : disponible (technique apprise) / déjà utilisé dans ce combat. */
+  titan: { can: boolean; used: boolean; turns: number };
+  /** Objets volés par Lili (une fois par combat). */
+  stolen: Record<string, number>;
 }
 
-export type Action = { kind: "move"; move: string } | { kind: "item"; item: string; target?: number } | { kind: "swap"; to: number } | { kind: "flee" };
+export type Action = { kind: "transform" } | { kind: "move"; move: string } | { kind: "item"; item: string; target?: number } | { kind: "swap"; to: number } | { kind: "flee" };
 
 export type BattleEvent =
   | { kind: "text"; text: string }
@@ -174,6 +182,7 @@ export type BattleEvent =
   | { kind: "faint"; side: Side; who: string }
   | { kind: "enter"; side: Side; index: number }
   | { kind: "phase"; text: string; sprite?: string }
+  | { kind: "transform"; side: Side; on: boolean; sprite: string }
   | { kind: "end"; outcome: Exclude<Outcome, null> };
 
 export function startBattle(id: string, team: Team, seed = Date.now()): Battle {
@@ -192,15 +201,19 @@ export function startBattle(id: string, team: Team, seed = Date.now()): Battle {
     seed: seed >>> 0,
     fleeTries: 0,
     used: {},
+    titan: { can: team.skills.includes("titan"), used: false, turns: Math.max(1, team.titanTurns ?? 3) },
+    stolen: {},
   };
 }
 
 const clone = (b: Battle): Battle => ({
   ...b,
-  allies: b.allies.map((x) => ({ ...x, stages: { ...x.stages }, status: x.status && { ...x.status }, moves: [...x.moves] })),
+  allies: b.allies.map((x) => ({ ...x, stages: { ...x.stages }, status: x.status && { ...x.status }, moves: [...x.moves], form: x.form && { ...x.form, base: { ...x.form.base, moves: [...x.form.base.moves] } } })),
   foes: b.foes.map((x) => ({ ...x, stages: { ...x.stages }, status: x.status && { ...x.status }, moves: [...x.moves] })),
   bag: { ...b.bag },
   used: { ...b.used },
+  titan: { ...b.titan },
+  stolen: { ...b.stolen },
 });
 
 export const ally = (b: Battle) => b.allies[b.a];
@@ -211,6 +224,50 @@ export const eff = (x: Fighter, s: Exclude<Stat, "acc">) => x[s] * mult(x.stages
 
 /** L'équipier actif est K.O. et il en reste : le joueur doit en choisir un autre. */
 export const mustSwap = (b: Battle) => !b.over && ally(b).hp <= 0 && b.allies.some((x) => x.hp > 0);
+
+/** SPARROW TITAN est-il utilisable maintenant ? */
+export const canTransform = (b: Battle) => {
+  const me = ally(b);
+  return !b.over && b.titan.can && !b.titan.used && me.id === "sparrow" && me.hp > 0 && !me.form && !me.charging;
+};
+
+function transform(b: Battle, me: Fighter, ev: BattleEvent[]) {
+  b.titan.used = true;
+  me.form = { turns: b.titan.turns, base: { atk: me.atk, def: me.def, spd: me.spd, maxHp: me.maxHp, moves: [...me.moves], sprite: me.sprite } };
+  const bonus = Math.round(me.maxHp * 0.3);
+  me.atk = Math.round(me.atk * 1.5);
+  me.def = Math.round(me.def * 1.4);
+  me.spd = Math.round(me.spd * 1.15);
+  me.maxHp += bonus;
+  me.hp += bonus;
+  me.moves = [...TITAN_MOVES];
+  me.sprite = "sparrow-titan";
+  me.status = null;
+  ev.push(
+    { kind: "text", text: "Sparrow serre les poings… Ses muscles se souviennent de chaque répétition !" },
+    { kind: "transform", side: "ally", on: true, sprite: me.sprite },
+    { kind: "heal", side: "ally", amount: bonus, hp: me.hp },
+    { kind: "text", text: `SPARROW TITAN ! Attaque et défense en hausse pendant ${b.titan.turns} tours.` },
+  );
+}
+
+/** Fin de la transformation (durée écoulée, K.O. ou changement d'équipier). */
+function revert(me: Fighter, ev: BattleEvent[], quiet = false) {
+  const f = me.form;
+  if (!f) return;
+  me.atk = f.base.atk;
+  me.def = f.base.def;
+  me.spd = f.base.spd;
+  me.maxHp = f.base.maxHp;
+  me.hp = Math.min(me.hp, me.maxHp);
+  me.moves = f.base.moves;
+  me.sprite = f.base.sprite;
+  me.charging = null;
+  me.form = null;
+  if (quiet) return;
+  ev.push({ kind: "transform", side: "ally", on: false, sprite: me.sprite }, { kind: "text", text: "La forme de Titan s'estompe. Sparrow reprend son souffle." });
+  if (me.hp > 0) ev.push({ kind: "heal", side: "ally", amount: 0, hp: me.hp });
+}
 
 /** Le joueur ne choisit pas : l'équipier actif lance son attaque préparée (ou est étourdi). */
 export function forced(b: Battle): Action | null {
@@ -261,8 +318,13 @@ export function playTurn(b0: Battle, action: Action): { battle: Battle; events: 
     else doFoe(b, s.act, ev, r);
     checkKo(b, ev);
   }
-  // Fin du tour : brûlure, fin des gardes
+  // Fin du tour : transformation, brûlure, fin des gardes
   if (!b.over) {
+    const me = ally(b);
+    if (me.form && me.hp > 0) {
+      me.form.turns--;
+      if (me.form.turns <= 0) revert(me, ev);
+    }
     for (const x of [ally(b), foe(b)]) {
       x.guard = false;
       if (x.hp > 0 && x.status?.id === "brule") {
@@ -283,6 +345,7 @@ export function playTurn(b0: Battle, action: Action): { battle: Battle; events: 
 
 function prioOf(a: Action, x: Fighter): number {
   if (a.kind === "swap" || a.kind === "item") return 6;
+  if (a.kind === "transform") return 5;
   if (a.kind === "flee") return 7;
   if (a.kind !== "move") return 0;
   return MOVES[x.charging ?? a.move]?.priority ?? 0;
@@ -305,10 +368,15 @@ function doAlly(b: Battle, a: Action, ev: BattleEvent[], r: () => number) {
     }
     return;
   }
+  if (a.kind === "transform") {
+    if (canTransform(b)) transform(b, me, ev);
+    return;
+  }
   if (a.kind === "swap") {
     const to = b.allies[a.to];
     if (!to || to.hp <= 0 || a.to === b.a) return;
     me.charging = null;
+    revert(me, ev, true);
     ev.push({ kind: "text", text: `${me.name}, reviens !` });
     b.a = a.to;
     ev.push({ kind: "enter", side: "ally", index: b.a }, { kind: "text", text: `À toi, ${to.name} !` });
@@ -416,6 +484,9 @@ function act(b: Battle, user: Fighter, target: Fighter, moveId: string, ev: Batt
     for (let i = 0; i < n && target.hp > 0; i++) {
       const crit = r() < 0.0625;
       let d = baseDamage(user, target, m) * (0.85 + r() * 0.15) * (crit ? 1.5 : 1);
+      const ex = m.effects?.find((e) => e.kind === "execute");
+      const finishing = ex?.kind === "execute" && target.hp / target.maxHp < ex.below;
+      if (finishing) d *= ex.mult;
       if (target.guard) d *= 0.5;
       const amount = Math.max(1, Math.round(d));
       target.hp = Math.max(0, target.hp - amount);
@@ -423,6 +494,7 @@ function act(b: Battle, user: Fighter, target: Fighter, moveId: string, ev: Batt
       landed++;
       ev.push({ kind: "damage", side: target.side, amount, hp: target.hp, crit, hit: i });
       if (crit) ev.push({ kind: "text", text: "Coup critique !" });
+      if (finishing) ev.push({ kind: "text", text: "Coup de grâce !" });
     }
     if (target.guard) {
       target.guard = false;
@@ -453,6 +525,15 @@ function applyEffects(b: Battle, m: Move, user: Fighter, target: Fighter, ev: Ba
     } else if (e.kind === "guard") {
       user.guard = true;
       ev.push({ kind: "text", text: `${user.name} se met en garde.` });
+    } else if (e.kind === "steal") {
+      if (!dealt || user.side !== "ally" || Object.keys(b.stolen).length) continue;
+      const k = r();
+      const item = k < 0.55 ? "frites" : k < 0.8 ? "barre-proteinee" : k < 0.93 ? "mega-cornet" : "ketchup";
+      b.stolen[item] = 1;
+      b.bag[item] = Math.min(99, (b.bag[item] ?? 0) + 1);
+      ev.push({ kind: "text", text: `${user.name} chipe : ${CONSUMABLES[item].name} !` });
+    } else if (e.kind === "execute") {
+      continue;
     } else if (e.kind === "recoil") {
       if (!dealt) continue;
       const d = Math.max(1, Math.round((dealt * e.pct) / 100));
@@ -488,6 +569,7 @@ function checkKo(b: Battle, ev: BattleEvent[]) {
   } else checkPhase(b, f, ev);
   const a = ally(b);
   if (a.hp <= 0) {
+    revert(a, ev, true);
     a.charging = null;
     a.status = null;
     ev.push({ kind: "faint", side: "ally", who: a.name }, { kind: "text", text: `${a.name} est K.O. !` });
@@ -567,7 +649,9 @@ export interface Spoils {
 
 export function spoils(b: Battle): Spoils {
   if (b.over !== "win") return { xp: 0, fp: 0, drops: {}, used: b.used };
-  return { xp: b.def.xp, fp: b.def.fp, drops: { ...(b.def.drops ?? {}) }, used: b.used };
+  const drops: Record<string, number> = { ...(b.def.drops ?? {}) };
+  for (const [k, n] of Object.entries(b.stolen)) drops[k] = (drops[k] ?? 0) + n;
+  return { xp: b.def.xp, fp: b.def.fp, drops, used: b.used };
 }
 
 /** Sac après le combat : objets utilisés retirés (même en cas de défaite), butin ajouté. */

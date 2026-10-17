@@ -188,6 +188,22 @@ export function paintGround2(ctx: Ctx, k: Ground, tx: number, ty: number, kit: K
       px(ctx, Q.muck, X, Y, TILE, TILE);
       if (at(m, tx, ty - 1) !== "eaux-usees") px(ctx, "#1f3a28", X, Y, TILE, 2);
       return true;
+    case "tatami": {
+      const vert = (tx + ty) % 2 === 0;
+      px(ctx, "#c8b878", X, Y, TILE, TILE);
+      for (let i = 1; i < TILE; i += 3) px(ctx, "#b8a868", vert ? X + i : X, vert ? Y : Y + i, vert ? 1 : TILE, vert ? TILE : 1);
+      px(ctx, "#5a3a22", X, Y, TILE, 1);
+      px(ctx, "#5a3a22", X, Y, 1, TILE);
+      return true;
+    }
+    case "roche":
+      px(ctx, "#7a7068", X, Y, TILE, TILE);
+      for (let i = 0; i < 6; i++) {
+        const sx = Math.floor(hash(tx, ty, 80 + i) * 13);
+        const sy = Math.floor(hash(tx, ty, 90 + i) * 13);
+        px(ctx, i % 2 ? "#8e847a" : "#625a52", X + sx, Y + sy, 3, 2);
+      }
+      return true;
     case "marbre": {
       const c = (tx + ty) % 2 ? Q.marble : Q.marbleV;
       px(ctx, c, X, Y, TILE, TILE);
@@ -440,6 +456,81 @@ export function paintProp2(base: Ctx, top: Ctx, p: Prop, kit: Kit): boolean {
       light({ x: X + W / 2, y: Y + 10, r: 26, color: "#ffe6a0", tint: true });
       return true;
     }
+    case "rocher":
+      shadow(b, X + W / 2, Y + H - 2, W / 2 - 1, 3);
+      blob(b, X + W / 2, Y + H / 2 + 1, Math.min(W, H) / 2 - 1, "#4a4440");
+      blob(b, X + W / 2 - 1, Y + H / 2, Math.min(W, H) / 2 - 2, "#7a7068");
+      blob(b, X + W / 2 - 3, Y + H / 2 - 3, Math.min(W, H) / 4, "#9a9088");
+      return true;
+    case "haltere-geant": {
+      // Statue : haltère d'or géant sur un socle
+      shadow(b, X + W / 2, Y + H - 2, W / 2, 3);
+      px(b, Q.stoneD, X + 6, Y + H - 10, W - 12, 9);
+      px(b, Q.stoneL, X + 5, Y + H - 12, W - 10, 3);
+      px(top, Q.goldD, X + 10, Y + 6, W - 20, 5);
+      px(top, Q.gold, X + 10, Y + 6, W - 20, 2);
+      for (const dx of [2, W - 10]) {
+        px(top, Q.goldD, X + dx, Y - 2, 8, 20);
+        px(top, Q.gold, X + dx + 1, Y - 1, 3, 18);
+      }
+      px(b, Q.goldD, X + W / 2 - 2, Y + 11, 4, H - 22);
+      light({ x: X + W / 2, y: Y + 8, r: 30, color: "#ffe6a0", tint: true });
+      return true;
+    }
+    case "banc-muscu":
+      shadow(b, X + W / 2, Y + 15, W / 2, 2);
+      px(b, "#2a2a32", X + 4, Y + 8, W - 8, 4);
+      px(b, "#c62828", X + 5, Y + 7, W - 10, 3);
+      px(b, Q.metalD, X + 6, Y + 11, 2, 5);
+      px(b, Q.metalD, X + W - 8, Y + 11, 2, 5);
+      px(b, Q.metal, X + 1, Y + 2, W - 2, 2);
+      px(b, "#1b1626", X, Y, 4, 7);
+      px(b, "#1b1626", X + W - 4, Y, 4, 7);
+      return true;
+    case "sac-frappe":
+      shadow(b, X + 8, Y + H - 1, 5, 2);
+      px(b, Q.metalD, X + 7, Y, 2, 4);
+      px(b, "#8e1b1b", X + 3, Y + 4, 10, H - 7);
+      px(b, "#c62828", X + 4, Y + 5, 3, H - 9);
+      px(b, "#1b1626", X + 3, Y + 10, 10, 1);
+      return true;
+    case "gong":
+      shadow(b, X + 8, Y + H - 1, 7, 2);
+      px(b, Q.woodD, X + 1, Y + 2, 2, H - 2);
+      px(b, Q.woodD, X + 13, Y + 2, 2, H - 2);
+      px(b, Q.woodD, X, Y + 1, 16, 2);
+      blob(b, X + 8, Y + 12, 6, Q.goldD);
+      blob(b, X + 8, Y + 12, 5, Q.gold);
+      blob(b, X + 7, Y + 11, 2, "#f8dc70");
+      return true;
+    case "brasero":
+      shadow(b, X + 8, Y + 15, 5, 2);
+      px(b, Q.metalD, X + 4, Y + 8, 8, 6);
+      px(b, Q.metalD, X + 6, Y + 13, 4, 3);
+      px(top, "#ff7a2a", X + 5, Y + 4, 6, 4);
+      px(top, "#ffd04a", X + 6, Y + 2, 4, 4);
+      px(top, "#fff0b0", X + 7, Y + 3, 2, 2);
+      light({ x: X + 8, y: Y + 6, r: 34, color: "#ff9a4a", tint: true, flicker: true });
+      return true;
+    case "statue-titan": {
+      // Statue du Premier Titan : il dort, les bras croisés sur son haltère
+      shadow(b, X + W / 2, Y + H - 2, W / 2, 3);
+      px(b, Q.stoneD, X + 2, Y + H - 10, W - 4, 9);
+      px(b, Q.stoneL, X + 1, Y + H - 12, W - 2, 3);
+      blob(top, X + W / 2, Y + 14, 9, Q.stoneD);
+      blob(top, X + W / 2 - 1, Y + 13, 8, Q.stone);
+      blob(top, X + W / 2, Y + 3, 5, Q.stone);
+      px(top, Q.stoneD, X + W / 2 - 3, Y + 3, 2, 1);
+      px(top, Q.stoneD, X + W / 2 + 1, Y + 3, 2, 1);
+      px(top, Q.stoneL, X + 4, Y + 20, W - 8, 3);
+      pixelText(b, "ZZZ", X + W / 2 - 5, Y + H - 9, Q.gold);
+      return true;
+    }
+    case "podium":
+      px(b, Q.goldD, X, Y + 4, W, H - 4);
+      px(b, Q.gold, X, Y + 4, W, 2);
+      px(b, Q.red, X + W / 2 - 4, Y + 8, 8, 4);
+      return true;
     case "lanterne": {
       // Lanterne de la cité (comme un lampadaire, plus chaude)
       shadow(b, X + 8, Y + 30, 5, 2);

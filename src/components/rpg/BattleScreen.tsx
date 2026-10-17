@@ -13,7 +13,7 @@
 
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 import { CONSUMABLES, MOVES, nameOf, type Fx } from "@/lib/rpg/bestiary";
-import { ally, bagAfter, foe, forced, mustSwap, playTurn, spoils, startBattle, type Action, type Battle, type BattleEvent, type Side, type Team } from "@/lib/rpg/combat";
+import { ally, bagAfter, canTransform, foe, forced, mustSwap, playTurn, spoils, startBattle, type Action, type Battle, type BattleEvent, type Side, type Team } from "@/lib/rpg/combat";
 import type { Chiptune } from "../game/audio";
 import { battler } from "./battlers";
 import { hash } from "./pixel";
@@ -47,6 +47,7 @@ interface Disp {
   allyStatus: (string | null)[];
   foeStatus: (string | null)[];
   foeSprite: string[];
+  allySprite: string[];
   showAlly: boolean;
   showFoe: boolean;
 }
@@ -90,6 +91,7 @@ const freshDisp = (b: Battle): Disp => ({
   allyStatus: b.allies.map((x) => x.status?.id ?? null),
   foeStatus: b.foes.map((x) => x.status?.id ?? null),
   foeSprite: b.foes.map((x) => x.sprite),
+  allySprite: b.allies.map((x) => x.sprite),
   showAlly: true,
   showFoe: true,
 });
@@ -155,6 +157,45 @@ function background(kind: Battle["def"]["bg"], h: number): HTMLCanvasElement {
     band(horizon + 10, h, ["#1d3a2a", "#244a33", "#1a3626"]);
     x.fillStyle = "#3f7a4a";
     for (let i = 0; i < 30; i++) x.fillRect(Math.floor(hash(i, 3, 9) * W), horizon + 12 + Math.floor(hash(i, 4, 9) * (h - horizon - 14)), 4, 1);
+  } else if (kind === "montagne") {
+    band(0, horizon, ["#3a2a5a", "#6a3a6a", "#b0566a", "#e88a5a", "#f8c070"]);
+    // Montagnes lointaines
+    for (let layer = 0; layer < 2; layer++) {
+      x.fillStyle = layer ? "#5a3a5a" : "#7a4a6a";
+      for (let px = 0; px < W; px++) {
+        const hgt = Math.round((Math.sin(px / (18 + layer * 9) + layer * 2) * 0.5 + 0.5) * horizon * (0.35 + layer * 0.2) + hash(px, layer, 4) * 3);
+        x.fillRect(px, horizon - hgt, 1, hgt);
+      }
+    }
+    x.fillStyle = "#f8f4e8";
+    for (let px = 40; px < 70; px++) x.fillRect(px, horizon - 38 + Math.abs(px - 55), 1, 3);
+    band(horizon, h, ["#5a6a4a", "#4a5a3e", "#3e4a34"]);
+    x.fillStyle = "#6a7a5a";
+    for (let i = 0; i < 40; i++) x.fillRect(Math.floor(hash(i, 8, 2) * W), horizon + 4 + Math.floor(hash(i, 9, 2) * (h - horizon - 6)), 3, 1);
+  } else if (kind === "temple" || kind === "sanctuaire") {
+    const sanct = kind === "sanctuaire";
+    band(0, horizon, sanct ? ["#2a1a2a", "#3a2234", "#4a2a3a"] : ["#8a5a3a", "#9a6a46", "#7a4a2e"]);
+    // Poutres et lanternes en papier
+    x.fillStyle = sanct ? "#1a0e18" : "#5a3a22";
+    for (const cx of [10, 80, 160, 230]) x.fillRect(cx - 4, 0, 8, horizon);
+    x.fillRect(0, 10, W, 5);
+    for (const cx of [45, 120, 195]) {
+      x.fillStyle = "#c62828";
+      x.fillRect(cx - 5, 20, 10, 14);
+      x.fillStyle = "#e8b830";
+      x.fillRect(cx - 5, 26, 10, 1);
+    }
+    if (sanct) {
+      // Haltère d'or géant au fond
+      x.fillStyle = "#e8b830";
+      x.fillRect(100, horizon - 30, 40, 4);
+      x.fillRect(92, horizon - 40, 8, 24);
+      x.fillRect(140, horizon - 40, 8, 24);
+    }
+    band(horizon, h, sanct ? ["#4a2d2d", "#3d2525"] : ["#c8b878", "#b8a868", "#a89858"]);
+    x.fillStyle = sanct ? "#331f1f" : "#8a7a48";
+    for (let gy = horizon + 8; gy < h; gy += 14) x.fillRect(0, gy, W, 1);
+    for (let gx = 0; gx < W; gx += 28) x.fillRect(gx, horizon, 1, h - horizon);
   } else {
     const throne = kind === "trone";
     band(0, horizon, throne ? ["#2a1a3a", "#341f48", "#3e2556"] : ["#d8d0c0", "#cfc6b4", "#c4baa6"]);
@@ -204,6 +245,9 @@ const PLAT: Record<Battle["def"]["bg"], [string, string]> = {
   egout: ["#2f5a3a", "#1d3a26"],
   palais: ["#cfc6b4", "#a89c88"],
   trone: ["#6a3a3a", "#4a2525"],
+  montagne: ["#6a7a5a", "#4a5a3e"],
+  temple: ["#a89858", "#8a7a48"],
+  sanctuaire: ["#5a3434", "#3d2525"],
 };
 
 const FX_COLORS: Record<Fx, string[]> = {
@@ -221,6 +265,8 @@ const FX_COLORS: Record<Fx, string[]> = {
   sieste: ["#c8d0ff", "#ffffff"],
   charge: ["#ffd04a", "#ffffff"],
   vinaigre: ["#e8c33a", "#a66cff"],
+  titan: ["#ffd04a", "#ffffff", "#ff8a3a"],
+  dague: ["#c8d0ff", "#a66cff"],
   bouclier: ["#6ad0ff", "#c8f0ff"],
   terre: ["#8a6a4a", "#5a4430"],
 };
@@ -497,6 +543,20 @@ export function BattleScreen({
         later(Math.max(1600, e.text.length * 32));
         break;
       }
+      case "transform": {
+        a.flash = 1;
+        a.flashColor = e.on ? "255,208,74" : "255,255,255";
+        a.shake = e.on ? 0.9 : 0.2;
+        const i = dispRef.current.a;
+        patchDisp((d) => ({ ...d, allySprite: d.allySprite.map((x, j) => (j === i ? e.sprite : x)) }));
+        if (e.on) {
+          spawn("titan", "ally", "ally");
+          audio.milestone();
+          navigator.vibrate?.([50, 30, 50, 30, 120]);
+        }
+        later(e.on ? 900 : 400);
+        break;
+      }
       case "end":
         break;
     }
@@ -521,7 +581,7 @@ export function BattleScreen({
       audio.win();
       play(lines, () => {
         setModeBoth("done");
-        onEnd({ outcome: "win", xp: sp.xp, fp: sp.fp, bag: bagAfter(bt.bag, { ...sp, used: {} }), notes: [] });
+        onEnd({ outcome: "win", xp: sp.xp, fp: sp.fp, bag: bagAfter(bt.bag, { ...sp, drops: { ...(bt.def.drops ?? {}) }, used: {} }), notes: [] });
       });
     } else if (bt.over === "lose") {
       audio.music(null);
@@ -669,7 +729,7 @@ export function BattleScreen({
       // Équipier actif (de dos)
       const al = bt.allies[d.a];
       if (al && d.showAlly) {
-        const spr = battler(al.sprite, tenue);
+        const spr = battler(d.allySprite[d.a] ?? al.sprite, tenue);
         const slide = 1 - a.slide.ally;
         let x = s.ally.x - (spr.width * s.k) / 2 + slide * 220;
         let y = s.ally.y - spr.height * s.k + 2 + (Math.floor(a.t * 2 + 1) % 2) * s.k;
@@ -779,6 +839,7 @@ export function BattleScreen({
         setModeBoth("party");
       } else doTurn.current({ kind: "flee" });
     } else if (m === "moves") {
+      if (i === 4 && canTransform(bt)) return doTurn.current({ kind: "transform" });
       const id = ally(bt).moves[i];
       if (id) doTurn.current({ kind: "move", move: id });
     } else if (m === "items") {
@@ -852,10 +913,13 @@ export function BattleScreen({
         const c = curRef.current;
         if (m === "menu" || m === "moves") {
           const n = m === "menu" ? 4 : bRef.current.allies[bRef.current.a].moves.length;
+          const titan = m === "moves" && canTransform(bRef.current);
           let x = c;
-          if (dd === "left" || dd === "right") x = c % 2 ? c - 1 : c + 1;
+          if (c === 4) x = dd === "up" ? 2 : dd === "down" ? 0 : 4;
+          else if (dd === "left" || dd === "right") x = c % 2 ? c - 1 : c + 1;
+          else if (titan && ((dd === "down" && c >= 2) || (dd === "up" && c < 2))) x = 4;
           else x = (c + 2) % 4;
-          if (x < n) setCurBoth(x);
+          if (x < n || (x === 4 && titan)) setCurBoth(x);
           audio.select();
         } else if (m === "items" || m === "party" || m === "lost") {
           const n = m === "items" ? Object.entries(bRef.current.bag).filter(([k, v]) => v > 0 && CONSUMABLES[k]).length : m === "party" ? bRef.current.allies.length : 2;
@@ -881,7 +945,7 @@ export function BattleScreen({
   const allyHp = disp.allyHp[disp.a] ?? 0;
   const st = (s: string | null) => (s === "brule" ? <b className="bt-status bt-status--brule">BRÛ</b> : s === "etourdi" ? <b className="bt-status bt-status--etourdi">ÉTO</b> : null);
   const showBoxes = mode !== "intro";
-  const sel = mode === "moves" ? MOVES[me.moves[cur]] : null;
+  const sel = mode === "moves" ? (cur === 4 ? { power: 0, acc: 100, desc: `Transformation (une fois par combat) : Attaque ×1,5, Défense ×1,4, PV +30 % et 4 techniques de Titan pendant ${b.titan.turns} tours.`, hits: undefined, charge: undefined } : MOVES[me.moves[cur]]) : null;
 
   return (
     <div ref={root} className="bt" role="dialog" aria-label="Combat">
@@ -953,6 +1017,11 @@ export function BattleScreen({
                   {MOVES[mid].name}
                 </button>
               ))}
+              {canTransform(b) && (
+                <button type="button" className={`bt-titan${cur === 4 ? " is-on" : ""}`} onClick={() => choose("moves", 4)}>
+                  <span className="gb-cursor">{cur === 4 ? "▶" : ""}</span>★ SPARROW TITAN
+                </button>
+              )}
             </div>
             {sel && (
               <p className="bt-info">

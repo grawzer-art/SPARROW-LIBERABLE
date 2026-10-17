@@ -8,6 +8,7 @@
  */
 
 import { CH2, CH2_CARD } from "./ch2";
+import { CH3, CH3_CARD } from "./ch3";
 import { flag, has, isDone, status, type Effect, type Rpg } from "./quest";
 import { pick, type Chapter, type Conversation, type Rule, type ThingTalk } from "./talk";
 
@@ -347,7 +348,7 @@ const CH1: Chapter = {
   things: {},
 };
 
-const ALL: Chapter = { npcs: { ...CH1.npcs, ...CH2.npcs }, things: { ...CH1.things, ...CH2.things } };
+const ALL: Chapter = { npcs: { ...CH1.npcs, ...CH2.npcs, ...CH3.npcs }, things: { ...CH1.things, ...CH2.things, ...CH3.things } };
 
 /** Réplique d'un PNJ sur une carte. */
 export function talkTo(id: string, r: Rpg, map = "quartier"): Conversation {
@@ -378,7 +379,7 @@ export function examine(id: string, r: Rpg, text?: string, map = "quartier"): Co
 
 /** Réplique à l'arrivée sur une carte (`first` = première visite). */
 export function arrival(map: string, r: Rpg, first: boolean): Conversation | null {
-  return CH2.arrival?.(map, r, first) ?? null;
+  return CH2.arrival?.(map, r, first) ?? CH3.arrival?.(map, r, first) ?? null;
 }
 
 /** Après une victoire. */
@@ -394,14 +395,14 @@ export function afterBattle(id: string, r: Rpg): Conversation | null {
       ],
       effects: [{ kind: "quest", id: "frites-perdues" }],
     };
-  return CH2.afterBattle?.(id, r) ?? null;
+  return CH2.afterBattle?.(id, r) ?? CH3.afterBattle?.(id, r) ?? null;
 }
 
 /** Scène enchaînée après un dialogue (`then: { kind: "scene" }`). */
-export const scene = (id: string): Conversation | null => CH2.scene(id);
+export const scene = (id: string): Conversation | null => CH2.scene(id) ?? CH3.scene(id);
 
 /** Après un mini-jeu lancé depuis un dialogue. */
-export const afterMinigame = (id: string, ok: boolean, r: Rpg): Conversation | null => CH2.afterMinigame(id, ok, r);
+export const afterMinigame = (id: string, ok: boolean, r: Rpg): Conversation | null => CH2.afterMinigame(id, ok, r) ?? CH3.afterMinigame(id, ok, r);
 
 /** Étapes de quête liées à une zone (on y entre pour la première fois ou non). */
 export function zoneEffects(zone: string): Effect[] {
@@ -418,6 +419,7 @@ export const GAME_SUBTITLE = "L'Élu de la Minute";
 export function openingCard(map: string, r: Rpg): string[] | null {
   if (map === "quartier" && !d(r, "sortir")) return ["CHAPITRE 1 · LA VILLE FIGÉE", GAME_TITLE, GAME_SUBTITLE];
   if (map === "cite" && !r.done.includes("frites-perdues:route")) return ["CHAPITRE 2 · LA CITÉ DES FRITES PERDUES", GAME_TITLE, GAME_SUBTITLE];
+  if (map === "sentier" && !r.done.includes("confrerie:nord")) return ["CHAPITRE 3 · LA CONFRÉRIE DU MUSCLE", GAME_TITLE, GAME_SUBTITLE];
   return null;
 }
 
@@ -425,6 +427,7 @@ export function openingCard(map: string, r: Rpg): string[] | null {
 export function chapterCard(quest: string): string[] | null {
   if (quest === Q) return ["CHAPITRE 1 TERMINÉ", "LA VILLE FIGÉE", "+120 XP · +150 FP", "Objet : Fragment d'horloge n°1", "La barrière du Centre-ville s'est levée…"];
   if (quest === "frites-perdues") return CH2_CARD;
+  if (quest === "confrerie") return CH3_CARD;
   return null;
 }
 

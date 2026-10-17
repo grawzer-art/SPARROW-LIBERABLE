@@ -166,6 +166,8 @@ export function Gotchi() {
     overlay.current = { ...overlay.current, cook: id, npc: npc ?? overlay.current.npc };
     setCookState(id);
   }, []);
+  /** Dernière séance de muscu jouée dans le RPG (Épreuve de la Force). */
+  const muscuRun = useRef<MuscuResult | null>(null);
   const busy = () => !!(fightRef.current || overlay.current.shop || overlay.current.cook);
   const fightRef = useRef<Fight | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
@@ -1366,7 +1368,7 @@ export function Gotchi() {
             <BattleScreen
               key={fight.id}
               id={fight.id}
-              team={{ level: state.level, party: state.rpg.party, gear: state.rpg.gear, skills: state.rpg.skills, bag: state.rpg.bag }}
+              team={{ level: state.level, party: state.rpg.party, gear: state.rpg.gear, skills: state.rpg.skills, bag: state.rpg.bag, titanTurns: muscleStage(state.muscle) >= 4 ? 4 : 3 }}
               tenue={state.equip.tenue}
               audio={audio.current}
               reduced={reduced.current}
@@ -1378,7 +1380,7 @@ export function Gotchi() {
           {shop && state && (
             <ShopScreen id={shop} coins={state.coins} bag={state.rpg.bag} owned={state.rpg.owned} pad={pad} onBuy={shopBuy} onClose={closeShop} />
           )}
-          {cook && <CookGame height={vh} audio={audio.current} reduced={reduced.current} pad={pad} onEnd={endCook} />}
+          {cook && cook !== "muscu" && <CookGame height={vh} audio={audio.current} reduced={reduced.current} pad={pad} onEnd={endCook} />}
           {!cur && line && menu === null && (
             <button type="button" className="gb-dialog mono" onClick={() => (typed < line.length ? setTyped(line.length) : setLine(null))} aria-live="polite">
               <span>{line.slice(0, typed)}</span>
@@ -1464,6 +1466,25 @@ export function Gotchi() {
       <input ref={fileInput} type="file" accept="application/json,.json" hidden onChange={(e) => importSave(e.target.files?.[0])} />
 
       {game === "farm" && state && <FarmGame audio={audio.current} best={state.bestFarm} reduced={reduced.current} onFinish={onFarmFinish} onClose={closeGame} />}
+      {cook === "muscu" && state && (
+        <MuscuGame
+          audio={audio.current}
+          best={state.bestMuscu}
+          look={lookOf(state)}
+          tier={tierOf(state.owned, "sport")}
+          reduced={reduced.current}
+          exitLabel="Retour au temple"
+          onFinish={(r) => {
+            muscuRun.current = r;
+            return onMuscuFinish(r);
+          }}
+          onClose={() => {
+            const r = muscuRun.current;
+            muscuRun.current = null;
+            endCook(!!r && r.reps >= 12 && !r.crampe);
+          }}
+        />
+      )}
       {game === "muscu" && state && (
         <MuscuGame
           audio={audio.current}

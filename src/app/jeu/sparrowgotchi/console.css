@@ -1554,3 +1554,15 @@
   text-transform: uppercase;
   color: #6a6a74;
 }
+
+.bt-grid .bt-titan {
+  grid-column: 1 / -1;
+  justify-content: center;
+  color: #8a5a00;
+  background: linear-gradient(90deg, rgba(242, 193, 78, 0.25), rgba(242, 193, 78, 0.5), rgba(242, 193, 78, 0.25));
+  letter-spacing: 0.08em;
+}
+
+.bt-grid .bt-titan.is-on {
+  background: linear-gradient(90deg, rgba(242, 193, 78, 0.45), rgba(242, 193, 78, 0.8), rgba(242, 193, 78, 0.45));
+}
