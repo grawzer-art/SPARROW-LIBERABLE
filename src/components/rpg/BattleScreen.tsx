@@ -12,8 +12,8 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
-import { CONSUMABLES, MOVES, nameOf, type Fx } from "@/lib/rpg/bestiary";
-import { ally, bagAfter, canTransform, foe, forced, mustSwap, playTurn, spoils, startBattle, type Action, type Battle, type BattleEvent, type Side, type Team } from "@/lib/rpg/combat";
+import { CONSUMABLES, FORMS, MOVES, nameOf, type Fx } from "@/lib/rpg/bestiary";
+import { ally, bagAfter, foe, forced, forms, mustSwap, playTurn, spoils, startBattle, type Action, type Battle, type BattleEvent, type Side, type Team } from "@/lib/rpg/combat";
 import type { Chiptune } from "../game/audio";
 import { battler } from "./battlers";
 import { hash } from "./pixel";
@@ -172,6 +172,63 @@ function background(kind: Battle["def"]["bg"], h: number): HTMLCanvasElement {
     band(horizon, h, ["#5a6a4a", "#4a5a3e", "#3e4a34"]);
     x.fillStyle = "#6a7a5a";
     for (let i = 0; i < 40; i++) x.fillRect(Math.floor(hash(i, 8, 2) * W), horizon + 4 + Math.floor(hash(i, 9, 2) * (h - horizon - 6)), 3, 1);
+  } else if (kind === "cerisiers" || kind === "festival") {
+    const fest = kind === "festival";
+    band(0, horizon, fest ? ["#0c0a22", "#16123a", "#221a4a"] : ["#4a2a5a", "#8a4a7a", "#d87a8a", "#f2b0a0"]);
+    if (fest) {
+      for (let i = 0; i < 30; i++) x.fillRect(Math.floor(hash(i, 1, 6) * W), Math.floor(hash(i, 2, 6) * horizon * 0.6), 1, 1);
+      // Guirlandes de lanternes
+      for (let gx = 0; gx < W; gx += 4) {
+        const gy = 18 + Math.round(Math.sin(gx / 30) * 6);
+        x.fillStyle = "#3a2a1a";
+        x.fillRect(gx, gy, 4, 1);
+        if (gx % 20 === 0) {
+          x.fillStyle = gx % 40 ? "#e8b830" : "#d23a3a";
+          x.fillRect(gx - 2, gy + 1, 5, 6);
+        }
+      }
+      // Scène du DJ
+      x.fillStyle = "#1a1430";
+      x.fillRect(150, horizon - 26, 80, 26);
+      x.fillStyle = "#a66cff";
+      x.fillRect(150, horizon - 26, 80, 2);
+    } else {
+      // Cerisiers en fleurs
+      for (const [cx, r] of [
+        [30, 22],
+        [95, 16],
+        [190, 26],
+        [235, 14],
+      ]) {
+        x.fillStyle = "#4a2a2a";
+        x.fillRect(cx - 2, horizon - r, 4, r);
+        for (let i = 0; i < 60; i++) {
+          const a = hash(i, cx, 1) * Math.PI * 2;
+          const d = hash(i, cx, 2) * r;
+          x.fillStyle = i % 3 ? "#f8b8c8" : "#e88aa8";
+          x.fillRect(Math.round(cx + Math.cos(a) * d), Math.round(horizon - r + Math.sin(a) * d * 0.6), 2, 2);
+        }
+      }
+    }
+    band(horizon, h, fest ? ["#3a2a2a", "#2e2222"] : ["#6a8a5a", "#5a7a4a", "#4a6a3e"]);
+    x.fillStyle = fest ? "#4a3434" : "#f8b8c8";
+    for (let i = 0; i < 30; i++) x.fillRect(Math.floor(hash(i, 5, 7) * W), horizon + 4 + Math.floor(hash(i, 6, 7) * (h - horizon - 6)), 2, 1);
+  } else if (kind === "dojo") {
+    band(0, horizon, ["#6a4a2e", "#7a5a38", "#5a3a22"]);
+    // Shoji et lune
+    x.fillStyle = "#e8e0c8";
+    x.fillRect(70, 10, 100, horizon - 20);
+    x.fillStyle = "#5a3a22";
+    for (let gx = 70; gx <= 170; gx += 20) x.fillRect(gx, 10, 2, horizon - 20);
+    for (let gy = 10; gy <= horizon - 10; gy += 16) x.fillRect(70, gy, 100, 2);
+    x.fillStyle = "#f8f4e8";
+    x.fillRect(132, 18, 14, 14);
+    x.fillStyle = "#c62828";
+    x.fillRect(20, 14, 18, 30);
+    x.fillRect(202, 14, 18, 30);
+    band(horizon, h, ["#c8b878", "#b8a868", "#a89858"]);
+    x.fillStyle = "#8a7a48";
+    for (let gy = horizon + 8; gy < h; gy += 14) x.fillRect(0, gy, W, 1);
   } else if (kind === "temple" || kind === "sanctuaire") {
     const sanct = kind === "sanctuaire";
     band(0, horizon, sanct ? ["#2a1a2a", "#3a2234", "#4a2a3a"] : ["#8a5a3a", "#9a6a46", "#7a4a2e"]);
@@ -248,6 +305,9 @@ const PLAT: Record<Battle["def"]["bg"], [string, string]> = {
   montagne: ["#6a7a5a", "#4a5a3e"],
   temple: ["#a89858", "#8a7a48"],
   sanctuaire: ["#5a3434", "#3d2525"],
+  cerisiers: ["#7a9a6a", "#5a7a4a"],
+  festival: ["#5a4040", "#3a2a2a"],
+  dojo: ["#a89858", "#8a7a48"],
 };
 
 const FX_COLORS: Record<Fx, string[]> = {
@@ -267,6 +327,8 @@ const FX_COLORS: Record<Fx, string[]> = {
   vinaigre: ["#e8c33a", "#a66cff"],
   titan: ["#ffd04a", "#ffffff", "#ff8a3a"],
   dague: ["#c8d0ff", "#a66cff"],
+  sabre: ["#ffffff", "#c8f0ff", "#a6d8ff"],
+  son: ["#a66cff", "#6ad0ff", "#ff6fae"],
   bouclier: ["#6ad0ff", "#c8f0ff"],
   terre: ["#8a6a4a", "#5a4430"],
 };
@@ -423,7 +485,7 @@ export function BattleScreen({
           const ang = rand(Math.PI * 2);
           push({ x: tgt.x, y: tgt.y, vx: Math.cos(ang) * 90, vy: Math.sin(ang) * 90, life: 0.3, max: 0.3, s: 2 });
         }
-        if (fx === "lame") for (let i = 0; i < 14; i++) push({ x: tgt.x - 18 + i * 2.6, y: tgt.y - 18 + i * 2.6, life: 0.3, max: 0.3, s: 2, c: "#ffffff" });
+        if (fx === "lame" || fx === "sabre") for (let i = 0; i < 14; i++) push({ x: tgt.x - 18 + i * 2.6, y: tgt.y - 18 + i * 2.6, life: 0.3, max: 0.3, s: 2, c: "#ffffff" });
     }
   }, [reduced, scene]);
 
@@ -839,7 +901,8 @@ export function BattleScreen({
         setModeBoth("party");
       } else doTurn.current({ kind: "flee" });
     } else if (m === "moves") {
-      if (i === 4 && canTransform(bt)) return doTurn.current({ kind: "transform" });
+      const fl = forms(bt);
+      if (i >= 4 && fl[i - 4]) return doTurn.current({ kind: "transform", form: fl[i - 4] });
       const id = ally(bt).moves[i];
       if (id) doTurn.current({ kind: "move", move: id });
     } else if (m === "items") {
@@ -913,13 +976,15 @@ export function BattleScreen({
         const c = curRef.current;
         if (m === "menu" || m === "moves") {
           const n = m === "menu" ? 4 : bRef.current.allies[bRef.current.a].moves.length;
-          const titan = m === "moves" && canTransform(bRef.current);
+          // Transformations sous les 4 techniques (index 4 et 5)
+          const nf = m === "moves" ? forms(bRef.current).length : 0;
+          const last = 3 + nf;
           let x = c;
-          if (c === 4) x = dd === "up" ? 2 : dd === "down" ? 0 : 4;
+          if (c >= 4) x = dd === "up" ? (c === 4 ? 2 : c - 1) : dd === "down" ? (c < last ? c + 1 : 0) : c;
           else if (dd === "left" || dd === "right") x = c % 2 ? c - 1 : c + 1;
-          else if (titan && ((dd === "down" && c >= 2) || (dd === "up" && c < 2))) x = 4;
+          else if (nf && ((dd === "down" && c >= 2) || (dd === "up" && c < 2))) x = dd === "down" ? 4 : last;
           else x = (c + 2) % 4;
-          if (x < n || (x === 4 && titan)) setCurBoth(x);
+          if (x < n || (x >= 4 && x <= last)) setCurBoth(x);
           audio.select();
         } else if (m === "items" || m === "party" || m === "lost") {
           const n = m === "items" ? Object.entries(bRef.current.bag).filter(([k, v]) => v > 0 && CONSUMABLES[k]).length : m === "party" ? bRef.current.allies.length : 2;
@@ -945,7 +1010,13 @@ export function BattleScreen({
   const allyHp = disp.allyHp[disp.a] ?? 0;
   const st = (s: string | null) => (s === "brule" ? <b className="bt-status bt-status--brule">BRÛ</b> : s === "etourdi" ? <b className="bt-status bt-status--etourdi">ÉTO</b> : null);
   const showBoxes = mode !== "intro";
-  const sel = mode === "moves" ? (cur === 4 ? { power: 0, acc: 100, desc: `Transformation (une fois par combat) : Attaque ×1,5, Défense ×1,4, PV +30 % et 4 techniques de Titan pendant ${b.titan.turns} tours.`, hits: undefined, charge: undefined } : MOVES[me.moves[cur]]) : null;
+  const fl = forms(b);
+  const sel =
+    mode === "moves"
+      ? cur >= 4 && fl[cur - 4]
+        ? { power: 0, acc: 100, desc: `Transformation (une seule par combat) : ${FORMS[fl[cur - 4]].desc} pendant ${b.titan.turns} tours.`, hits: undefined, charge: undefined }
+        : MOVES[me.moves[cur]]
+      : null;
 
   return (
     <div ref={root} className="bt" role="dialog" aria-label="Combat">
@@ -1017,11 +1088,11 @@ export function BattleScreen({
                   {MOVES[mid].name}
                 </button>
               ))}
-              {canTransform(b) && (
-                <button type="button" className={`bt-titan${cur === 4 ? " is-on" : ""}`} onClick={() => choose("moves", 4)}>
-                  <span className="gb-cursor">{cur === 4 ? "▶" : ""}</span>★ SPARROW TITAN
+              {fl.map((f, k) => (
+                <button key={f} type="button" className={`bt-titan bt-titan--${f}${cur === 4 + k ? " is-on" : ""}`} onClick={() => choose("moves", 4 + k)}>
+                  <span className="gb-cursor">{cur === 4 + k ? "▶" : ""}</span>★ {FORMS[f].name}
                 </button>
-              )}
+              ))}
             </div>
             {sel && (
               <p className="bt-info">

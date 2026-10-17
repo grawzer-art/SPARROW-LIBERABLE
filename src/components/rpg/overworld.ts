@@ -210,7 +210,7 @@ export class Overworld {
     if (npc) return { kind: "npc", id: npc.def.id };
     // Comme dans les boutiques des RPG portables : on parle au marchand par-dessus le comptoir.
     const counter = thingAt(this.map, front, this.rpg);
-    if (counter?.prop.kind === "comptoir") {
+    if (counter?.prop.kind === "comptoir" || counter?.prop.kind === "platines") {
       const keeper = this.npcAt(step(front, this.dir));
       if (keeper) return { kind: "npc", id: keeper.def.id };
     }

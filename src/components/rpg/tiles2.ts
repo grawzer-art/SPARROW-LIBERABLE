@@ -531,6 +531,79 @@ export function paintProp2(base: Ctx, top: Ctx, p: Prop, kit: Kit): boolean {
       px(b, Q.gold, X, Y + 4, W, 2);
       px(b, Q.red, X + W / 2 - 4, Y + 8, 8, 4);
       return true;
+    case "cerisier": {
+      shadow(b, X + 16, Y + 29, 13, 3);
+      px(b, "#4a2a2a", X + 13, Y + 18, 6, 12);
+      px(b, "#6a3a3a", X + 14, Y + 18, 2, 12);
+      const t = top;
+      blob(t, X + 16, Y + 11, 14, "#c86a8a");
+      blob(t, X + 15, Y + 10, 13, "#e88aa8");
+      blob(t, X + 10, Y + 8, 7, "#f8b8c8");
+      blob(t, X + 21, Y + 6, 6, "#f8b8c8");
+      for (let i = 0; i < 18; i++) px(t, "#fff0f4", X + 4 + Math.floor(hash(p.x * 9 + i, p.y, 81) * 24), Y + 2 + Math.floor(hash(p.x, p.y * 9 + i, 82) * 18), 1, 1);
+      // Pétales au sol
+      for (let i = 0; i < 6; i++) px(b, "#f8b8c8", X + Math.floor(hash(p.x + i, p.y, 83) * 30), Y + 26 + Math.floor(hash(p.x, p.y + i, 84) * 6), 2, 1);
+      return true;
+    }
+    case "poteau":
+      shadow(b, X + 8, Y + 15, 4, 2);
+      px(b, "#8e1b1b", X + 5, Y, 6, 16);
+      px(b, "#c62828", X + 6, Y, 2, 16);
+      px(b, "#1b1626", X + 4, Y + 13, 8, 3);
+      return true;
+    case "portique":
+      // Poutre haute, dessinée au-dessus des personnages (on passe dessous)
+      px(top, "#1b1626", X - 2, Y - 2, W + 4, 4);
+      px(top, "#c62828", X - 1, Y - 1, W + 2, 2);
+      px(top, "#8e1b1b", X + 2, Y + 4, W - 4, 3);
+      px(top, "#c62828", X + 2, Y + 4, W - 4, 1);
+      px(top, "#c62828", X + 5, Y + 2, 6, 10);
+      px(top, "#c62828", X + W - 11, Y + 2, 6, 10);
+      return true;
+    case "pierre":
+      shadow(b, X + 8, Y + 15, 6, 2);
+      px(b, Q.stoneD, X + 5, Y + 11, 6, 4);
+      px(b, Q.stone, X + 6, Y + 6, 4, 5);
+      px(b, "#ffd04a", X + 7, Y + 7, 2, 2);
+      px(b, Q.stoneD, X + 3, Y + 3, 10, 3);
+      px(b, Q.stoneL, X + 4, Y + 3, 8, 1);
+      light({ x: X + 8, y: Y + 8, r: 16, color: "#ffd04a", tint: true });
+      return true;
+    case "scene": {
+      // Scène du festival : estrade, enceintes, banderole
+      shadow(b, X + W / 2, Y + H, W / 2, 3);
+      px(b, "#3a2a1a", X, Y + H - 14, W, 14);
+      px(b, "#5a3a22", X, Y + H - 14, W, 3);
+      for (let x = 4; x < W; x += 12) px(b, "#2a1a10", X + x, Y + H - 10, 2, 10);
+      px(b, "#1a1430", X + 4, Y + 2, W - 8, H - 16);
+      for (const sx of [X + 2, X + W - 14]) {
+        px(b, "#1b1626", sx, Y + 4, 12, H - 18);
+        blob(b, sx + 6, Y + 12, 4, "#3a3a46");
+        blob(b, sx + 6, Y + 12, 2, "#a66cff");
+        blob(b, sx + 6, Y + 24, 3, "#3a3a46");
+      }
+      px(b, "#c62828", X + 18, Y + 3, W - 36, 7);
+      pixelText(b, "FESTIVAL", X + W / 2 - Math.round(textWidth("FESTIVAL") / 2), Y + 4, "#f8f4e8");
+      light({ x: X + W / 2, y: Y + H - 10, r: 46, color: "#a66cff", tint: true });
+      return true;
+    }
+    case "platines":
+      shadow(b, X + W / 2, Y + 15, W / 2, 2);
+      px(b, "#1b1626", X + 1, Y + 4, W - 2, 10);
+      px(b, "#2a2a32", X + 2, Y + 5, W - 4, 8);
+      for (const cx of [X + 10, X + W - 10]) {
+        blob(b, cx, Y + 9, 4, "#1b1626");
+        blob(b, cx, Y + 9, 1, "#a66cff");
+      }
+      for (let i = 0; i < 4; i++) px(b, ["#3ccf6a", "#f2c14e", "#ff6fae", "#6ad0ff"][i], X + W / 2 - 4 + i * 2, Y + 7, 1, 3);
+      return true;
+    case "ratelier":
+      px(b, Q.woodD, X + 1, Y + 2, W - 2, 12);
+      for (let x = 5; x < W - 3; x += 6) {
+        px(b, "#c8a06a", X + x, Y + 1, 2, 12);
+        px(b, "#1b1626", X + x, Y + 9, 2, 2);
+      }
+      return true;
     case "lanterne": {
       // Lanterne de la cité (comme un lampadaire, plus chaude)
       shadow(b, X + 8, Y + 30, 5, 2);
@@ -607,6 +680,20 @@ export function drawLive(ctx: Ctx, p: Prop, state: boolean, t: number, ox: numbe
       f(Q.gold, X + W / 2 - 1, Y + 7, 2, 2);
       break;
     }
+    case "lampion": {
+      // Lampion de la fête : éteint (gris) ou rallumé (rouge et lumineux)
+      f(state ? "#5a3a22" : "#3a3a46", X + 7, Y + 6, 2, 10);
+      f("#1b1626", X + 3, Y - 4, 10, 12);
+      f(state ? "#d23a3a" : "#6a6a74", X + 4, Y - 3, 8, 10);
+      f(state ? "#f06a5a" : "#7a7a84", X + 5, Y - 3, 2, 10);
+      f("#1b1626", X + 4, Y + 1, 8, 1);
+      if (state) {
+        const k = 0.35 + Math.sin(t * 6 + p.x) * 0.1;
+        f(`rgba(255,208,74,${k})`, X - 2, Y - 8, 20, 18);
+        f("#ffd04a", X + 7, Y, 2, 2);
+      }
+      break;
+    }
     case "sachet":
       if (state) break;
       f(Q.woodL, X + 5, Y + 7, 6, 6);
@@ -616,4 +703,4 @@ export function drawLive(ctx: Ctx, p: Prop, state: boolean, t: number, ox: numbe
   }
 }
 
-export const LIVE_KINDS = new Set(["coffre", "vanne", "flux", "grille", "sachet"]);
+export const LIVE_KINDS = new Set(["coffre", "vanne", "flux", "grille", "sachet", "lampion"]);

@@ -11,9 +11,9 @@ import type { Rpg } from "./state";
 
 export const TILE = 16;
 
-export type MapId = "quartier" | "cite" | "maison-chou" | "herboristerie" | "armurerie" | "restaurant" | "egouts" | "palais" | "sentier" | "refuge" | "temple-cour" | "temple";
+export type MapId = "quartier" | "cite" | "maison-chou" | "herboristerie" | "armurerie" | "restaurant" | "egouts" | "palais" | "sentier" | "refuge" | "temple-cour" | "temple" | "cerisiers" | "village" | "auberge" | "dojo";
 
-export const MAP_IDS: MapId[] = ["quartier", "cite", "maison-chou", "herboristerie", "armurerie", "restaurant", "egouts", "palais", "sentier", "refuge", "temple-cour", "temple"];
+export const MAP_IDS: MapId[] = ["quartier", "cite", "maison-chou", "herboristerie", "armurerie", "restaurant", "egouts", "palais", "sentier", "refuge", "temple-cour", "temple", "cerisiers", "village", "auberge", "dojo"];
 
 /** Ambiance : règle l'éclairage (nuit, crépuscule, intérieur, souterrain, palais). */
 export type Region = "nuit" | "crepuscule" | "interieur" | "egout" | "palais" | "aube";
@@ -257,6 +257,12 @@ const EXAMINABLE = new Set([
   "gong",
   "haltere-geant",
   "statue-titan",
+  "lampion",
+  "platines",
+  "scene",
+  "ratelier",
+  "pierre",
+  "cerisier",
 ]);
 
 export interface Thing {

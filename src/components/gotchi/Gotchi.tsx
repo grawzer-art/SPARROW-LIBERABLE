@@ -45,6 +45,7 @@ import { Chiptune } from "../game/audio";
 import { Toast } from "../Overlays";
 import { BattleScreen, type BattleEnd, type PadHandler } from "../rpg/BattleScreen";
 import { CookGame } from "../rpg/CookGame";
+import { RythmeGame } from "../rpg/RythmeGame";
 import { ShopScreen } from "../rpg/ShopScreen";
 import { OW_H, OW_W, Overworld, type OwFrame } from "../rpg/overworld";
 import { DPad, type Dir } from "./DPad";
@@ -1380,7 +1381,8 @@ export function Gotchi() {
           {shop && state && (
             <ShopScreen id={shop} coins={state.coins} bag={state.rpg.bag} owned={state.rpg.owned} pad={pad} onBuy={shopBuy} onClose={closeShop} />
           )}
-          {cook && cook !== "muscu" && <CookGame height={vh} audio={audio.current} reduced={reduced.current} pad={pad} onEnd={endCook} />}
+          {cook === "frites" && <CookGame height={vh} audio={audio.current} reduced={reduced.current} pad={pad} onEnd={endCook} />}
+          {cook === "rythme" && <RythmeGame height={vh} audio={audio.current} reduced={reduced.current} pad={pad} onEnd={endCook} />}
           {!cur && line && menu === null && (
             <button type="button" className="gb-dialog mono" onClick={() => (typed < line.length ? setTyped(line.length) : setLine(null))} aria-live="polite">
               <span>{line.slice(0, typed)}</span>

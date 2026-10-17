@@ -8,10 +8,13 @@ export function policy(b: Battle): Action {
   if (f) return f;
   const me = ally(b);
   const them = foe(b);
+  if (canTransform(b, "samourai") && them.hp / them.maxHp > 0.4) return { kind: "transform", form: "samourai" };
   if (canTransform(b) && them.hp / them.maxHp > 0.4) return { kind: "transform" };
   const low = me.hp / me.maxHp < 0.35;
   if (low && me.moves.includes("micro-sieste")) return { kind: "move", move: "micro-sieste" };
   if (low && me.moves.includes("sieste-titan")) return { kind: "move", move: "sieste-titan" };
+  if (low && me.moves.includes("meditation")) return { kind: "move", move: "meditation" };
+  if (low && me.moves.includes("remix")) return { kind: "move", move: "remix" };
   if (low && me.moves.includes("cornet-soin")) return { kind: "move", move: "cornet-soin" };
   if (low && (b.bag.frites ?? 0) > 0) return { kind: "item", item: "frites" };
   if (low) {

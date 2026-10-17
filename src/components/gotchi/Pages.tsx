@@ -170,7 +170,8 @@ export function Page({ page, state, now, sound, room, outside, h, onClose }: Pro
                     q.chapter === 1 ||
                     status(s.rpg, q.id) !== "disponible" ||
                     (q.id === "frites-perdues" && status(s.rpg, "ville-figee") === "terminee") ||
-                    (q.id === "confrerie" && status(s.rpg, "frites-perdues") === "terminee"),
+                    (q.id === "confrerie" && status(s.rpg, "frites-perdues") === "terminee") ||
+                    (q.id === "samourai" && status(s.rpg, "confrerie") === "terminee"),
                 ).map((q) => {
                   const st = status(s.rpg, q.id);
                   const nx = nextStep(s.rpg, q.id);
@@ -203,7 +204,9 @@ export function Page({ page, state, now, sound, room, outside, h, onClose }: Pro
                         ? { n: 3, name: "La Confrérie du Muscle", hint: "Termine « La Cité des Frites Perdues » pour débloquer la suite." }
                         : status(s.rpg, "confrerie") !== "terminee"
                           ? { n: 4, name: "La Voie du Samouraï", hint: "Termine « La Confrérie du Muscle » pour débloquer la suite." }
-                          : { n: 4, name: "La Voie du Samouraï", hint: "Le prochain chapitre arrive bientôt." };
+                          : status(s.rpg, "samourai") !== "terminee"
+                            ? { n: 5, name: "Protocole Minuit", hint: "Termine « La Voie du Samouraï » pour débloquer la suite." }
+                            : { n: 5, name: "Protocole Minuit", hint: "Le prochain chapitre arrive bientôt." };
                   return (
                     <div className="gb-card is-locked">
                       <p className="gb-group__title">CHAPITRE {next.n} · VERROUILLÉ</p>
