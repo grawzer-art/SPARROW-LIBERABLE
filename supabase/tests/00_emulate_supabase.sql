@@ -1,6 +1,7 @@
 -- Émulation minimale de Supabase pour tester le schéma sur un PostgreSQL local
 -- (rôles, auth.uid() lu dans le JWT simulé, schéma realtime, publication).
 -- NE PAS exécuter sur un vrai projet Supabase : ces objets y existent déjà.
+create schema extensions;
 create role anon nologin;
 create role authenticated nologin;
 create role service_role nologin bypassrls;

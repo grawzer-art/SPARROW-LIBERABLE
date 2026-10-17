@@ -106,7 +106,9 @@ class SupabaseNet implements OnlineNet {
     return u ? { id: u.id, email: u.email ?? "" } : null;
   }
   async signUp(email: string, password: string) {
-    const { data, error } = await this.sb.auth.signUp({ email, password });
+    // Le lien de confirmation (si activée) ramène directement au jeu en ligne
+    const emailRedirectTo = typeof location !== "undefined" ? `${location.origin}/jeu/online` : undefined;
+    const { data, error } = await this.sb.auth.signUp({ email, password, options: { emailRedirectTo } });
     if (error) throw error;
     return { confirm: !data.session };
   }
@@ -343,11 +345,19 @@ class RelayNet implements OnlineNet {
   report = async (target: string, reason: string) => void (await this.call("report", { target, reason }));
 }
 
+/**
+ * Projet Supabase « sparrow-online ». L'URL et la clé publiable sont PUBLIQUES par conception :
+ * elles ne donnent que les droits des règles RLS. (Aucune clé secrète ne doit figurer ici.)
+ * Les variables d'environnement, si elles existent, ont la priorité.
+ */
+const PROJECT_URL = "https://mtbsuhllfsvhdafuaqtr.supabase.co";
+const PUBLISHABLE_KEY = "sb_publishable_-z4SjSf40IKuMLliG44Osw_Y7UFaieI";
+
 /** Le service en ligne configuré pour cette version de l'application (ou null). */
 export function onlineNet(): OnlineNet | null {
   const relay = process.env.NEXT_PUBLIC_ONLINE_DEV_RELAY;
   if (relay) return new RelayNet(relay);
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || PROJECT_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || PUBLISHABLE_KEY;
   return url && key ? new SupabaseNet(url, key) : null;
 }

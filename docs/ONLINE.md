@@ -36,7 +36,20 @@ Le schéma est dans `supabase/migrations/20261018000000_sparrow_online.sql`.
 
 **Limite connue :** les positions en temps réel ne sont pas « autoritaires ». Un client modifié pourrait annoncer une fausse position. Rien de persistant n'en dépend aujourd'hui. Les futures récompenses devront être validées côté serveur.
 
-## Configuration à faire (une fois)
+## Configuration en place
+
+- Projet Supabase **sparrow-online**, réf. `mtbsuhllfsvhdafuaqtr`. Plan Free (0 €), région Paris (eu-west-3).
+  - Il est distinct du projet JARVIS, qui n'est pas touché.
+- **Migration appliquée.**
+  - Le conseiller de sécurité Supabase signale seulement deux choix assumés : `invites` sans règle, car illisible pour les clients, et les 3 fonctions serveur appelables par les joueurs, qui sont la seule porte d'écriture.
+  - Les règles ont été vérifiées sur la vraie base, dans une transaction annulée.
+- **Code d'invitation de la bêta :** `SPARROW-404-BETA`, valable pour 20 héros.
+- **L'app utilise ce projet par défaut.** L'URL et la clé publiable sont publiques par conception. Les variables `NEXT_PUBLIC_SUPABASE_URL` et `NEXT_PUBLIC_SUPABASE_ANON_KEY`, si elles sont définies sur Vercel, ont la priorité.
+- **Réglages facultatifs du tableau de bord.** Le connecteur ne permet pas de les changer :
+  - **Authentication → Sign In / Providers → Email → « Confirm email »** : le désactiver permet de jouer sans cliquer sur un e-mail.
+  - **Authentication → URL Configuration → Site URL** : y mettre l'adresse du site. Les liens de confirmation s'ouvrent alors au bon endroit.
+
+## Refaire la configuration sur un autre projet
 
 1. **Créer un projet Supabase gratuit** sur supabase.com, avec le plan Free (pas de carte bancaire). Choisir une région proche, par exemple Paris ou Francfort.
 2. **SQL Editor → New query :** coller tout le fichier `supabase/migrations/20261018000000_sparrow_online.sql`, puis Run.

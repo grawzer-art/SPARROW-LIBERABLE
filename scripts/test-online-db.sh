@@ -16,5 +16,5 @@ run "$BIN/pg_ctl -D $DIR/data -o '-p $PORT -k $DIR -c listen_addresses=' -l $DIR
 PSQL="psql -h $DIR -p $PORT -U postgres -v ON_ERROR_STOP=1 -q -t -o /dev/null"
 $PSQL -c "create database online"
 $PSQL -d online -f "$ROOT/supabase/tests/00_emulate_supabase.sql"
-$PSQL -d online -f "$ROOT/supabase/migrations/20261018000000_sparrow_online.sql"
+$PSQL -d online -c "alter database online set search_path = \"\$user\", public, extensions" && $PSQL -d online -f "$ROOT/supabase/migrations/20261018000000_sparrow_online.sql"
 $PSQL -d online -f "$ROOT/supabase/tests/10_rls_test.sql" 2>&1 | sed 's/^psql:[^:]*:[0-9]*: //'

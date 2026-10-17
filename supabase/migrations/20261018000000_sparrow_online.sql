@@ -7,7 +7,7 @@
 -- Niveau, monnaie et futurs inventaires ne sont modifiables que côté serveur.
 -- ════════════════════════════════════════════════════════════════════════════
 
-create extension if not exists citext;
+create extension if not exists citext with schema extensions;
 
 -- ─── Bêta privée : invitations ───
 create table public.invites (
@@ -20,7 +20,7 @@ create table public.invites (
 -- ─── Héros (un par compte) ───
 create table public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
-  pseudo citext not null unique,
+  pseudo extensions.citext not null unique,
   look jsonb not null,
   -- Progression multijoueur : jamais écrite par le client
   level int not null default 1 check (level between 1 and 99),
@@ -36,7 +36,7 @@ create table public.chat_messages (
   id bigint generated always as identity primary key,
   room text not null check (room ~ '^[a-z0-9-]{3,40}$'),
   author uuid not null references public.profiles (id) on delete cascade,
-  pseudo citext not null,
+  pseudo extensions.citext not null,
   body text not null check (char_length(body) between 1 and 200),
   created_at timestamptz not null default now()
 );
@@ -85,25 +85,25 @@ create policy "profils visibles par les joueurs" on public.profiles
 -- Le chat n'est lisible que par un joueur qui a un héros, sans les messages des joueurs qu'il a bloqués
 create policy "chat lisible par les joueurs" on public.chat_messages
   for select to authenticated using (
-    exists (select 1 from public.profiles p where p.id = auth.uid())
-    and not exists (select 1 from public.blocks b where b.blocker = auth.uid() and b.blocked = chat_messages.author)
+    exists (select 1 from public.profiles p where p.id = (select auth.uid()))
+    and not exists (select 1 from public.blocks b where b.blocker = (select auth.uid()) and b.blocked = chat_messages.author)
   );
 
 create policy "mes blocages : lire" on public.blocks
-  for select to authenticated using (blocker = auth.uid());
+  for select to authenticated using (blocker = (select auth.uid()));
 create policy "mes blocages : ajouter" on public.blocks
-  for insert to authenticated with check (blocker = auth.uid());
+  for insert to authenticated with check (blocker = (select auth.uid()));
 create policy "mes blocages : retirer" on public.blocks
-  for delete to authenticated using (blocker = auth.uid());
+  for delete to authenticated using (blocker = (select auth.uid()));
 
 create policy "signaler" on public.reports
-  for insert to authenticated with check (reporter = auth.uid());
+  for insert to authenticated with check (reporter = (select auth.uid()));
 
 -- ══════════════════════════ Fonctions serveur validées ══════════════════════════
 
 -- Apparence : uniquement les options réellement proposées par l'éditeur (src/lib/online/hero.ts)
 create or replace function public.valid_look(l jsonb) returns boolean
-language sql immutable as $$
+language sql immutable set search_path = public as $$
   select jsonb_typeof(l) = 'object'
     and (select array_agg(k order by k) from jsonb_object_keys(l) k) = array['acc', 'face', 'hair', 'hairColor', 'pants', 'skin', 'top', 'topColor']
     and (select bool_and(jsonb_typeof(v) = 'number' and (v::text)::numeric = floor((v::text)::numeric)) from jsonb_each(l) e(k, v))
@@ -120,7 +120,7 @@ $$;
 -- Création du héros (bêta privée : un code d'invitation valide est nécessaire)
 create or replace function public.create_hero(p_invite text, p_pseudo text, p_look jsonb)
 returns public.profiles
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, extensions as $$
 declare
   me uuid := auth.uid();
   inv public.invites;
@@ -144,7 +144,7 @@ end $$;
 -- Changer d'apparence (rien d'autre : ni niveau, ni monnaie)
 create or replace function public.update_look(p_look jsonb)
 returns public.profiles
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, extensions as $$
 declare
   v_out public.profiles;
 begin
@@ -158,7 +158,7 @@ end $$;
 -- Envoyer un message : validation, salons autorisés, anti-spam
 create or replace function public.send_message(p_room text, p_body text)
 returns public.chat_messages
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, extensions as $$
 declare
   me public.profiles;
   v_body text;
@@ -198,10 +198,10 @@ alter publication supabase_realtime add table public.chat_messages;
 create policy "salon quartier : écouter" on realtime.messages
   for select to authenticated using (
     realtime.topic() like 'online:quartier-404:%'
-    and exists (select 1 from public.profiles p where p.id = auth.uid())
+    and exists (select 1 from public.profiles p where p.id = (select auth.uid()))
   );
 create policy "salon quartier : parler" on realtime.messages
   for insert to authenticated with check (
     realtime.topic() like 'online:quartier-404:%'
-    and exists (select 1 from public.profiles p where p.id = auth.uid())
+    and exists (select 1 from public.profiles p where p.id = (select auth.uid()))
   );
