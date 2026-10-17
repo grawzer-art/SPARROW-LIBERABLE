@@ -6,7 +6,7 @@
 export type Stat = "atk" | "def" | "spd" | "acc";
 export type StatusId = "etourdi" | "brule";
 /** Effet visuel joué par l'écran de combat. */
-export type Fx = "titan" | "dague" | "coup" | "feu" | "soin" | "bonus" | "malus" | "ombre" | "lame" | "sel" | "huile" | "frites" | "feuille" | "sieste" | "charge" | "vinaigre" | "bouclier" | "terre";
+export type Fx = "sabre" | "son" | "titan" | "dague" | "coup" | "feu" | "soin" | "bonus" | "malus" | "ombre" | "lame" | "sel" | "huile" | "frites" | "feuille" | "sieste" | "charge" | "vinaigre" | "bouclier" | "terre";
 
 export type MoveEffect =
   | { kind: "stage"; stat: Stat; n: number; who: "self" | "target"; chance?: number }
@@ -66,6 +66,34 @@ export const MOVES: Record<string, Move> = {
   "biceps-sismique": { id: "biceps-sismique", name: "Biceps sismique", desc: "Le sol tremble. L'ennemi aussi. Peut étourdir.", power: 60, acc: 100, target: "foe", effects: [{ kind: "status", status: "etourdi", chance: 30 }], fx: "terre" },
   "cri-titan": { id: "cri-titan", name: "Cri du Titan", desc: "Un cri à décoiffer un brocoli : Attaque +1, Défense de l'ennemi −1.", power: 0, acc: 100, target: "foe", effects: [{ kind: "stage", stat: "atk", n: 1, who: "self" }, { kind: "stage", stat: "def", n: -1, who: "target" }], fx: "bonus" },
   "sieste-titan": { id: "sieste-titan", name: "Sieste du Titan", desc: "Même un Titan a besoin de repos : rend 45 % des PV.", power: 0, acc: 100, target: "self", effects: [{ kind: "heal", pct: 45 }, { kind: "cleanse" }], fx: "sieste" },
+  // SPARROW SAMOURAÏ (transformation)
+  "iai-eclair": { id: "iai-eclair", name: "Iaï éclair", desc: "Un seul geste, plus rapide que la minute. Frappe en premier.", power: 70, acc: 100, target: "foe", priority: 2, fx: "sabre" },
+  "lame-temps": { id: "lame-temps", name: "Lame du temps", desc: "Sparrow tranche une seconde en deux. Se prépare un tour, frappe très fort.", power: 125, acc: 95, target: "foe", charge: 1, fx: "sabre" },
+  "garde-sabre": { id: "garde-sabre", name: "Garde du sabre", desc: "Se met en garde, lame levée : le prochain coup est divisé par deux. Attaque +1.", power: 0, acc: 100, target: "self", priority: 2, effects: [{ kind: "guard" }, { kind: "stage", stat: "atk", n: 1, who: "self" }], fx: "bouclier" },
+  meditation: { id: "meditation", name: "Méditation", desc: "Un instant de calme : rend 35 % des PV, soigne les états, Précision +1.", power: 0, acc: 100, target: "self", effects: [{ kind: "heal", pct: 35 }, { kind: "cleanse" }, { kind: "stage", stat: "acc", n: 1, who: "self" }], fx: "sieste" },
+  // Pokeyz
+  "drop-basse": { id: "drop-basse", name: "Drop de basse", desc: "Les basses tombent : 2 à 3 coups qui font vibrer les côtes.", power: 24, acc: 95, target: "foe", hits: [2, 3], fx: "son" },
+  scratch: { id: "scratch", name: "Scratch", desc: "Wikka-wikka ! Un scratch qui fait perdre le fil. Peut étourdir.", power: 40, acc: 95, target: "foe", effects: [{ kind: "status", status: "etourdi", chance: 30 }], fx: "son" },
+  "boucle-infinie": { id: "boucle-infinie", name: "Boucle infinie", desc: "Pokeyz lance une boucle hypnotique : vitesse et précision de l'ennemi baissent.", power: 0, acc: 100, target: "foe", effects: [{ kind: "stage", stat: "spd", n: -1, who: "target" }, { kind: "stage", stat: "acc", n: -1, who: "target" }], fx: "son" },
+  remix: { id: "remix", name: "Remix", desc: "Un remix qui remet d'aplomb : Pokeyz récupère 35 % de ses PV, l'équipe en réserve 20 %.", power: 0, acc: 100, target: "ally", effects: [{ kind: "heal", pct: 35 }, { kind: "cleanse" }], fx: "soin" },
+  // Ennemis du chapitre 4
+  "pas-cadence": { id: "pas-cadence", name: "Pas cadencé", desc: "", power: 50, acc: 95, target: "foe", fx: "coup" },
+  "tempo-force": { id: "tempo-force", name: "Tempo forcé", desc: "", power: 0, acc: 100, target: "self", effects: [{ kind: "stage", stat: "spd", n: 2, who: "self" }], fx: "bonus" },
+  "shuriken-noire": { id: "shuriken-noire", name: "Croche-shuriken", desc: "", power: 18, acc: 95, target: "foe", hits: [2, 3], fx: "dague" },
+  "roulement": { id: "roulement", name: "Roulement de tambour", desc: "", power: 0, acc: 100, target: "self", effects: [{ kind: "stage", stat: "atk", n: 1, who: "self" }, { kind: "stage", stat: "def", n: 1, who: "self" }], fx: "son" },
+  "coup-baguette": { id: "coup-baguette", name: "Coup de baguette", desc: "", power: 55, acc: 95, target: "foe", effects: [{ kind: "status", status: "etourdi", chance: 15 }], fx: "coup" },
+  "flamme-papier": { id: "flamme-papier", name: "Flamme de papier", desc: "", power: 50, acc: 90, target: "foe", effects: [{ kind: "status", status: "brule", chance: 40 }], fx: "feu" },
+  "lueur-folle": { id: "lueur-folle", name: "Lueur folle", desc: "", power: 0, acc: 100, target: "foe", effects: [{ kind: "stage", stat: "acc", n: -1, who: "target" }], fx: "malus" },
+  "tic-tac": { id: "tic-tac", name: "Tic-tac", desc: "", power: 55, acc: 100, target: "foe", fx: "coup" },
+  "mesure-136": { id: "mesure-136", name: "Mesure à 136 BPM", desc: "", power: 0, acc: 100, target: "self", effects: [{ kind: "stage", stat: "spd", n: 1, who: "self" }, { kind: "stage", stat: "atk", n: 1, who: "self" }], fx: "son" },
+  "boucle-volee": { id: "boucle-volee", name: "Boucle volée", desc: "", power: 40, acc: 95, target: "foe", effects: [{ kind: "stage", stat: "spd", n: -1, who: "target" }], fx: "son" },
+  "drop-fatal": { id: "drop-fatal", name: "Drop fatal", desc: "", power: 120, acc: 90, target: "foe", charge: 1, fx: "son" },
+  "kata-vent": { id: "kata-vent", name: "Kata du vent", desc: "", power: 60, acc: 100, target: "foe", priority: 1, fx: "sabre" },
+  "posture-montagne": { id: "posture-montagne", name: "Posture de la montagne", desc: "", power: 0, acc: 100, target: "self", effects: [{ kind: "guard" }, { kind: "stage", stat: "def", n: 2, who: "self" }], fx: "bouclier" },
+  "the-ceremonie": { id: "the-ceremonie", name: "Thé de cérémonie", desc: "", power: 0, acc: 100, target: "self", effects: [{ kind: "heal", pct: 20 }, { kind: "cleanse" }], fx: "soin" },
+  "coupe-seconde": { id: "coupe-seconde", name: "Coupe-seconde", desc: "", power: 130, acc: 90, target: "foe", charge: 1, effects: [{ kind: "status", status: "etourdi", chance: 25 }], fx: "sabre" },
+  "minute-ultime": { id: "minute-ultime", name: "Minute ultime", desc: "", power: 75, acc: 95, target: "foe", priority: 1, fx: "sabre" },
+  "regard-futur": { id: "regard-futur", name: "Regard du futur", desc: "", power: 0, acc: 100, target: "foe", effects: [{ kind: "stage", stat: "def", n: -2, who: "target" }], fx: "malus" },
   // Ennemis du chapitre 3
   "roule-boule": { id: "roule-boule", name: "Roulé-boulé", desc: "", power: 45, acc: 95, target: "foe", fx: "terre" },
   "poids-mort": { id: "poids-mort", name: "Poids mort", desc: "", power: 0, acc: 100, target: "self", effects: [{ kind: "stage", stat: "def", n: 2, who: "self" }], fx: "bouclier" },
@@ -141,6 +169,14 @@ export const MEMBERS: Record<string, Member> = {
     moves: ["lame-ombre", "fumigene", "garde-silencieuse", "eclipse"],
     desc: "Gardien de la route du Centre-ville. Solennel, dramatique, étonnamment gentil.",
   },
+  pokeyz: {
+    id: "pokeyz",
+    name: "Pokeyz",
+    sprite: "pokeyz",
+    grow: { hp: [44, 5.5], atk: [12, 1.5], def: [10, 1.3], spd: [13, 1.6] },
+    moves: ["drop-basse", "scratch", "boucle-infinie", "remix"],
+    desc: "DJ, pote de Sparrow depuis toujours. Il transforme n'importe quel silence en soirée.",
+  },
   lili: {
     id: "lili",
     name: "Lili",
@@ -164,10 +200,42 @@ export const SKILLS: Record<string, { member: string; replaces: string; move: st
   "pluie-frites": { member: "sparrow", replaces: "coup-manette", move: "pluie-frites", name: "Pluie de frites" },
   // Transformation (ne remplace aucune technique : elle ajoute « SPARROW TITAN » au menu des techniques)
   titan: { member: "sparrow", replaces: "", move: "", name: "SPARROW TITAN" },
+  samourai: { member: "sparrow", replaces: "", move: "", name: "SPARROW SAMOURAÏ" },
 };
 
 /** Techniques de Sparrow sous sa forme de Titan. */
 export const TITAN_MOVES = ["developpe-cosmique", "biceps-sismique", "cri-titan", "sieste-titan"];
+
+export type FormId = "titan" | "samourai";
+
+/** Transformations de Sparrow (une seule par combat). */
+export const FORMS: Record<FormId, { name: string; sprite: string; atk: number; def: number; spd: number; hp: number; acc?: number; moves: string[]; intro: string; gain: string; desc: string }> = {
+  titan: {
+    name: "SPARROW TITAN",
+    sprite: "sparrow-titan",
+    atk: 1.5,
+    def: 1.4,
+    spd: 1.15,
+    hp: 0.3,
+    moves: TITAN_MOVES,
+    intro: "Sparrow serre les poings… Ses muscles se souviennent de chaque répétition !",
+    gain: "Attaque et défense en hausse",
+    desc: "Attaque ×1,5, Défense ×1,4, PV +30 % et 4 techniques de Titan",
+  },
+  samourai: {
+    name: "SPARROW SAMOURAÏ",
+    sprite: "sparrow-samourai",
+    atk: 1.3,
+    def: 1.1,
+    spd: 1.6,
+    hp: 0.15,
+    acc: 1,
+    moves: ["iai-eclair", "lame-temps", "garde-sabre", "meditation"],
+    intro: "Sparrow ferme les yeux. Le temps ralentit autour de lui… Il dégaine.",
+    gain: "Vitesse et précision en hausse",
+    desc: "Vitesse ×1,6, Attaque ×1,3, Précision +1, PV +15 % et 4 techniques de samouraï",
+  },
+};
 
 // ─── Ennemis ───
 
@@ -202,6 +270,43 @@ export interface Foe {
 }
 
 export const FOES: Record<string, Foe> = {
+  "sbire-metronome": { id: "sbire-metronome", name: "Sbire du Métronome", sprite: "sbire", lv: [9, 17], hp: 110, atk: 25, def: 19, spd: 19, moves: ["pas-cadence", "tempo-force", "shuriken-noire"] },
+  tambour: { id: "tambour", name: "Tambour possédé", sprite: "tambour", lv: [9, 17], hp: 135, atk: 24, def: 24, spd: 11, moves: ["coup-baguette", "roulement", "pas-cadence"] },
+  "lanterne-folle": { id: "lanterne-folle", name: "Lanterne Folle", sprite: "lanterne", lv: [9, 17], hp: 105, atk: 26, def: 18, spd: 17, moves: ["flamme-papier", "lueur-folle", "pas-cadence"] },
+  metronome: {
+    id: "metronome",
+    name: "Le Métronome",
+    sprite: "metronome",
+    lv: [10, 18],
+    hp: 290,
+    atk: 26,
+    def: 24,
+    spd: 18,
+    boss: true,
+    moves: ["tic-tac", "mesure-136", "boucle-volee", "drop-fatal"],
+  },
+  katsu: {
+    id: "katsu",
+    name: "Maître Katsu",
+    sprite: "katsu",
+    lv: [11, 19],
+    hp: 230,
+    atk: 23,
+    def: 21,
+    spd: 20,
+    boss: true,
+    moves: ["kata-vent", "posture-montagne", "the-ceremonie", "coupe-seconde"],
+    phases: [
+      {
+        below: 0.5,
+        moves: ["minute-ultime", "coupe-seconde", "regard-futur", "the-ceremonie"],
+        line: "Katsu retire son chapeau de paille. Sous la barbe grise… des lunettes. « Bien. Maintenant, je me bats pour de vrai. »",
+        heal: 12,
+        stages: { spd: 1, acc: 1 },
+        sprite: "katsu-vrai",
+      },
+    ],
+  },
   "haltere-sauvage": { id: "haltere-sauvage", name: "Haltère Sauvage", sprite: "haltere", lv: [6, 14], hp: 60, atk: 17, def: 18, spd: 8, moves: ["roule-boule", "poids-mort", "chute-libre"] },
   proteinator: { id: "proteinator", name: "Protéinator", sprite: "proteinator", lv: [6, 14], hp: 96, atk: 17, def: 15, spd: 12, boss: true, moves: ["shake-explosif", "gorgee-whey", "mousse-aveuglante"] },
   "moine-gain": { id: "moine-gain", name: "Moine du Gain", sprite: "moine", lv: [7, 15], hp: 80, atk: 19, def: 16, spd: 14, moves: ["coup-serviette", "pompes-infinies", "planche"] },
@@ -265,13 +370,19 @@ export interface BattleDef {
   /** Consommables gagnés à la victoire. */
   drops?: Record<string, number>;
   /** Fond de l'écran de combat. */
-  bg: "rue" | "cite" | "egout" | "palais" | "trone" | "montagne" | "temple" | "sanctuaire";
+  bg: "rue" | "cite" | "egout" | "palais" | "trone" | "montagne" | "temple" | "sanctuaire" | "cerisiers" | "festival" | "dojo";
   /** Conseils affichés au premier combat (tutoriel). */
   tutorial?: boolean;
   music?: "combat" | "boss";
 }
 
 export const BATTLES: Record<string, BattleDef> = {
+  "sbire-1": { id: "sbire-1", foes: ["sbire-metronome"], intro: "Un Sbire du Métronome surgit en rythme !", canFlee: true, xp: 110, fp: 60, drops: { "the-vert": 1 }, bg: "cerisiers" },
+  "sbires-2": { id: "sbires-2", foes: ["sbire-metronome", "sbire-metronome"], intro: "Deux Sbires dansent en parfaite synchronisation. C'est presque beau.", canFlee: true, xp: 170, fp: 90, drops: { onigiri: 1 }, bg: "festival" },
+  "tambour-1": { id: "tambour-1", foes: ["tambour"], intro: "Un Tambour possédé roule vers vous : BOUM, BOUM, BOUM !", canFlee: true, xp: 130, fp: 70, drops: { "the-vert": 1 }, bg: "festival" },
+  "lanterne-1": { id: "lanterne-1", foes: ["lanterne-folle"], intro: "Une Lanterne Folle s'enflamme de colère !", canFlee: true, xp: 120, fp: 65, drops: { onigiri: 1 }, bg: "cerisiers" },
+  metronome: { id: "metronome", foes: ["metronome"], intro: "LE MÉTRONOME descend de la scène : « Tic. Tac. Vous êtes en retard d'un temps. »", canFlee: false, xp: 300, fp: 180, drops: { "mega-cornet": 2 }, bg: "festival", music: "boss" },
+  katsu: { id: "katsu", foes: ["katsu"], intro: "Maître Katsu salue, puis pose la main sur son sabre de bois.", canFlee: false, xp: 520, fp: 320, bg: "dojo", music: "boss" },
   "haltere-1": { id: "haltere-1", foes: ["haltere-sauvage"], intro: "Un Haltère Sauvage dévale la pente !", canFlee: true, xp: 70, fp: 40, drops: { "barre-proteinee": 1 }, bg: "montagne" },
   "halteres-2": { id: "halteres-2", foes: ["haltere-sauvage", "haltere-sauvage"], intro: "Deux Haltères Sauvages ! Ils roulent en paire.", canFlee: true, xp: 110, fp: 60, drops: { soupe: 1 }, bg: "montagne" },
   proteinator: { id: "proteinator", foes: ["proteinator"], intro: "Le PROTÉINATOR bloque le pont ! Il secoue sa mousse menaçante.", canFlee: false, xp: 150, fp: 90, drops: { "mega-cornet": 1 }, bg: "montagne", music: "boss" },
@@ -308,6 +419,8 @@ export const CONSUMABLES: Record<string, Consumable> = {
   "sauce-piquante": { id: "sauce-piquante", name: "Sauce piquante", desc: "Attaque +2 jusqu'à la fin du combat.", price: 40, use: { stage: { stat: "atk", n: 2 } } },
   ketchup: { id: "ketchup", name: "Ketchup de rappel", desc: "Relève un équipier K.O. avec 50 % de ses PV.", price: 80, use: { revive: 50 }, ko: true },
   tisane: { id: "tisane", name: "Tisane de persil", desc: "Rend 20 PV et soigne les états. Goût : jardin.", price: 15, use: { heal: 20, cleanse: true } },
+  "the-vert": { id: "the-vert", name: "Thé vert", desc: "Rend 45 PV et soigne les états. Il fume encore.", price: 30, use: { heal: 45, cleanse: true } },
+  onigiri: { id: "onigiri", name: "Boulette de riz", desc: "Rend 80 PV. Avec une frite cachée au milieu : la recette de Pokeyz.", price: 55, use: { heal: 80 } },
   "barre-proteinee": { id: "barre-proteinee", name: "Barre protéinée", desc: "Rend 25 PV et Attaque +1. Goût : carton sucré.", price: 30, use: { heal: 25, stage: { stat: "atk", n: 1 } } },
   soupe: { id: "soupe", name: "Soupe du jour", desc: "Rend 60 PV. Le jour en question n'est pas précisé.", price: 35, use: { heal: 60 } },
 };
@@ -328,6 +441,10 @@ export const EQUIPMENT: Record<string, Equipment> = {
   "sweat-epais": { id: "sweat-epais", name: "Sweat épais", slot: "armure", desc: "Molletonné. Défense +2, PV +8.", price: 80, bonus: { def: 2, hp: 8 } },
   tablier: { id: "tablier", name: "Tablier blindé", slot: "armure", desc: "Résiste aux éclaboussures et aux coups. Défense +4, PV +14.", price: 150, bonus: { def: 4, hp: 14 } },
   "bracelet-sel": { id: "bracelet-sel", name: "Bracelet de sel", slot: "accessoire", desc: "Porte-bonheur salé. Vitesse +3.", price: 100, bonus: { spd: 3 } },
+  "katana-bois": { id: "katana-bois", name: "Sabre de bois", slot: "arme", desc: "Léger, équilibré, il siffle quand on le manie. Attaque +11.", price: 340, bonus: { atk: 11 } },
+  hakama: { id: "hakama", name: "Hakama renforcé", slot: "armure", desc: "Ample et résistant. Défense +8, PV +26, Vitesse +1.", price: 360, bonus: { def: 8, hp: 26, spd: 1 } },
+  "casque-audio": { id: "casque-audio", name: "Casque de Pokeyz", slot: "accessoire", desc: "Le casque de secours de Pokeyz. Vitesse +3, Attaque +3.", price: 0, bonus: { spd: 3, atk: 3 } },
+  "ruban-katsu": { id: "ruban-katsu", name: "Ruban de Katsu", slot: "accessoire", desc: "Le ruban de l'ancien maître. Vitesse +5, Attaque +5, Défense +2.", price: 0, bonus: { spd: 5, atk: 5, def: 2 } },
   "gants-fonte": { id: "gants-fonte", name: "Gants de fonte", slot: "arme", desc: "Lourds, mais efficaces. Attaque +8.", price: 240, bonus: { atk: 8 } },
   "survet-pro": { id: "survet-pro", name: "Survêt' pro", slot: "armure", desc: "Le survêtement des champions. Défense +6, PV +20.", price: 260, bonus: { def: 6, hp: 20 } },
   "ceinture-titan": { id: "ceinture-titan", name: "Ceinture du Titan", slot: "accessoire", desc: "La ceinture du Premier Titan. Attaque +4, Défense +4.", price: 0, bonus: { atk: 4, def: 4 } },
@@ -350,6 +467,13 @@ export const SHOPS: Record<string, { name: string; keeper: string; items: string
     items: ["manette-pro", "sweat-epais", "spatule", "tablier"],
     hello: "Des armes ? Des armures ? Tout est garanti sans friture.",
     bye: "Bonne chance. Évite de te battre contre le Roi. Ou alors gagne.",
+  },
+  auberge: {
+    name: "Auberge du Thé Tiède",
+    keeper: "Madame Sencha",
+    items: ["the-vert", "onigiri", "mega-cornet", "ketchup", "katana-bois", "hakama"],
+    hello: "Bienvenue à l'auberge ! Ici, on prend le temps. Enfin, on essayait, avant la boucle.",
+    bye: "Reposez-vous bien. C'est un ordre de la maison.",
   },
   refuge: {
     name: "Refuge du Mont Biscotto",

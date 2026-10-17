@@ -10,7 +10,7 @@
  * Chaque tour renvoie une liste d'événements que l'écran de combat anime un par un.
  */
 
-import { BATTLES, CONSUMABLES, EQUIPMENT, FOES, MEMBERS, MOVES, SKILLS, TITAN_MOVES, type BattleDef, type Foe, type Move, type Stat, type StatusId } from "./bestiary";
+import { BATTLES, CONSUMABLES, EQUIPMENT, FOES, FORMS, MEMBERS, MOVES, SKILLS, type BattleDef, type FormId, type Foe, type Move, type Stat, type StatusId } from "./bestiary";
 
 // ─── Hasard reproductible (tests, rejouabilité) ───
 
@@ -163,12 +163,12 @@ export interface Battle {
   /** Objets utilisés (à retirer du sac à la fin). */
   used: Record<string, number>;
   /** SPARROW TITAN : disponible (technique apprise) / déjà utilisé dans ce combat. */
-  titan: { can: boolean; used: boolean; turns: number };
+  titan: { can: boolean; used: boolean; turns: number; samourai: boolean };
   /** Objets volés par Lili (une fois par combat). */
   stolen: Record<string, number>;
 }
 
-export type Action = { kind: "transform" } | { kind: "move"; move: string } | { kind: "item"; item: string; target?: number } | { kind: "swap"; to: number } | { kind: "flee" };
+export type Action = { kind: "transform"; form?: FormId } | { kind: "move"; move: string } | { kind: "item"; item: string; target?: number } | { kind: "swap"; to: number } | { kind: "flee" };
 
 export type BattleEvent =
   | { kind: "text"; text: string }
@@ -188,7 +188,7 @@ export type BattleEvent =
 export function startBattle(id: string, team: Team, seed = Date.now()): Battle {
   const def = BATTLES[id];
   if (!def) throw new Error(`Combat inconnu : ${id}`);
-  const members = ["sparrow", ...team.party.filter((p) => p !== "sparrow" && MEMBERS[p])].slice(0, 4);
+  const members = ["sparrow", ...team.party.filter((p) => p !== "sparrow" && MEMBERS[p])].slice(0, 5);
   return {
     def,
     allies: members.map((m) => makeAlly(m, team)),
@@ -201,7 +201,7 @@ export function startBattle(id: string, team: Team, seed = Date.now()): Battle {
     seed: seed >>> 0,
     fleeTries: 0,
     used: {},
-    titan: { can: team.skills.includes("titan"), used: false, turns: Math.max(1, team.titanTurns ?? 3) },
+    titan: { can: team.skills.includes("titan"), samourai: team.skills.includes("samourai"), used: false, turns: Math.max(1, team.titanTurns ?? 3) },
     stolen: {},
   };
 }
@@ -225,29 +225,35 @@ export const eff = (x: Fighter, s: Exclude<Stat, "acc">) => x[s] * mult(x.stages
 /** L'équipier actif est K.O. et il en reste : le joueur doit en choisir un autre. */
 export const mustSwap = (b: Battle) => !b.over && ally(b).hp <= 0 && b.allies.some((x) => x.hp > 0);
 
-/** SPARROW TITAN est-il utilisable maintenant ? */
-export const canTransform = (b: Battle) => {
+/** Une transformation (SPARROW TITAN, SPARROW SAMOURAÏ) est-elle utilisable maintenant ? Une seule par combat. */
+export const canTransform = (b: Battle, form: FormId = "titan") => {
   const me = ally(b);
-  return !b.over && b.titan.can && !b.titan.used && me.id === "sparrow" && me.hp > 0 && !me.form && !me.charging;
+  const learned = form === "titan" ? b.titan.can : b.titan.samourai;
+  return !b.over && learned && !b.titan.used && me.id === "sparrow" && me.hp > 0 && !me.form && !me.charging;
 };
 
-function transform(b: Battle, me: Fighter, ev: BattleEvent[]) {
+/** Transformations apprises et encore utilisables dans ce combat. */
+export const forms = (b: Battle): FormId[] => (["titan", "samourai"] as FormId[]).filter((f) => canTransform(b, f));
+
+function transform(b: Battle, me: Fighter, form: FormId, ev: BattleEvent[]) {
+  const F = FORMS[form];
   b.titan.used = true;
   me.form = { turns: b.titan.turns, base: { atk: me.atk, def: me.def, spd: me.spd, maxHp: me.maxHp, moves: [...me.moves], sprite: me.sprite } };
-  const bonus = Math.round(me.maxHp * 0.3);
-  me.atk = Math.round(me.atk * 1.5);
-  me.def = Math.round(me.def * 1.4);
-  me.spd = Math.round(me.spd * 1.15);
+  const bonus = Math.round(me.maxHp * F.hp);
+  me.atk = Math.round(me.atk * F.atk);
+  me.def = Math.round(me.def * F.def);
+  me.spd = Math.round(me.spd * F.spd);
   me.maxHp += bonus;
   me.hp += bonus;
-  me.moves = [...TITAN_MOVES];
-  me.sprite = "sparrow-titan";
+  me.moves = [...F.moves];
+  me.sprite = F.sprite;
   me.status = null;
+  if (F.acc) me.stages.acc = Math.min(3, me.stages.acc + F.acc);
   ev.push(
-    { kind: "text", text: "Sparrow serre les poings… Ses muscles se souviennent de chaque répétition !" },
+    { kind: "text", text: F.intro },
     { kind: "transform", side: "ally", on: true, sprite: me.sprite },
     { kind: "heal", side: "ally", amount: bonus, hp: me.hp },
-    { kind: "text", text: `SPARROW TITAN ! Attaque et défense en hausse pendant ${b.titan.turns} tours.` },
+    { kind: "text", text: `${F.name} ! ${F.gain} pendant ${b.titan.turns} tours.` },
   );
 }
 
@@ -265,7 +271,7 @@ function revert(me: Fighter, ev: BattleEvent[], quiet = false) {
   me.charging = null;
   me.form = null;
   if (quiet) return;
-  ev.push({ kind: "transform", side: "ally", on: false, sprite: me.sprite }, { kind: "text", text: "La forme de Titan s'estompe. Sparrow reprend son souffle." });
+  ev.push({ kind: "transform", side: "ally", on: false, sprite: me.sprite }, { kind: "text", text: "La transformation s'estompe. Sparrow reprend son souffle." });
   if (me.hp > 0) ev.push({ kind: "heal", side: "ally", amount: 0, hp: me.hp });
 }
 
@@ -369,7 +375,8 @@ function doAlly(b: Battle, a: Action, ev: BattleEvent[], r: () => number) {
     return;
   }
   if (a.kind === "transform") {
-    if (canTransform(b)) transform(b, me, ev);
+    const form = a.form ?? "titan";
+    if (canTransform(b, form)) transform(b, me, form, ev);
     return;
   }
   if (a.kind === "swap") {

@@ -1566,3 +1566,32 @@
 .bt-grid .bt-titan.is-on {
   background: linear-gradient(90deg, rgba(242, 193, 78, 0.45), rgba(242, 193, 78, 0.8), rgba(242, 193, 78, 0.45));
 }
+
+.bt-grid .bt-titan--samourai {
+  color: #1f3a6a;
+  background: linear-gradient(90deg, rgba(106, 168, 255, 0.2), rgba(106, 168, 255, 0.45), rgba(106, 168, 255, 0.2));
+}
+
+.bt-grid .bt-titan--samourai.is-on {
+  background: linear-gradient(90deg, rgba(106, 168, 255, 0.4), rgba(106, 168, 255, 0.75), rgba(106, 168, 255, 0.4));
+}
+
+.rythme__pop {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 38%;
+  margin: 0;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #f8f4e8;
+  text-shadow: 2px 2px 0 #1b1626;
+  animation: gbIn 0.2s var(--ease) both;
+  pointer-events: none;
+}
+
+.rythme__pop.is-parfait { color: #3ccf6a; }
+.rythme__pop.is-bien { color: #f2c14e; }
+.rythme__pop.is-rate { color: #ff6f7a; }

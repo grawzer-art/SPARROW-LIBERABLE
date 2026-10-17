@@ -508,7 +508,179 @@ function pixelText(r: Raster, t: string, x: number, y: number) {
   [...t].forEach((ch, i) => F[ch]?.forEach((row, yy) => [...row].forEach((b, xx) => b === "1" && r.set(x + i * 4 + xx, y + yy, "#f8f4e8"))));
 }
 
+
+// ─── Chapitre 4 : la Voie du Samouraï ───
+
+function sparrowSamourai(): Raster {
+  const r = new Raster(52, 52);
+  // Hakama bleu nuit, veste claire, sabre dans le dos
+  r.ball(26, 46, 21, 12, "#2a3a6a", "#3a4e8a", "#1a2648", (_x, y) => y > 51);
+  r.ball(9, 41, 6, 8, "#e8e0c8", "#f8f4e8", "#c8bfa4");
+  r.ball(43, 41, 6, 8, "#e8e0c8", "#f8f4e8", "#c8bfa4");
+  r.ball(26, 37, 13, 7, "#e8e0c8", "#f8f4e8", "#c8bfa4");
+  r.line(16, 30, 38, 50, "#1b1626");
+  r.line(17, 30, 39, 50, "#5a3a22");
+  r.rect(13, 28, 6, 3, "#c62828");
+  // Tête de dos : cheveux noués, bandeau blanc, barbe rousse sur les côtés
+  r.ball(26, 22, 11, 12, "#8a4b22", "#a8622f", "#6b3a1a");
+  r.ball(26, 9, 4, 3, "#6b3a1a", "#8a4b22", "#4a2a12");
+  r.rect(15, 17, 22, 3, "#f8f4e8");
+  r.line(36, 18, 41, 23, "#f8f4e8");
+  r.ball(14.5, 24, 2.5, 3.5, "#e9b18a", "#f5c7a3", "#c98b66");
+  r.ball(37.5, 24, 2.5, 3.5, "#e9b18a", "#f5c7a3", "#c98b66");
+  r.ball(16, 30, 3, 3, "#c4521f", "#d8692f", "#93370f");
+  r.ball(36, 30, 3, 3, "#c4521f", "#d8692f", "#93370f");
+  r.outline(INK);
+  // Traits de vitesse bleutés
+  for (let y = 6; y < 50; y += 5) {
+    r.set(2, y, "#a6d8ff");
+    r.set(49, y + 2, "#a6d8ff");
+  }
+  return r;
+}
+
+function pokeyzBack(): Raster {
+  const r = new Raster(48, 48);
+  // Sweat à capuche violet, casque sur les oreilles
+  r.ball(24, 42, 18, 12, "#5a2a8a", "#7a3aaa", "#3a1a5a", (_x, y) => y > 47);
+  r.ball(8, 40, 5, 7, "#5a2a8a", "#7a3aaa", "#3a1a5a");
+  r.ball(40, 40, 5, 7, "#5a2a8a", "#7a3aaa", "#3a1a5a");
+  r.ball(24, 31, 11, 5, "#3a1a5a", "#5a2a8a", "#2a1040");
+  r.ball(24, 19, 11, 12, "#2a1a14", "#3a2a1e", "#1a100a");
+  r.ball(12, 20, 4, 5, "#1b1626", "#3a3a46", "#0a0a10");
+  r.ball(36, 20, 4, 5, "#1b1626", "#3a3a46", "#0a0a10");
+  r.ball(12, 20, 2, 3, "#6ad0ff");
+  r.ball(36, 20, 2, 3, "#6ad0ff");
+  r.ball(24, 8, 12, 3, "#1b1626", "#3a3a46", "#0a0a10", (_x, y) => y > 9);
+  // Platine portable sous le bras
+  r.ball(42, 45, 6, 3, "#2a2a32", "#45454f", "#16161c");
+  r.ball(42, 45, 2, 1, "#a66cff");
+  r.outline(INK);
+  return r;
+}
+
+function sbire(): Raster {
+  const r = new Raster(48, 48);
+  // Danseur en noir, masque de métronome, sabots qui claquent
+  r.ball(24, 38, 11, 9, "#1d1826", "#2e2740", "#120f18");
+  r.line(14, 32, 6, 24, "#1d1826");
+  r.line(34, 32, 42, 22, "#1d1826");
+  r.ball(6, 23, 2, 2, "#e8e0c8");
+  r.ball(42, 21, 2, 2, "#e8e0c8");
+  r.ball(18, 45, 3, 2, "#1d1826");
+  r.ball(30, 45, 3, 2, "#1d1826");
+  // Masque triangulaire
+  for (let y = 8; y < 28; y++) {
+    const half = Math.round((y - 8) * 0.55) + 2;
+    for (let x = 24 - half; x <= 24 + half; x++) r.set(x, y, y < 12 ? "#e8b830" : "#c9952e");
+  }
+  r.line(24, 12, 29, 24, "#1b1626");
+  r.rect(19, 20, 3, 2, "#ff4a4a");
+  r.rect(26, 20, 3, 2, "#ff4a4a");
+  r.outline(INK);
+  return r;
+}
+
+function tambour(): Raster {
+  const r = new Raster(52, 52);
+  r.ball(26, 30, 20, 17, "#8e1b1b", "#c62828", "#5a1010");
+  r.ball(26, 16, 18, 6, "#e8e0c8", "#f8f4e8", "#c8bfa4");
+  for (let a = 0; a < 12; a++) {
+    const x = 26 + Math.cos((a / 12) * Math.PI * 2) * 19;
+    r.set(x, 30, "#e8b830");
+    r.set(x, 34, "#e8b830");
+  }
+  eyes(r, 18, 28, 12, "fache", 3);
+  r.rect(21, 38, 10, 2, INK);
+  // Baguettes
+  r.line(6, 6, 16, 18, "#a87a50");
+  r.line(46, 6, 36, 18, "#a87a50");
+  r.ball(6, 6, 2, 2, "#e8e0c8");
+  r.ball(46, 6, 2, 2, "#e8e0c8");
+  r.outline(INK);
+  return r;
+}
+
+function lanterne(): Raster {
+  const r = new Raster(48, 48);
+  r.rect(20, 4, 8, 3, "#1b1626");
+  r.ball(24, 24, 14, 17, "#d23a3a", "#f06a5a", "#a52b25");
+  for (let y = 10; y < 40; y += 5) r.line(11, y, 37, y, "#a52b25");
+  r.ball(24, 24, 7, 9, "#ffd04a", "#fff0b0", "#e8a838");
+  eyes(r, 18, 20, 9, "rage", 2);
+  r.rect(20, 28, 8, 2, INK);
+  r.rect(20, 41, 8, 3, "#1b1626");
+  r.line(24, 44, 24, 47, "#e8b830");
+  r.outline(INK);
+  return r;
+}
+
+function metronome(): Raster {
+  const r = new Raster(56, 56);
+  // Pyramide en bois, balancier doré, chapeau haut-de-forme
+  for (let y = 14; y < 52; y++) {
+    const half = Math.round((y - 14) * 0.5) + 6;
+    for (let x = 28 - half; x <= 28 + half; x++) r.set(x, y, x < 28 - half + 3 ? "#8a5a3a" : x > 28 + half - 3 ? "#4a2a16" : "#6a4228");
+  }
+  r.rect(18, 26, 20, 18, "#e8e0c8");
+  for (let y = 28; y < 43; y += 3) r.rect(20, y, 16, 1, "#8a7a6a");
+  r.line(28, 44, 38, 20, "#e8b830");
+  r.ball(36, 25, 3, 3, "#e8b830", "#f8dc70", "#a87a18");
+  eyes(r, 21, 32, 10, "fache", 2);
+  r.rect(24, 38, 8, 1, INK);
+  r.rect(18, 4, 20, 10, "#1b1626");
+  r.rect(14, 12, 28, 3, "#1b1626");
+  r.rect(18, 9, 20, 2, "#a66cff");
+  r.outline(INK);
+  return r;
+}
+
+function katsu(vrai: boolean): Raster {
+  const r = new Raster(56, 56);
+  // Kimono sombre, hakama, sabre de bois
+  r.ball(28, 46, 20, 13, "#2a2a3a", "#3a3a4e", "#1a1a26", (_x, y) => y > 55);
+  r.ball(28, 38, 14, 8, "#5a4a3a", "#6a5a46", "#3a2e22");
+  r.ball(10, 40, 6, 8, "#5a4a3a", "#6a5a46", "#3a2e22");
+  r.ball(46, 40, 6, 8, "#5a4a3a", "#6a5a46", "#3a2e22");
+  r.line(46, 18, 46, 50, "#c8a06a");
+  r.rect(44, 34, 5, 2, "#1b1626");
+  // Tête : barbe rousse grisonnante
+  r.ball(28, 22, 10, 11, "#e9b18a", "#f5c7a3", "#c98b66");
+  r.ball(28, 30, 9, 6, "#b07050", "#c89070", "#8a5030");
+  for (const [x, y] of [
+    [22, 30],
+    [27, 33],
+    [32, 31],
+    [25, 34],
+  ])
+    r.set(x, y, "#d8d4cc");
+  if (vrai) {
+    // Sans chapeau : cheveux gris, LUNETTES — c'est un Sparrow
+    r.ball(28, 13, 10, 5, "#9a9088", "#b8b0a8", "#7a7068", (_x, y) => y > 15);
+    r.rect(20, 20, 6, 4, "#101010");
+    r.rect(30, 20, 6, 4, "#101010");
+    r.rect(26, 21, 4, 1, "#101010");
+    r.set(21, 21, "#9fb4c8");
+    r.set(31, 21, "#9fb4c8");
+  } else {
+    // Chapeau de paille qui cache les yeux
+    r.ball(28, 15, 18, 5, "#d8b870", "#e8d090", "#a88a48");
+    r.ball(28, 11, 7, 4, "#c8a860", "#d8b870", "#a88a48");
+    r.rect(14, 18, 28, 1, "#8a6a30");
+  }
+  r.outline(INK);
+  return r;
+}
+
 const PAINT: Record<string, (tenue?: string) => Raster> = {
+  "sparrow-samourai": sparrowSamourai,
+  pokeyz: pokeyzBack,
+  sbire,
+  tambour,
+  lanterne,
+  metronome,
+  katsu: () => katsu(false),
+  "katsu-vrai": () => katsu(true),
   "sparrow-titan": sparrowTitan,
   lili: liliBack,
   haltere,

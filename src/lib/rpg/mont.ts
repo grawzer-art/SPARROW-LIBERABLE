@@ -145,8 +145,10 @@ function templeCour(): MapDef {
   fill("roche", 20, 1, 24, 6);
   for (let y = 0; y < 22; y += 2) {
     add({ kind: "sapin", x: 0, y, w: 1, h: 2, solidRows: 2 });
-    add({ kind: "sapin", x: 25, y, w: 1, h: 2, solidRows: 2 });
+    // Passage à l'est (chapitre 4) vers le Chemin des Cerisiers
+    if (y !== 10) add({ kind: "sapin", x: 25, y, w: 1, h: 2, solidRows: 2 });
   }
+  fill("chemin", 21, 10, 25, 11);
   // Rangée d'arbres en bas (passage au milieu) et en haut (de part et d'autre du temple)
   for (const x of [1, 3, 5, 7, 9, 15, 17, 19, 21, 23]) add({ kind: "arbre", x, y: 20, w: 2, h: 2, solidRows: 2 });
   add({ kind: "sapin", x: 11, y: 20, w: 1, h: 2, solidRows: 2 });
@@ -163,6 +165,8 @@ function templeCour(): MapDef {
   add({ kind: "pancarte", x: 15, y: 17, w: 1, h: 1, text: "LA DOULEUR EST UNE INFORMATION" });
   def.warps.push(
     { id: "porte", at: { x: 12, y: 7 }, to: { map: "temple", x: 14, y: 20, dir: "up" }, needs: templeOuvert, lockedKey: "porte-temple" },
+    { id: "est-1", at: { x: 25, y: 10 }, dir: "right", to: { map: "cerisiers", x: 1, y: 9, dir: "right" }, needs: (r) => r.quests.confrerie === "terminee", lockedKey: "porte-est" },
+    { id: "est-2", at: { x: 25, y: 11 }, dir: "right", to: { map: "cerisiers", x: 1, y: 10, dir: "right" }, needs: (r) => r.quests.confrerie === "terminee", lockedKey: "porte-est" },
     { id: "bas-1", at: { x: 12, y: 21 }, dir: "down", to: { map: "sentier", x: 11, y: 1, dir: "down" } },
     { id: "bas-2", at: { x: 13, y: 21 }, dir: "down", to: { map: "sentier", x: 12, y: 1, dir: "down" } },
   );
