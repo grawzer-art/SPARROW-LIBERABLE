@@ -66,6 +66,8 @@ export interface Counters {
   rareEvents: number;
   caches: number;
   pannes: number;
+  trainings: number;
+  reps: number;
 }
 
 export interface Mission {
@@ -103,6 +105,9 @@ export interface State {
   /** Jours (AAAA-MM-JJ, Paris) où le joueur est venu. */
   days: string[];
   bestFarm: number;
+  /** Points de muscle (évolution jusqu'à SPARROW TITAN). */
+  muscle: number;
+  bestMuscu: number;
   pcBrokenUntil: number;
   lastAction: { a: string; t: number } | null;
   /** Dernières répliques dites (anti-répétition). */
@@ -130,6 +135,8 @@ export const emptyCounters = (): Counters => ({
   rareEvents: 0,
   caches: 0,
   pannes: 0,
+  trainings: 0,
+  reps: 0,
 });
 
 export const clamp = (n: number) => Math.max(0, Math.min(100, n));
@@ -166,6 +173,8 @@ export function newState(now: number): State {
     journal: [],
     days: [parisDay(now)],
     bestFarm: 0,
+    muscle: 0,
+    bestMuscu: 0,
     pcBrokenUntil: 0,
     lastAction: null,
     said: [],
@@ -233,6 +242,8 @@ export function restore(raw: unknown, now: number): State {
     journal,
     days: strs(o.days, 400).length ? strs(o.days, 400) : base.days,
     bestFarm: Math.max(0, num(o.bestFarm, 0)),
+    muscle: Math.max(0, num(o.muscle, 0)),
+    bestMuscu: Math.max(0, num(o.bestMuscu, 0)),
     pcBrokenUntil: Math.min(num(o.pcBrokenUntil, 0), now + 2 * HOUR),
     lastAction:
       o.lastAction && typeof o.lastAction.a === "string" && typeof o.lastAction.t === "number" ? o.lastAction : null,

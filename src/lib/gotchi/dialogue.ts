@@ -153,3 +153,72 @@ export function welcome(away: number, s: State, rand: Rand = Math.random): strin
             : [`Absent ${dur}. J'ai survécu sans toi. Je fais semblant de ne pas t'avoir attendu.`, `Te revoilà après ${dur}. Assieds-toi, je te raconte ce que tu as raté.`];
   return pool[Math.floor(rand() * pool.length)];
 }
+
+// ─── Répliques liées à ce que fait vraiment le joueur (déplacements, objets) ───
+
+export const PLAY_LINES = {
+  start: [
+    "Ah, on me pilote maintenant ? Doucement avec le joystick, je suis fragile.",
+    "Tu me diriges ? Très bien. Mais je choisis la musique.",
+    "Mode manette activé. Je me sens comme un perso de jeu. Un perso principal.",
+  ],
+  bump: [
+    "Aïe. Ce meuble n'était pas là hier.",
+    "Tu viens de me faire foncer dans un mur. Je note.",
+    "Je rentre dans les meubles, mais avec style.",
+    "Collision. Mon honneur est intact, mon genou moins.",
+  ],
+  long: [
+    "On va où exactement ? S'il y a des frites au bout, je marche.",
+    "Je fais plus de pas en 5 minutes qu'en une semaine. Merci, je crois.",
+    "C'est un appartement, pas un marathon.",
+  ],
+  room: {
+    chambre: ["La chambre. Je n'y dors pas, j'y stocke des chaussettes.", "Le lit me regarde. Je ne le regarde pas."],
+    gaming: ["Mon bureau. Mon trône. Mon destin.", "Le PC m'appelle. Je l'entends ronronner."],
+    salon: ["Le salon. Territoire officiel du canapé.", "Ici, j'ai fait 300 siestes de 4 minutes."],
+    cuisine: ["La cuisine. Mon sanctuaire.", "Ça sent la friture. Je suis chez moi."],
+    muscu: ["La salle de sport. Ça sent l'effort. Et un peu les frites.", "Ici, on soulève. Des haltères, et parfois une frite."],
+  } as Record<string, string[]>,
+  canape: [
+    "Encore une émission de cuisine sans frites. Je zappe.",
+    "La télé, c'est comme un PC, mais sans les monstres.",
+    "Je regarde la télé, mais je pense à mon farm.",
+  ],
+  miroir: [
+    ["Miroir, mon beau miroir… Ah. C'est moi. D'accord.", "Pour l'instant, mes muscles sont en mode furtif."],
+    ["Je suis sec. Comme une frite trop cuite, mais en beau.", "On voit un début de biceps. Ou c'est la lumière."],
+    ["Costaud ! Le t-shirt commence à souffrir.", "Regarde ce bras. Non, l'autre. Pareil, en fait."],
+    ["Bodybuildé. Je pourrais porter le frigo. Je ne le ferai pas.", "Mes épaules ont leurs propres épaules."],
+    ["SPARROW TITAN. Le miroir a peur de moi.", "Je suis devenu une légende. Une légende qui mange des frites."],
+  ],
+  frigo: [
+    "Le frigo contient : de la mayo, de l'espoir, et une salade suspecte.",
+    "J'ouvre, je regarde, je referme. Comme d'habitude.",
+    "Toujours pas de frites dans le frigo. C'est un scandale national.",
+  ],
+  fenetre: [
+    "Dehors, il y a le monde. Il n'a pas l'air d'avoir de Wi-Fi.",
+    "Je regarde passer les pigeons. Ils me jugent.",
+    "Il fait beau. Parfait pour rester à l'intérieur.",
+  ],
+  lit: [
+    "Le lit ? Non. J'ai des responsabilités. Et un PC.",
+    "Je m'assois sur le lit. Je ne m'allonge pas. C'est une règle.",
+    "Dormir, c'est perdre du temps de jeu.",
+  ],
+};
+
+export type PlayLine = "start" | "bump" | "long" | "frigo" | "fenetre" | "canape" | "lit";
+
+export function playLine(kind: PlayLine, said: string[], rand: Rand = Math.random): string {
+  return pickFresh(PLAY_LINES[kind], said, rand);
+}
+
+export function roomLine(room: string, said: string[], rand: Rand = Math.random): string {
+  return pickFresh(PLAY_LINES.room[room] ?? PLAY_LINES.room.salon, said, rand);
+}
+
+export function mirrorLine(stage: number, said: string[], rand: Rand = Math.random): string {
+  return pickFresh(PLAY_LINES.miroir[Math.max(0, Math.min(4, stage))], said, rand);
+}

@@ -182,19 +182,19 @@
 
 .gt-actions {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-top: 14px;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  margin-top: 10px;
 }
 
 .gt-act {
   position: relative;
   display: grid;
   justify-items: center;
-  gap: 4px;
-  min-height: 66px;
-  padding: 8px 4px 7px;
-  border: 2px solid var(--line-strong);
+  gap: 3px;
+  min-height: 54px;
+  padding: 6px 1px 5px;
+  border: 1px solid var(--line-strong);
   background: #121212;
   overflow: hidden;
   transition: transform 0.1s, border-color 0.2s;
@@ -206,12 +206,12 @@
 }
 
 .gt-act__icon {
-  font-size: 24px;
+  font-size: 19px;
   line-height: 1;
 }
 
 .gt-act__lbl {
-  font-size: 10px;
+  font-size: 7.5px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -728,5 +728,154 @@
   .gt-farm__panel,
   .gt-bubble {
     animation: none;
+  }
+}
+
+/* Manette : joystick + bouton d'action contextuel */
+
+.gt-pad {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 14px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  background: linear-gradient(180deg, #151515, #0c0c0c);
+}
+
+.gt-joy {
+  position: relative;
+  width: 124px;
+  height: 124px;
+  border-radius: 50%;
+  touch-action: none;
+  -webkit-touch-callout: none;
+}
+
+.gt-joy__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid #2c2c2c;
+  background:
+    radial-gradient(circle, rgba(229, 57, 53, 0.08) 0 40%, transparent 41%),
+    #101010;
+  box-shadow: inset 0 0 0 6px #0a0a0a;
+}
+
+.gt-joy__ring::before,
+.gt-joy__ring::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  background: #262626;
+  transform: translate(-50%, -50%);
+}
+
+.gt-joy__ring::before {
+  width: 70%;
+  height: 2px;
+}
+
+.gt-joy__ring::after {
+  width: 2px;
+  height: 70%;
+}
+
+.gt-joy__knob {
+  position: absolute;
+  left: calc(50% - 26px);
+  top: calc(50% - 26px);
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ef5350, #9e1f1c 70%);
+  border: 3px solid #090909;
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.6);
+  transition: transform 0.12s var(--ease);
+}
+
+.gt-joy.is-on .gt-joy__knob {
+  transition: none;
+}
+
+.gt-pad__side {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.gt-pad__ctx {
+  margin: 0;
+  max-width: 100%;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: right;
+  color: var(--steel);
+}
+
+.gt-pad__a {
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  border: 3px solid #090909;
+  background: radial-gradient(circle at 35% 30%, #4a4a4a, #1f1f1f 70%);
+  box-shadow: 0 6px 0 #050505;
+  touch-action: manipulation;
+  transition: transform 0.08s, box-shadow 0.08s;
+}
+
+.gt-pad__a span {
+  font-family: var(--display);
+  font-size: 30px;
+  line-height: 1;
+}
+
+.gt-pad__a em {
+  margin-top: -10px;
+  font-style: normal;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.gt-pad__a.is-ready {
+  background: radial-gradient(circle at 35% 30%, #f6d27a, #b5851c 70%);
+  color: #090909;
+}
+
+.gt-pad__a:active {
+  transform: translateY(4px);
+  box-shadow: 0 2px 0 #050505;
+}
+
+.gt-pad:has(.gt-pad__a.is-ready) .gt-pad__ctx {
+  color: #f2c14e;
+}
+
+@media (max-width: 340px) {
+  .gt-joy {
+    width: 108px;
+    height: 108px;
+  }
+
+  .gt-pad__a {
+    width: 74px;
+    height: 74px;
+  }
+}
+
+@media (max-width: 360px) {
+  .gt-act__lbl {
+    font-size: 6.5px;
+    letter-spacing: 0;
   }
 }

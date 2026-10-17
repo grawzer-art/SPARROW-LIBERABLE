@@ -70,12 +70,50 @@ export interface Look {
   tenue?: string;
   tete?: string;
   barbe?: boolean;
+  /** Stade musculaire 0..4 (4 = SPARROW TITAN). */
+  muscle?: number;
+}
+
+/** Torse selon le stade musculaire (les bras apparaissent, les épaules s'élargissent). */
+const TORSO_MUSCLE: string[][] = [
+  TORSO.normal,
+  ["...stttttttts...", "..sstttttttss...", "...tttTTTTttt..."],
+  ["..sstttttttttss.", ".sssttttttttsss.", "..sstTTTTTTtss.."],
+  [".ssstttttttttsss", "sssstttttttttsss", ".sssTTTTTTTTsss."],
+  ["ssssstttttttssss", "sssssttttttsssss", "ssssTTTTTTTTssss"],
+];
+
+/** Sparrow vu de dos (il marche vers le haut de l'écran). */
+const BACK_HEAD = [
+  "......hhhhh.....",
+  "...hhhhhhhhhh...",
+  "..hhhhhhhhhhhh..",
+  "..hhhhhhhhhhhh..",
+  "..hhhhhhhhhhhh..",
+  "..hhhhGhhhhhhh..",
+  "..shhhhhhhhhhs..",
+  "..shhhhhhhhhhs..",
+  "..bhhhhhhhhhhb..",
+  "..bbhhhhhhhhbb..",
+  "..bbssssssssbb..",
+  "...bbsssssbbB...",
+  "....bssssssB....",
+  ".....ssssss.....",
+  "......ssss......",
+];
+
+export function sparrowBack(body: Body, legs: Legs = "stand", look: Look = {}): string[] {
+  let torso = body === "normal" && look.muscle ? TORSO_MUSCLE[look.muscle] : TORSO[body];
+  const o = look.tenue && OUTFIT[look.tenue];
+  if (o) torso = torso.map((r) => r.replace(/t/g, o[0]).replace(/T/g, o[1]));
+  const l = body === "gras" && legs !== "assis" ? LEGS_GRAS : LEGS[legs];
+  return [...BACK_HEAD, ...torso, ...l];
 }
 
 export function sparrow(eyes: Eyes, mouth: Mouth, body: Body, legs: Legs = "stand", look: Look = {}): string[] {
   let e = EYES[eyes];
   if ((eyes === "lunettes" || eyes === "triste") && look.lunettes && GLASSES[look.lunettes]) e = GLASSES[look.lunettes];
-  let torso = TORSO[body];
+  let torso = body === "normal" && look.muscle ? TORSO_MUSCLE[look.muscle] : TORSO[body];
   const o = look.tenue && OUTFIT[look.tenue];
   if (o) torso = torso.map((r) => r.replace(/t/g, o[0]).replace(/T/g, o[1]));
   const l = body === "gras" && legs !== "assis" ? LEGS_GRAS : LEGS[legs];

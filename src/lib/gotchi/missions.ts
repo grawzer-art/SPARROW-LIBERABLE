@@ -16,7 +16,9 @@ export type MissionKey =
   | "cache"
   | "dofusAuto"
   | "monstres"
-  | "ressources";
+  | "ressources"
+  | "muscu"
+  | "reps";
 
 export interface MissionDef {
   id: string;
@@ -43,6 +45,8 @@ export const MISSIONS: MissionDef[] = [
   { id: "m-sieste", txt: "Obtenir une vraie micro-sieste", key: "sieste", n: 1, coins: 40, xp: 30 },
   { id: "m-cache", txt: "Trouver l'objet caché dans l'appartement", key: "cache", n: 1, coins: 50, xp: 40 },
   { id: "m-auto", txt: "Le laisser farmer seul une fois", key: "dofusAuto", n: 1, coins: 20, xp: 15 },
+  { id: "m-muscu", txt: "Faire une séance de muscu", key: "muscu", n: 1, coins: 35, xp: 30 },
+  { id: "m-reps", txt: "Enchaîner 25 répétitions", key: "reps", n: 25, coins: 45, xp: 35 },
 ];
 
 export const missionDef = (id: string) => MISSIONS.find((m) => m.id === id);
