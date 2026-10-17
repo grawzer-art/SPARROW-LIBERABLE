@@ -8,6 +8,7 @@
  */
 
 import { CH2, CH2_CARD } from "./ch2";
+import { INFIRMERIE_NPCS } from "./infirmerie";
 import { CH3, CH3_CARD } from "./ch3";
 import { CH4, CH4_CARD } from "./ch4";
 import { CH5, CH5_CARD, EPILOGUE_NPCS } from "./ch5";
@@ -355,7 +356,7 @@ const ALL: Chapter = { npcs: { ...CH1.npcs, ...CH2.npcs, ...CH3.npcs, ...CH4.npc
 /** Réplique d'un PNJ sur une carte. */
 export function talkTo(id: string, r: Rpg, map = "quartier"): Conversation {
   const key = `${map}:${id}`;
-  const rules = [...(EPILOGUE_NPCS[key] ?? []), ...(ALL.npcs[key] ?? [])];
+  const rules = [...(EPILOGUE_NPCS[key] ?? []), ...(ALL.npcs[key] ?? []), ...(INFIRMERIE_NPCS[key] ?? [])];
   return rules.length ? pick(rules, r) : { lines: [{ who: "", text: "…" }] };
 }
 

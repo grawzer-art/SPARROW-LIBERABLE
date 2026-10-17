@@ -25,6 +25,10 @@ export interface Rpg {
   mons?: Record<string, MonSave>;
   /** Niveau et expérience propres des compagnons (ils ne suivent plus Sparrow). */
   levels?: Record<string, { level: number; xp: number }>;
+  /** PV restants entre deux combats, en fraction des PV max (absent = en pleine forme). */
+  hp?: Record<string, number>;
+  /** Dernière infirmerie visitée : on y réapparaît après une défaite (absent = l'appartement). */
+  respawn?: { map: string; x: number; y: number; dir: "up" | "down" | "left" | "right" };
 }
 
 export interface MonSave {
@@ -71,5 +75,13 @@ export function restoreRpg(raw: unknown): Rpg {
   if (o.levels && typeof o.levels === "object")
     for (const [k, v] of Object.entries(o.levels as Record<string, Partial<MonSave>>))
       if (v && typeof v.level === "number" && v.level >= 1) levels[k] = { level: Math.min(99, Math.floor(v.level)), xp: typeof v.xp === "number" && v.xp > 0 ? Math.floor(v.xp) : 0 };
-  return { ...(Object.keys(levels).length ? { levels } : {}), quests, done: strs(o.done), items: strs(o.items), flags: strs(o.flags), seen: strs(o.seen), bag, party: strs(o.party), gear, owned, skills: strs(o.skills), ...(Object.keys(mons).length ? { mons } : {}) };
+  const hp: Record<string, number> = {};
+  if (o.hp && typeof o.hp === "object")
+    for (const [k, v] of Object.entries(o.hp as Record<string, unknown>)) if (typeof v === "number" && v >= 0 && v < 1) hp[k] = Math.round(v * 1000) / 1000;
+  const sp = o.respawn as Rpg["respawn"] | undefined;
+  const respawn = sp && typeof sp.map === "string" && Number.isInteger(sp.x) && Number.isInteger(sp.y) && ["up", "down", "left", "right"].includes(sp.dir) ? { map: sp.map, x: sp.x, y: sp.y, dir: sp.dir } : null;
+  return {
+    ...(Object.keys(hp).length ? { hp } : {}),
+    ...(respawn ? { respawn } : {}),
+    ...(Object.keys(levels).length ? { levels } : {}), quests, done: strs(o.done), items: strs(o.items), flags: strs(o.flags), seen: strs(o.seen), bag, party: strs(o.party), gear, owned, skills: strs(o.skills), ...(Object.keys(mons).length ? { mons } : {}) };
 }

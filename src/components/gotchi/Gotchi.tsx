@@ -39,6 +39,7 @@ import { mapOf, restoreWhere } from "@/lib/rpg/maps";
 import { CREDITS, FINAL_QUEST } from "@/lib/rpg/ch5";
 import { addCaught, fixLevels, isSeen, ownLevels, seenKey, teamGainXp, toggleTeam } from "@/lib/rpg/monsters";
 import { BATTLES, MEMBERS } from "@/lib/rpg/bestiary";
+import { freshFight, healOutside } from "@/lib/rpg/combat";
 import { SPAWN } from "@/lib/rpg/quartier";
 import { applyEffects, status, type Effect } from "@/lib/rpg/quest";
 import { buyRpg, equipRpg } from "@/lib/rpg/shop";
@@ -499,6 +500,8 @@ export function Gotchi() {
       world.current?.comeHome();
       save(WHERE_KEY, { map: "appart" });
       notify(["Appartement de Sparrow"]);
+      // L'appartement fait office d'infirmerie du Quartier 404
+      if (stateRef.current?.rpg.hp) rpgApplyRef.current([{ kind: "heal" }]);
     });
   }, [notify, transition]);
 
@@ -568,6 +571,19 @@ export function Gotchi() {
         rpg = g.rpg;
         monNotes.push(...g.ups);
       }
+      // PV gardés jusqu'au prochain soin (infirmerie, appartement, objets)
+      const fresh = freshFight(BATTLES[f.id]);
+      const ko = res.outcome === "lose" && !fresh;
+      if (res.hp && !fresh) {
+        const { hp: _old, ...rest } = rpg;
+        void _old;
+        rpg = Object.keys(res.hp).length ? { ...rest, hp: res.hp } : rest;
+      }
+      if (ko) {
+        const { hp: _old, ...rest } = rpg;
+        void _old;
+        rpg = rest;
+      }
       if (rpg !== applied.state.rpg) applied.state = { ...applied.state, rpg };
       commit(applied.state);
       notify([...(res.outcome === "win" ? res.notes : []), ...applied.notes, ...monNotes]);
@@ -577,10 +593,23 @@ export function Gotchi() {
         if (f.npc) o.talkTo(f.npc, false);
       }
       doorCooldown.current = Date.now();
+      if (ko) {
+        // Défaite : réveil à la dernière infirmerie (ou à l'appartement), équipe soignée, rien de perdu
+        const sp = applied.state.rpg.respawn;
+        const wake: Conversation = { lines: [{ who: "", text: "Sparrow se réveille, un peu sonné. L'équipe a été soignée. Rien n'est perdu : ni objets, ni créatures, ni progression." }] };
+        setTimeout(() => {
+          if (sp && mapOf(sp.map)) enterMapRef.current({ ...sp, map: sp.map as MapId }, wake);
+          else {
+            goHome();
+            setTimeout(() => openConvRef.current(wake), 700);
+          }
+        }, 300);
+        return;
+      }
       const after = res.outcome === "win" ? afterBattle(f.id, applied.state.rpg) : res.outcome === "lose" ? afterDefeat(f.id) : null;
       if (after) setTimeout(() => openConvRef.current(after), 350);
     },
-    [commit, notify],
+    [commit, goHome, notify],
   );
 
   /** Actions déclenchées à la fin d'un dialogue (combat, voyage…). */
@@ -1470,7 +1499,7 @@ export function Gotchi() {
             <BattleScreen
               key={fight.id}
               id={fight.id}
-              team={{ level: state.level, party: state.rpg.party, gear: state.rpg.gear, skills: state.rpg.skills, bag: state.rpg.bag, titanTurns: muscleStage(state.muscle) >= 4 ? 4 : 3, mons: ownLevels(state.rpg) }}
+              team={{ level: state.level, party: state.rpg.party, gear: state.rpg.gear, skills: state.rpg.skills, bag: state.rpg.bag, titanTurns: muscleStage(state.muscle) >= 4 ? 4 : 3, mons: ownLevels(state.rpg), hp: state.rpg.hp }}
               tenue={state.equip.tenue}
               audio={audio.current}
               reduced={reduced.current}
@@ -1574,6 +1603,19 @@ export function Gotchi() {
                 const st = stateRef.current;
                 if (!st) return;
                 commit({ ...st, rpg: toggleTeam(st.rpg, sp) });
+                audio.current.coin();
+              },
+              useItem: (id) => {
+                const st = stateRef.current;
+                if (!st || !(st.rpg.bag[id] > 0)) return;
+                const u = healOutside({ level: st.level, party: st.rpg.party, gear: st.rpg.gear, skills: st.rpg.skills, mons: ownLevels(st.rpg), hp: st.rpg.hp }, id);
+                if (!u) return notify(["Personne n'en a besoin pour l'instant."]);
+                const { hp: _old, ...rest } = st.rpg;
+                void _old;
+                const bag = { ...st.rpg.bag, [id]: st.rpg.bag[id] - 1 };
+                if (bag[id] <= 0) delete bag[id];
+                commit({ ...st, rpg: { ...rest, bag, ...(Object.keys(u.hp).length ? { hp: u.hp } : {}) } });
+                notify([`${u.who} récupère ${u.gained} PV.`]);
                 audio.current.coin();
               },
               goRoom: (r) => {

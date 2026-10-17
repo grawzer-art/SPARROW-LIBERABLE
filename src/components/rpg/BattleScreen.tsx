@@ -13,7 +13,7 @@
 
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 import { CONSUMABLES, FORMS, MEMBERS, MOVES, nameOf, type Fx } from "@/lib/rpg/bestiary";
-import { ally, bagAfter, foe, forced, forms, mustSwap, playTurn, spoils, startBattle, type Action, type Battle, type BattleEvent, type Side, type Team } from "@/lib/rpg/combat";
+import { ally, bagAfter, foe, forced, forms, freshFight, hpAfter, mustSwap, playTurn, spoils, startBattle, type Action, type Battle, type BattleEvent, type Side, type Team } from "@/lib/rpg/combat";
 import type { Chiptune } from "../game/audio";
 import { battler } from "./battlers";
 import { hash } from "./pixel";
@@ -31,6 +31,8 @@ export interface BattleEnd {
   captured?: { species: string; level: number };
   /** Équipiers entrés au combat (eux seuls gagnent de l'expérience). */
   fought?: string[];
+  /** PV restants de l'équipe (fraction), gardés jusqu'au prochain soin. */
+  hp?: Record<string, number>;
   xp: number;
   fp: number;
   bag: Record<string, number>;
@@ -38,6 +40,8 @@ export interface BattleEnd {
 }
 
 type Mode = "intro" | "events" | "menu" | "moves" | "items" | "party" | "lost" | "done";
+/** Après une défaite : un boss se retente tout de suite ; sinon, retour à la dernière infirmerie. */
+const lostOptions = (bt: Battle) => (freshFight(bt.def) ? ["RÉESSAYER", "SE RETIRER"] : ["À L'INFIRMERIE"]);
 
 const W = 240;
 const MAIN = ["ATTAQUER", "OBJETS", "COMPAGNONS", "FUITE"] as const;
@@ -753,7 +757,7 @@ export function BattleScreen({
       audio.win();
       play(lines, () => {
         setModeBoth("done");
-        onEnd({ outcome: "win", captured: bt.captured, fought: bt.fought, xp: sp.xp, fp: bt.captured ? 0 : sp.fp, bag: bagAfter(bt.bag, { ...sp, drops: { ...(bt.def.drops ?? {}) }, used: {} }), notes: [] });
+        onEnd({ outcome: "win", captured: bt.captured, fought: bt.fought, hp: hpAfter(bt), xp: sp.xp, fp: bt.captured ? 0 : sp.fp, bag: bagAfter(bt.bag, { ...sp, drops: { ...(bt.def.drops ?? {}) }, used: {} }), notes: [] });
       });
     } else if (bt.over === "lose") {
       audio.music(null);
@@ -761,12 +765,12 @@ export function BattleScreen({
       play([{ kind: "text", text: "L'équipe est K.O. … Sparrow se relève, un peu sonné. Rien n'est perdu." }], () => {
         setCurBoth(0);
         setModeBoth("lost");
-        say("Réessayer le combat, ou se retirer pour se préparer ?");
+        say(freshFight(bt.def) ? "Réessayer le combat, ou se retirer pour se préparer ?" : "Direction l'infirmerie : l'équipe y sera soignée.");
       });
     } else {
       audio.music(null);
       setModeBoth("done");
-      onEnd({ outcome: "flee", xp: 0, fp: 0, bag: bt.bag, notes: [] });
+      onEnd({ outcome: "flee", hp: hpAfter(bt), xp: 0, fp: 0, bag: bt.bag, notes: [] });
     }
   }, [audio, onEnd, play, say]);
 
@@ -1093,7 +1097,7 @@ export function BattleScreen({
       if (i === bt.a && !mustSwap(bt)) return say(`${x.name} est déjà au combat !`);
       doTurn.current({ kind: "swap", to: i });
     } else if (m === "lost") {
-      if (i === 0) {
+      if (i === 0 && freshFight(bt.def)) {
         // Réessayer : même combat, équipe soignée, sac d'origine
         const nb = startBattle(id, { ...team, bag: startBag.current }, (Date.now() ^ 0x9e3779b9) >>> 0);
         bRef.current = nb;
@@ -1163,7 +1167,7 @@ export function BattleScreen({
           setCurBoth(dd === "up" || dd === "left" ? (c - 1 + n) % n : (c + 1) % n);
           audio.select();
         } else if (m === "party" || m === "lost") {
-          const n = m === "party" ? bRef.current.allies.length : 2;
+          const n = m === "party" ? bRef.current.allies.length : lostOptions(bRef.current).length;
           if (!n) return;
           if (dd === "up" || dd === "left") setCurBoth((c - 1 + n) % n);
           else setCurBoth((c + 1) % n);
@@ -1184,7 +1188,7 @@ export function BattleScreen({
   const hpClass = (p: number) => (p > 50 ? "" : p > 20 ? " is-mid" : " is-low");
   const foeHp = disp.foeHp[disp.f] ?? 0;
   const allyHp = disp.allyHp[disp.a] ?? 0;
-  const st = (s: string | null) => (s === "brule" ? <b className="bt-status bt-status--brule">BRÛ</b> : s === "etourdi" ? <b className="bt-status bt-status--etourdi">ÉTO</b> : null);
+  const st = (s: string | null) => (s === "brule" ? <b className="bt-status bt-status--brule">BRÛ</b> : s === "etourdi" ? <b className="bt-status bt-status--etourdi">ÉTO</b> : s === "endormi" ? <b className="bt-status bt-status--endormi">SOM</b> : null);
   const showBoxes = mode !== "intro";
   const fl = forms(b);
   const sel =
@@ -1329,7 +1333,7 @@ export function BattleScreen({
         )}
         {mode === "lost" && (
           <div className="bt-grid bt-grid--main">
-            {["RÉESSAYER", "SE RETIRER"].map((l, i) => (
+            {lostOptions(b).map((l, i) => (
               <button key={l} type="button" className={cur === i ? "is-on" : ""} onClick={() => choose("lost", i)}>
                 <span className="gb-cursor">{cur === i ? "▶" : ""}</span>
                 {l}

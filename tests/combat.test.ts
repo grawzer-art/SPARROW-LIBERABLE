@@ -226,7 +226,8 @@ describe("Chapitre 3 : transformation, vol, coup de grâce", () => {
     const g: Team["gear"] = { arme: "fourchette-sacree", armure: "tablier", accessoire: "bracelet-sel" };
     for (const id of ["haltere-1", "halteres-2", "proteinator", "moine-1", "moine-reserve", "arene"]) expect(stats(id, T(7, ["chevalier", "gerard"], { frites: 2 }, g, ["pluie-frites"]), 150).rate, id).toBeGreaterThan(0.9);
     const boss = stats("gonflax", T(8, ["chevalier", "gerard"], { frites: 2, soupe: 1 }, g, ["pluie-frites", "titan"]), 200);
-    expect(boss.rate).toBeGreaterThan(0.85);
+    // Solo V2 : l'IA ne gâche plus ses attaques d'état sur une cible déjà touchée → un peu plus dur
+    expect(boss.rate).toBeGreaterThan(0.8);
     expect(boss.turns).toBeGreaterThanOrEqual(8);
   });
   it("équilibrage : le chapitre 5 se gagne, Monsieur Minuit est le combat le plus dur", () => {

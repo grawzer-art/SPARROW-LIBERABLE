@@ -225,7 +225,11 @@ export type Effect =
   /** Frit'pièces et expérience. */
   | { kind: "reward"; xp: number; coins: number }
   /** Une quête est acceptée (journal). */
-  | { kind: "quest"; id: string };
+  | { kind: "quest"; id: string }
+  /** Infirmerie : toute l'équipe retrouve ses PV. */
+  | { kind: "heal" }
+  /** Infirmerie : point de retour après une défaite. */
+  | { kind: "respawn"; at: NonNullable<Rpg["respawn"]> };
 
 export interface Applied {
   state: State;
@@ -263,6 +267,12 @@ export function applyEffects(s0: State, effects: Effect[], now: number): Applied
       r = { ...r, skills: [...r.skills, e.id] };
       notes.push(`Nouvelle technique : ${SKILLS[e.id].name} !`);
     } else if (e.kind === "reward") bonus = { xp: bonus.xp + e.xp, coins: bonus.coins + e.coins };
+    else if (e.kind === "heal") {
+      if (r.hp && Object.keys(r.hp).length) notes.push("Toute l'équipe est soignée.");
+      const { hp: _hp, ...rest } = r;
+      void _hp;
+      r = rest;
+    } else if (e.kind === "respawn") r = { ...r, respawn: { ...e.at } };
     else if (e.kind === "quest" && questById(e.id) && (r.quests[e.id] ?? "disponible") === "disponible") {
       r.quests[e.id] = "active";
       notes.push(`Nouvelle quête : ${questById(e.id)!.name}`);
