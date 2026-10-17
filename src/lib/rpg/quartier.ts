@@ -9,75 +9,45 @@
  * Ajouter un élément = une ligne dans `PROPS` ; le rendu est dans components/rpg/tiles.ts.
  */
 
-export const TILE = 16;
+import {
+  TILE,
+  makeMap,
+  reachable as reachableOn,
+  restoreOn,
+  solidAt,
+  step,
+  thingAt as thingOn,
+  warpAt,
+  zoneAt as zoneOn,
+  type Facing,
+  type Ground,
+  type MapDef,
+  type NpcDef,
+  type Prop,
+  type Tile,
+  type Warp,
+  type Zone,
+} from "./mapdef";
+import { emptyRpg, type Rpg } from "./state";
+
+export { TILE, step, type Facing, type Ground, type NpcDef, type Prop, type Tile, type Zone };
+export type Door = Warp;
+export type PropKind = string;
+export type NpcId = string;
+
 export const MAP_W = 36;
 export const MAP_H = 30;
 
-export type Ground = "herbe" | "fleurs" | "chemin" | "route" | "ligne" | "trottoir" | "pave" | "gravier" | "eau" | "ruelle";
-export type Facing = "down" | "up" | "left" | "right";
-
-export interface Tile {
-  x: number;
-  y: number;
-}
-
-export type PropKind =
-  | "batiment"
-  | "arbre"
-  | "sapin"
-  | "buisson"
-  | "lampadaire"
-  | "banc"
-  | "poubelle"
-  | "benne"
-  | "cageots"
-  | "panneau"
-  | "boite"
-  | "fontaine"
-  | "horloge"
-  | "cloture"
-  | "portail"
-  | "transfo"
-  | "pylone"
-  | "barriere"
-  | "massif"
-  | "velo"
-  | "affiche";
-
-export interface Building {
-  name: string;
-  style: "brique" | "enduit" | "boutique" | "maison";
-  roof: "ardoise" | "tuiles" | "plat";
-  door: number; // colonne de la porte (absolue)
-  sign?: string;
-  awning?: "rouge" | "vert";
-  /** Fenêtres éclairées (graine). */
-  lit?: number;
-}
-
-export interface Prop {
-  kind: PropKind;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  /** Rangées du bas qui bloquent (par défaut : toutes). */
-  solidRows?: number;
-  b?: Building;
-  /** Texte d'un panneau. */
-  text?: string;
-  flip?: boolean;
-}
-
-export const PROPS: Prop[] = [];
-const add = (p: Prop) => PROPS.push(p);
+const M = makeMap("quartier", "Quartier 404", MAP_W, MAP_H, "nuit", "herbe");
+export const QUARTIER: MapDef = M.def;
+export const PROPS: Prop[] = M.def.props;
+export const GROUND: Ground[][] = M.def.ground;
+const add = M.add;
+const fill = M.fill;
+const fini = (r: Rpg) => r.quests["ville-figee"] === "terminee";
 
 // ─── Sol ───
 
-export const GROUND: Ground[][] = Array.from({ length: MAP_H }, () => Array.from({ length: MAP_W }, () => "herbe" as Ground));
-const fill = (g: Ground, x1: number, y1: number, x2: number, y2: number) => {
-  for (let y = y1; y <= y2; y++) for (let x = x1; x <= x2; x++) if (x >= 0 && y >= 0 && x < MAP_W && y < MAP_H) GROUND[y][x] = g;
-};
 
 // Trottoirs et route principale (« Rue de l'Horloge »)
 fill("trottoir", 0, 9, 35, 10);
@@ -130,7 +100,7 @@ add({ kind: "buisson", x: 34, y: 8, w: 1, h: 1 });
 for (const x of [3, 12, 21, 30]) add({ kind: "lampadaire", x, y: 9, w: 1, h: 2, solidRows: 1 });
 for (const x of [8, 27]) add({ kind: "lampadaire", x, y: 12, w: 1, h: 2, solidRows: 1 });
 add({ kind: "barriere", x: 0, y: 11, w: 1, h: 2, text: "TRAVAUX" });
-add({ kind: "barriere", x: 35, y: 11, w: 1, h: 2, text: "CENTRE-VILLE" });
+add({ kind: "barriere", x: 35, y: 11, w: 1, h: 2, text: "CENTRE-VILLE", open: fini });
 add({ kind: "poubelle", x: 24, y: 13, w: 1, h: 1 });
 add({ kind: "poubelle", x: 33, y: 9, w: 1, h: 1 });
 
@@ -170,7 +140,7 @@ add({ kind: "panneau", x: 19, y: 23, w: 1, h: 1, text: "PLACE DE LA FONTAINE" })
 
 // ─── Station électrique ───
 add({ kind: "cloture", x: 25, y: 15, w: 4, h: 1 });
-add({ kind: "portail", x: 29, y: 15, w: 2, h: 1 });
+add({ kind: "portail", x: 29, y: 15, w: 2, h: 1, open: (r) => r.flags.includes("portail") });
 add({ kind: "cloture", x: 31, y: 15, w: 4, h: 1 });
 add({ kind: "cloture", x: 25, y: 16, w: 1, h: 11 });
 add({ kind: "cloture", x: 34, y: 16, w: 1, h: 11 });
@@ -190,67 +160,23 @@ add({ kind: "sapin", x: 21, y: 0, w: 1, h: 2, solidRows: 2 });
 add({ kind: "cloture", x: 16, y: MAP_H - 1, w: 4, h: 1 });
 add({ kind: "panneau", x: 19, y: 26, w: 1, h: 1, text: "SENTIER DU SUD" });
 
-// ─── Portes, objets interactifs, zones ───
+// ─── Portes, zones, PNJ ───
 
-export interface Door {
-  id: string;
-  /** Case de la porte (on y entre en marchant vers le haut). */
-  at: Tile;
-  /** null = porte fermée (réplique), sinon destination. */
-  to: "appart" | null;
-  text?: string;
-}
-
-export const DOORS: Door[] = [
+/** Vers la Cité des Frites Perdues : barrière levée et éclaireur brocoli vaincu. */
+const routeLibre = (r: Rpg) => fini(r) && r.flags.includes("ko:eclaireur");
+export const DOORS: Warp[] = [
   { id: "residence", at: { x: 5, y: 8 }, to: "appart" },
   { id: "superette", at: { x: 15, y: 8 }, to: null, text: "Fermé. Une pancarte : « Retour à 23:59 ». Il est déjà 23:59. Il le sera toujours, apparemment." },
   { id: "bouchon", at: { x: 24, y: 7 }, to: null, text: "Fermé à clé. Une odeur de soupe de 1987 passe sous la porte." },
   { id: "bleue", at: { x: 31, y: 7 }, to: null, text: "Personne ne répond. Un chat miaule derrière la porte. Il est 23:59 pour lui aussi." },
+  { id: "route-cite", at: { x: 35, y: 11 }, dir: "right", to: { map: "cite", x: 19, y: 30, dir: "up" }, needs: routeLibre, lockedKey: "route" },
+  { id: "route-cite-2", at: { x: 35, y: 12 }, dir: "right", to: { map: "cite", x: 20, y: 30, dir: "up" }, needs: routeLibre, lockedKey: "route" },
 ];
+QUARTIER.warps.push(...DOORS);
 
 /** Où Sparrow apparaît quand il sort de chez lui. */
 export const SPAWN: Tile & { dir: Facing } = { x: 5, y: 9, dir: "down" };
-
-export type ObjectId = "horloge" | "benne" | "portail" | "transfo" | "barriere" | "panneau" | "boite" | "fontaine" | "banc" | "poubelle" | "affiche" | "velo";
-
-/** Objet interactif : on se tient sur une case voisine, face à lui, et on appuie sur A. */
-export interface Thing {
-  id: ObjectId;
-  tiles: Tile[];
-  text?: string;
-}
-
-export function thingAt(t: Tile): Thing | null {
-  for (const p of PROPS) {
-    if (t.x < p.x || t.x >= p.x + p.w || t.y < p.y || t.y >= p.y + p.h) continue;
-    const id: Record<string, ObjectId> = {
-      horloge: "horloge",
-      benne: "benne",
-      portail: "portail",
-      transfo: "transfo",
-      barriere: "barriere",
-      panneau: "panneau",
-      boite: "boite",
-      fontaine: "fontaine",
-      banc: "banc",
-      poubelle: "poubelle",
-      affiche: "affiche",
-      velo: "velo",
-    };
-    const k = id[p.kind];
-    if (k) return { id: k, tiles: [], text: p.text };
-  }
-  return null;
-}
-
-export interface Zone {
-  id: "place" | "station" | "ruelle" | "parc";
-  name: string;
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
-}
+QUARTIER.spawn = SPAWN;
 
 export const ZONES: Zone[] = [
   { id: "place", name: "Place de la Fontaine", x1: 12, y1: 14, x2: 23, y2: 24 },
@@ -258,84 +184,43 @@ export const ZONES: Zone[] = [
   { id: "ruelle", name: "Ruelle du Chat", x1: 19, y1: 2, x2: 21, y2: 8 },
   { id: "parc", name: "Parc des Minutes", x1: 0, y1: 14, x2: 11, y2: 27 },
 ];
-
-export const zoneAt = (t: Tile) => ZONES.find((z) => t.x >= z.x1 && t.x <= z.x2 && t.y >= z.y1 && t.y <= z.y2) ?? null;
-
-// ─── PNJ ───
-
-export type NpcId = "nico" | "bouchon" | "raymond" | "inconnu";
-
-export interface NpcDef {
-  id: NpcId;
-  name: string;
-  start: Tile;
-  dir: Facing;
-  /** Petit trajet en boucle (cases successives, en ligne droite). */
-  path?: Tile[];
-  /** Pause à chaque étape (s). */
-  pause?: number;
-}
+QUARTIER.zones.push(...ZONES);
 
 export const NPCS: NpcDef[] = [
-  { id: "nico", name: "Nico le Livreur", start: { x: 10, y: 13 }, dir: "right", path: [{ x: 10, y: 13 }, { x: 22, y: 13 }], pause: 1.2 },
-  { id: "bouchon", name: "Madame Bouchon", start: { x: 22, y: 9 }, dir: "right", path: [{ x: 22, y: 9 }, { x: 27, y: 9 }], pause: 2.2 },
-  { id: "raymond", name: "Raymond", start: { x: 16, y: 9 }, dir: "down" },
-  { id: "inconnu", name: "???", start: { x: 6, y: 19 }, dir: "right" },
+  { id: "nico", name: "Nico le Livreur", char: "nico", start: { x: 10, y: 13 }, dir: "right", path: [{ x: 10, y: 13 }, { x: 22, y: 13 }], pause: 1.2 },
+  { id: "bouchon", name: "Madame Bouchon", char: "bouchon", start: { x: 22, y: 9 }, dir: "right", path: [{ x: 22, y: 9 }, { x: 27, y: 9 }], pause: 2.2 },
+  { id: "raymond", name: "Raymond", char: "raymond", start: { x: 16, y: 9 }, dir: "down" },
+  { id: "inconnu", name: "???", char: "inconnu", start: { x: 6, y: 19 }, dir: "right", watch: true, when: (r) => !r.flags.includes("inconnu-parti") },
+  // Chapitre 2 : le Chevalier Noir attend Sparrow près de la barrière levée
+  { id: "chevalier", name: "Chevalier Noir", char: "chevalier", start: { x: 32, y: 12 }, dir: "left", when: (r) => fini(r) && !r.party.includes("chevalier") },
+  { id: "eclaireur", name: "Soldat Brocoli", char: "brocoli", start: { x: 34, y: 11 }, dir: "left", watch: true, when: (r) => r.party.includes("chevalier"), enemy: { battle: "eclaireur", sight: 3, defeated: "ko:eclaireur" } },
 ];
+QUARTIER.npcs.push(...NPCS);
 
-// ─── Collisions ───
+// ─── Compatibilité (tests et interface du chapitre 1) ───
 
-const BLOCK_GROUND: Ground[] = ["eau"];
+const rpgOf = (gateOpen?: boolean): Rpg => ({ ...emptyRpg(), flags: gateOpen ? ["portail"] : [] });
 
-let solidGrid: boolean[][] | null = null;
-
-function buildSolid(): boolean[][] {
-  const g = Array.from({ length: MAP_H }, (_, y) => Array.from({ length: MAP_W }, (_, x) => BLOCK_GROUND.includes(GROUND[y][x])));
-  for (const p of PROPS) {
-    const rows = p.solidRows ?? p.h;
-    for (let y = p.y + p.h - rows; y < p.y + p.h; y++) for (let x = p.x; x < p.x + p.w; x++) if (y >= 0 && y < MAP_H && x >= 0 && x < MAP_W) g[y][x] = true;
-  }
-  return g;
+export type ObjectId = string;
+export interface Thing {
+  id: string;
+  tiles: Tile[];
+  text?: string;
 }
+
+export function thingAt(t: Tile): Thing | null {
+  const th = thingOn(QUARTIER, t, rpgOf(true));
+  return th ? { id: th.key, tiles: [], text: th.text } : null;
+}
+
+export const zoneAt = (t: Tile) => zoneOn(QUARTIER, t);
 
 /** Case bloquée par le décor (le portail ne l'est plus une fois ouvert). */
-export function isSolid(t: Tile, opts: { gateOpen?: boolean } = {}): boolean {
-  if (t.x < 0 || t.y < 0 || t.x >= MAP_W || t.y >= MAP_H) return true;
-  solidGrid ??= buildSolid();
-  if (opts.gateOpen && t.y === 15 && (t.x === 29 || t.x === 30)) return false;
-  return solidGrid[t.y][t.x];
-}
+export const isSolid = (t: Tile, opts: { gateOpen?: boolean } = {}) => solidAt(QUARTIER, t, rpgOf(opts.gateOpen));
 
-export const doorAt = (t: Tile) => DOORS.find((d) => d.at.x === t.x && d.at.y === t.y) ?? null;
+export const doorAt = (t: Tile) => warpAt(QUARTIER, t);
 
-export const step = (t: Tile, d: Facing): Tile => ({
-  x: t.x + (d === "left" ? -1 : d === "right" ? 1 : 0),
-  y: t.y + (d === "up" ? -1 : d === "down" ? 1 : 0),
-});
-
-/** Cases accessibles depuis `from` (en 4 directions) — utile pour les tests de level design. */
-export function reachable(from: Tile, opts: { gateOpen?: boolean } = {}): Set<string> {
-  const seen = new Set<string>([`${from.x},${from.y}`]);
-  const q = [from];
-  while (q.length) {
-    const c = q.shift()!;
-    for (const d of ["up", "down", "left", "right"] as Facing[]) {
-      const n = step(c, d);
-      const k = `${n.x},${n.y}`;
-      if (seen.has(k) || isSolid(n, opts)) continue;
-      seen.add(k);
-      q.push(n);
-    }
-  }
-  return seen;
-}
+export const reachable = (from: Tile, opts: { gateOpen?: boolean } = {}) => reachableOn(QUARTIER, from, rpgOf(opts.gateOpen));
 
 /** Valide une position sauvegardée dehors. */
-export function restoreTile(raw: unknown): (Tile & { dir: Facing }) | null {
-  const o = raw as Partial<Tile & { dir: Facing }> | null;
-  if (!o || typeof o.x !== "number" || typeof o.y !== "number") return null;
-  const t = { x: Math.round(o.x), y: Math.round(o.y) };
-  if (isSolid(t, { gateOpen: true }) || NPCS.some((n) => n.start.x === t.x && n.start.y === t.y)) return null;
-  const dir = (["down", "up", "left", "right"] as const).includes(o.dir as Facing) ? (o.dir as Facing) : "down";
-  return { ...t, dir };
-}
+export const restoreTile = (raw: unknown) => restoreOn(QUARTIER, raw, rpgOf(true));

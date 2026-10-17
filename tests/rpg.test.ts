@@ -21,7 +21,8 @@ describe("Quartier 404 — level design", () => {
     for (const n of NPCS) expect(around(n.start).some((t) => open.has(key(t))), n.id).toBe(true);
   });
   it("chaque porte, l'horloge, la benne et le portail sont accessibles sans badge", () => {
-    for (const d of DOORS) expect(open.has(key(step(d.at, "down"))), d.id).toBe(true);
+    const back = { up: "down", down: "up", left: "right", right: "left" } as const;
+    for (const d of DOORS) expect(open.has(key(step(d.at, back[d.dir ?? "up"]))), d.id).toBe(true);
     expect(open.has("21,17")).toBe(true); // devant l'horloge
     expect(open.has("20,3")).toBe(true); // devant la benne
     expect(open.has("29,14")).toBe(true); // devant le portail
@@ -145,8 +146,8 @@ describe("Sauvegarde RPG", () => {
 });
 
 describe("Sprites des personnages", () => {
-  it("5 personnages, 3 directions, 3 images, 16 × 20, couleurs connues", () => {
-    expect(CHAR_IDS).toEqual(["sparrow", "nico", "bouchon", "raymond", "inconnu"]);
+  it("tous les personnages : 3 directions, 3 images, 16 × 20, couleurs connues", () => {
+    expect(CHAR_IDS).toEqual(expect.arrayContaining(["sparrow", "nico", "bouchon", "raymond", "inconnu", "chevalier", "brocoli"]));
     for (const id of CHAR_IDS)
       for (const d of ["down", "up", "side"] as Dir[])
         for (const f of [0, 1, 2] as Frame[]) {

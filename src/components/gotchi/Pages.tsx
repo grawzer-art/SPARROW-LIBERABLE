@@ -7,6 +7,8 @@ import { ITEMS, MUSCLE_STAGES, TITLES, muscleStage, tierOf, titleFor, xpToNext, 
 import { LAYOUT, ROOMS, type RoomId } from "@/lib/gotchi/map";
 import { MINIGAMES, type GameId } from "@/lib/gotchi/minigames";
 import { missionDef } from "@/lib/gotchi/missions";
+import { CONSUMABLES, EQUIPMENT, MEMBERS, MOVES } from "@/lib/rpg/bestiary";
+import { makeAlly } from "@/lib/rpg/combat";
 import { QUESTS, RPG_ITEMS, isDone, nextStep, status } from "@/lib/rpg/quest";
 
 export type PageId = "quetes" | "jeux" | "missions" | "inventaire" | "appart" | "profil" | "equipe" | "options";
@@ -56,6 +58,8 @@ export interface PageHandlers {
   claim: (id: string) => void;
   buy: (id: string) => void;
   equip: (id: string) => void;
+  /** Équiper / retirer un équipement de combat. */
+  equipGear: (id: string) => void;
   goRoom: (r: RoomId) => void;
   toggleSound: () => void;
   exportSave: () => void;
@@ -77,7 +81,7 @@ interface Props {
 
 /** Pages du MENU, affichées dans l'écran de la console. */
 export function Page({ page, state, now, sound, room, outside, h, onClose }: Props) {
-  const [slot, setSlot] = useState<Slot | "objets">("objets");
+  const [slot, setSlot] = useState<Slot | "objets" | "combat">("objets");
   const [qtab, setQtab] = useState<"quetes" | "journal">("quetes");
   const [tab, setTab] = useState<"meubles" | "deco" | "plan">("plan");
   const [ptab, setPtab] = useState<"profil" | "trophees">("profil");
@@ -158,7 +162,7 @@ export function Page({ page, state, now, sound, room, outside, h, onClose }: Pro
             </div>
             {qtab === "quetes" ? (
               <>
-                {QUESTS.map((q) => {
+                {QUESTS.filter((q) => q.chapter === 1 || status(s.rpg, q.id) !== "disponible" || (q.id === "frites-perdues" && status(s.rpg, "ville-figee") === "terminee")).map((q) => {
                   const st = status(s.rpg, q.id);
                   const nx = nextStep(s.rpg, q.id);
                   return (
@@ -182,11 +186,19 @@ export function Page({ page, state, now, sound, room, outside, h, onClose }: Pro
                     </div>
                   );
                 })}
-                <div className="gb-card is-locked">
-                  <p className="gb-group__title">CHAPITRE 2 · VERROUILLÉ</p>
-                  <p className="gb-card__rank">Le Centre-ville</p>
-                  <p className="gb-row__meta">{status(s.rpg, "ville-figee") === "terminee" ? "La barrière s'est levée. La suite arrive bientôt." : "Termine « La Ville Figée » pour débloquer la suite."}</p>
-                </div>
+                {status(s.rpg, "ville-figee") !== "terminee" ? (
+                  <div className="gb-card is-locked">
+                    <p className="gb-group__title">CHAPITRE 2 · VERROUILLÉ</p>
+                    <p className="gb-card__rank">Le Centre-ville</p>
+                    <p className="gb-row__meta">Termine « La Ville Figée » pour débloquer la suite.</p>
+                  </div>
+                ) : (
+                  <div className="gb-card is-locked">
+                    <p className="gb-group__title">CHAPITRE 3 · VERROUILLÉ</p>
+                    <p className="gb-card__rank">La Confrérie du Muscle</p>
+                    <p className="gb-row__meta">{status(s.rpg, "frites-perdues") === "terminee" ? "Le prochain chapitre arrive bientôt." : "Termine « La Cité des Frites Perdues » pour débloquer la suite."}</p>
+                  </div>
+                )}
                 <p className="gb-note">Les quêtes racontent l&apos;aventure. Les missions du jour, elles, restent dans « Missions ».</p>
               </>
             ) : s.journal.length ? (
@@ -204,39 +216,57 @@ export function Page({ page, state, now, sound, room, outside, h, onClose }: Pro
 
         {page === "equipe" && (
           <>
-            <div className="gb-card">
-              <p className="gb-group__title">MEMBRE N°1</p>
-              <p className="gb-card__rank">Sparrow</p>
-              <p className="gb-row__meta">
-                Niv {s.level} · {titleFor(s.level)} · {MUSCLE_STAGES[muscleStage(s.muscle)][1]}
-              </p>
-              {(
-                [
-                  ["PV", 20 + s.level * 5, 120],
-                  ["ATTAQUE", 5 + muscleStage(s.muscle) * 6 + Math.floor(s.level / 2), 40],
-                  ["DÉFENSE", 4 + Math.round(s.stats.forme / 10), 20],
-                  ["VITESSE", 3 + Math.round(s.stats.energie / 10), 20],
-                  ["FRITE-NERGIE", Math.round(s.stats.satiete), 100],
-                ] as [string, number, number][]
-              ).map(([k, v, max]) => (
-                <div key={k} className="gb-gauge">
-                  <span>{k}</span>
-                  <div className="gb-bar gb-bar--red">
-                    <i style={{ transform: `scaleX(${Math.min(1, v / max)})` }} />
-                  </div>
-                  <b>{v}</b>
+            {["sparrow", ...s.rpg.party].map((id, n) => {
+              const m = MEMBERS[id];
+              if (!m) return null;
+              const f = makeAlly(id, { level: s.level, gear: s.rpg.gear, skills: s.rpg.skills });
+              return (
+                <div key={id} className="gb-card">
+                  <p className="gb-group__title">MEMBRE N°{n + 1}</p>
+                  <p className="gb-card__rank">{m.name}</p>
+                  <p className="gb-row__meta">
+                    Niv {f.lv}
+                    {id === "sparrow" ? ` · ${titleFor(s.level)} · ${MUSCLE_STAGES[muscleStage(s.muscle)][1]}` : ""}
+                  </p>
+                  <p className="gb-row__meta">{m.desc}</p>
+                  {(
+                    [
+                      ["PV", f.maxHp, 200],
+                      ["ATTAQUE", f.atk, 60],
+                      ["DÉFENSE", f.def, 60],
+                      ["VITESSE", f.spd, 60],
+                    ] as [string, number, number][]
+                  ).map(([k, v, max]) => (
+                    <div key={k} className="gb-gauge">
+                      <span>{k}</span>
+                      <div className="gb-bar gb-bar--red">
+                        <i style={{ transform: `scaleX(${Math.min(1, v / max)})` }} />
+                      </div>
+                      <b>{v}</b>
+                    </div>
+                  ))}
+                  <p className="gb-group__title">TECHNIQUES</p>
+                  {f.moves.map((mid) => {
+                    const mv = MOVES[mid];
+                    return (
+                      <p key={mid} className="gb-rank">
+                        ★ {mv.name}{" "}
+                        <small>
+                          · PUI {mv.power ? (mv.hits ? `${mv.power}×${mv.hits[0]}-${mv.hits[1]}` : mv.power) : "—"} · PRÉ {mv.acc} — {mv.desc}
+                        </small>
+                      </p>
+                    );
+                  })}
+                  {id === "sparrow" && (
+                    <p className="gb-row__meta">
+                      Équipement : {(["arme", "armure", "accessoire"] as const).map((sl) => (s.rpg.gear[sl] ? EQUIPMENT[s.rpg.gear[sl]!]?.name : "—")).join(" · ")}
+                    </p>
+                  )}
                 </div>
-              ))}
-            </div>
-            <div className="gb-card">
-              <p className="gb-group__title">TECHNIQUES (BIENTÔT)</p>
-              {["Frite enflammée", "Rage de lag", "Micro-sieste stratégique", "Regard du Chevalier Noir"].map((m) => (
-                <p key={m} className="gb-rank">
-                  ☆ {m}
-                </p>
-              ))}
-            </div>
-            <p className="gb-note">Les combats au tour par tour arrivent dans un prochain chapitre. D&apos;autres membres rejoindront peut-être l&apos;équipe…</p>
+              );
+            })}
+            {!s.rpg.party.length && <p className="gb-note">D&apos;autres membres rejoindront peut-être l&apos;équipe… La barrière du Centre-ville cache quelqu&apos;un.</p>}
+            <p className="gb-note">Les PV et les statistiques suivent le niveau de Sparrow. L&apos;équipe est soignée après chaque combat.</p>
           </>
         )}
 
@@ -295,25 +325,75 @@ export function Page({ page, state, now, sound, room, outside, h, onClose }: Pro
               <button type="button" role="tab" aria-selected={slot === "objets"} className={slot === "objets" ? "is-on" : ""} onClick={() => setSlot("objets")}>
                 Objets
               </button>
+              <button type="button" role="tab" aria-selected={slot === "combat"} className={slot === "combat" ? "is-on" : ""} onClick={() => setSlot("combat")}>
+                Combat
+              </button>
               {WEAR.map((w) => (
                 <button key={w.id} type="button" role="tab" aria-selected={slot === w.id} className={slot === w.id ? "is-on" : ""} onClick={() => setSlot(w.id)}>
                   {w.label}
                 </button>
               ))}
             </div>
-            {slot === "objets"
-              ? s.rpg.items.length
-                ? RPG_ITEMS.filter((it) => s.rpg.items.includes(it.id)).map((it) => (
-                    <div key={it.id} className="gb-row">
-                      <span className="gb-item">{it.icon}</span>
+            {slot === "objets" ? (
+              <>
+                {Object.entries(s.rpg.bag).filter(([k, n]) => n > 0 && CONSUMABLES[k]).length > 0 && <p className="gb-group__title">SAC (UTILISABLE EN COMBAT)</p>}
+                {Object.entries(s.rpg.bag)
+                  .filter(([k, n]) => n > 0 && CONSUMABLES[k])
+                  .map(([k, n]) => (
+                    <div key={k} className="gb-row">
+                      <span className="gb-item">✚</span>
                       <div className="gb-row__main">
-                        <p className="gb-row__title">{it.name}</p>
-                        <p className="gb-row__meta">{it.desc}</p>
+                        <p className="gb-row__title">
+                          {CONSUMABLES[k].name} ×{n}
+                        </p>
+                        <p className="gb-row__meta">{CONSUMABLES[k].desc}</p>
                       </div>
                     </div>
-                  ))
-                : <p className="gb-note">Aucun objet d&apos;aventure pour l&apos;instant. Sors explorer le quartier !</p>
-              : ITEMS.filter((it) => it.slot === slot).map((it) => itemRow(it.id))}
+                  ))}
+                {s.rpg.items.length > 0 && <p className="gb-group__title">OBJETS D&apos;AVENTURE</p>}
+                {s.rpg.items.length
+                  ? RPG_ITEMS.filter((it) => s.rpg.items.includes(it.id)).map((it) => (
+                      <div key={it.id} className="gb-row">
+                        <span className="gb-item">{it.icon}</span>
+                        <div className="gb-row__main">
+                          <p className="gb-row__title">{it.name}</p>
+                          <p className="gb-row__meta">{it.desc}</p>
+                        </div>
+                      </div>
+                    ))
+                  : !Object.keys(s.rpg.bag).length && <p className="gb-note">Aucun objet d&apos;aventure pour l&apos;instant. Sors explorer le quartier !</p>}
+              </>
+            ) : slot === "combat" ? (
+              <>
+                {s.rpg.owned.length ? (
+                  s.rpg.owned
+                    .filter((id) => EQUIPMENT[id])
+                    .map((id) => {
+                      const e = EQUIPMENT[id];
+                      const on = s.rpg.gear[e.slot] === id;
+                      return (
+                        <div key={id} className={`gb-row${on ? " is-on" : ""}`}>
+                          <span className="gb-item">{e.slot === "arme" ? "⚔" : e.slot === "armure" ? "⛨" : "◎"}</span>
+                          <div className="gb-row__main">
+                            <p className="gb-row__title">{e.name}</p>
+                            <p className="gb-row__meta">
+                              {e.slot.toUpperCase()} · {e.desc}
+                            </p>
+                          </div>
+                          <button type="button" className="gb-btn" onClick={() => h.equipGear(id)}>
+                            {on ? "RETIRER" : "ÉQUIPER"}
+                          </button>
+                        </div>
+                      );
+                    })
+                ) : (
+                  <p className="gb-note">Aucun équipement de combat. Les boutiques de la Cité des Frites Perdues en vendent.</p>
+                )}
+                <p className="gb-note">Une arme, une armure et un accessoire à la fois. L&apos;équipement s&apos;ajoute aux statistiques de Sparrow en combat.</p>
+              </>
+            ) : (
+              ITEMS.filter((it) => it.slot === slot).map((it) => itemRow(it.id))
+            )}
           </>
         )}
 
