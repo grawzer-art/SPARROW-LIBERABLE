@@ -672,14 +672,17 @@ export function BattleScreen({
     }
     const f = forced(bt);
     if (f) {
+      // Passe par la file d'événements : A (qui saute l'attente) lance aussi le tour préparé.
+      queue.current = [];
+      after.current = () => doTurn.current(f);
       setModeBoth("events");
-      waitT.current = setTimeout(() => doTurn.current(f), 300 * speed);
+      waitT.current = setTimeout(playNext, 300 * speed);
       return;
     }
     setCurBoth(0);
     setModeBoth("menu");
     say(`Que doit faire ${ally(bt).name} ?`);
-  }, [finish, say, speed]);
+  }, [finish, playNext, say, speed]);
 
   const doTurn = useRef<(a: Action) => void>(() => {});
   useEffect(() => {
