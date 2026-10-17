@@ -1029,7 +1029,7 @@ export function Gotchi() {
       o.talkTo(f.id, true);
       openConv(talkTo(f.id, s.rpg, o.map.id), { npc: f.id });
     } else if (f.kind === "door") onDoor(f.door);
-    else openConv(examine(f.thing.key, s.rpg, f.thing.text, o.map.id));
+    else if (f.kind === "thing") openConv(examine(f.thing.key, s.rpg, f.thing.text, o.map.id));
   };
 
   const openPage = (p: PageId) => {

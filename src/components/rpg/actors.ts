@@ -1276,4 +1276,10 @@ export function charSprite(id: string, dir: Dir, frame: Frame, flip: boolean, te
 }
 
 export const CHAR_IDS = Object.keys(DEFS) as CharId[];
+
+/** Personnage créé à la volée (héros de SPARROW ONLINE) : un identifiant par apparence. */
+export type CharDef = Def;
+export function registerChar(id: string, def: CharDef) {
+  if (!DEFS[id]) DEFS[id] = def;
+}
 export const charPalette = (id: CharId) => DEFS[id].pal;
