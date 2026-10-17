@@ -1,4 +1,4 @@
-# Moteur de combat — Sparrow, les Chroniques du Chaos
+# Moteur de combat — SPARROW : 23:59
 
 Moteur au tour par tour, pur et testé : `src/lib/rpg/combat.ts`. Les données sont dans `src/lib/rpg/bestiary.ts`. L'écran de combat est `src/components/rpg/BattleScreen.tsx`, et les sprites de combat sont dans `src/components/rpg/battlers.ts`.
 

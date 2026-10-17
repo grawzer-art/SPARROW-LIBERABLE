@@ -1,4 +1,4 @@
-# Chapitre 2 — La Cité des Frites Perdues
+# Chapitre 2 — La Cité des Frites Perdues (SPARROW : 23:59)
 
 Sparrow et le Chevalier Noir arrivent au Centre-ville. Le Roi de la Salade y a interdit les frites, et un fragment d'horloge brille dans sa couronne.
 

@@ -162,6 +162,9 @@ export function Page({ page, state, now, sound, room, outside, h, onClose }: Pro
             </div>
             {qtab === "quetes" ? (
               <>
+                <p className="gb-game-title">
+                  SPARROW : 23:59 <span>L&apos;Élu de la Minute</span>
+                </p>
                 {QUESTS.filter((q) => q.chapter === 1 || status(s.rpg, q.id) !== "disponible" || (q.id === "frites-perdues" && status(s.rpg, "ville-figee") === "terminee")).map((q) => {
                   const st = status(s.rpg, q.id);
                   const nx = nextStep(s.rpg, q.id);

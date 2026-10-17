@@ -410,6 +410,17 @@ export function zoneEffects(zone: string): Effect[] {
   return CH2.zoneEffects(zone);
 }
 
+/** Titre de l'aventure. */
+export const GAME_TITLE = "SPARROW : 23:59";
+export const GAME_SUBTITLE = "L'Élu de la Minute";
+
+/** Écran titre à l'ouverture d'un chapitre (première visite de sa carte). */
+export function openingCard(map: string, r: Rpg): string[] | null {
+  if (map === "quartier" && !d(r, "sortir")) return ["CHAPITRE 1 · LA VILLE FIGÉE", GAME_TITLE, GAME_SUBTITLE];
+  if (map === "cite" && !r.done.includes("frites-perdues:route")) return ["CHAPITRE 2 · LA CITÉ DES FRITES PERDUES", GAME_TITLE, GAME_SUBTITLE];
+  return null;
+}
+
 /** Carte de fin de chapitre (quêtes principales seulement). */
 export function chapterCard(quest: string): string[] | null {
   if (quest === Q) return ["CHAPITRE 1 TERMINÉ", "LA VILLE FIGÉE", "+120 XP · +150 FP", "Objet : Fragment d'horloge n°1", "La barrière du Centre-ville s'est levée…"];

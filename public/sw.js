@@ -3,7 +3,7 @@
  * Fichiers statiques : cache d'abord, mis à jour en arrière-plan.
  * Changer VERSION force la purge des anciens caches.
  */
-const VERSION = "sp2031-v15";
+const VERSION = "sp2031-v16";
 const PRECACHE = [
   "/",
   "/don",
