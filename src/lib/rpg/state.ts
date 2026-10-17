@@ -23,6 +23,8 @@ export interface Rpg {
   skills: string[];
   /** Créatures capturées (Bestiaire), par espèce : niveau, expérience, date de capture. */
   mons?: Record<string, MonSave>;
+  /** Niveau et expérience propres des compagnons (ils ne suivent plus Sparrow). */
+  levels?: Record<string, { level: number; xp: number }>;
 }
 
 export interface MonSave {
@@ -65,5 +67,9 @@ export function restoreRpg(raw: unknown): Rpg {
     for (const [k, v] of Object.entries(o.mons as Record<string, Partial<MonSave>>))
       if (v && typeof v.level === "number" && v.level >= 1)
         mons[k] = { level: Math.min(99, Math.floor(v.level)), xp: typeof v.xp === "number" && v.xp > 0 ? Math.floor(v.xp) : 0, caught: typeof v.caught === "number" ? v.caught : 0 };
-  return { quests, done: strs(o.done), items: strs(o.items), flags: strs(o.flags), seen: strs(o.seen), bag, party: strs(o.party), gear, owned, skills: strs(o.skills), ...(Object.keys(mons).length ? { mons } : {}) };
+  const levels: Record<string, { level: number; xp: number }> = {};
+  if (o.levels && typeof o.levels === "object")
+    for (const [k, v] of Object.entries(o.levels as Record<string, Partial<MonSave>>))
+      if (v && typeof v.level === "number" && v.level >= 1) levels[k] = { level: Math.min(99, Math.floor(v.level)), xp: typeof v.xp === "number" && v.xp > 0 ? Math.floor(v.xp) : 0 };
+  return { ...(Object.keys(levels).length ? { levels } : {}), quests, done: strs(o.done), items: strs(o.items), flags: strs(o.flags), seen: strs(o.seen), bag, party: strs(o.party), gear, owned, skills: strs(o.skills), ...(Object.keys(mons).length ? { mons } : {}) };
 }

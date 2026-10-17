@@ -94,6 +94,19 @@ export const MOVES: Record<string, Move> = {
   "coupe-seconde": { id: "coupe-seconde", name: "Coupe-seconde", desc: "", power: 130, acc: 90, target: "foe", charge: 1, effects: [{ kind: "status", status: "etourdi", chance: 25 }], fx: "sabre" },
   "minute-ultime": { id: "minute-ultime", name: "Minute ultime", desc: "", power: 75, acc: 95, target: "foe", priority: 1, fx: "sabre" },
   "regard-futur": { id: "regard-futur", name: "Regard du futur", desc: "", power: 0, acc: 100, target: "foe", effects: [{ kind: "stage", stat: "def", n: -2, who: "target" }], fx: "malus" },
+  // Techniques apprises en montant de niveau (elles remplacent une technique plus faible)
+  "frite-volcan": { id: "frite-volcan", name: "Frite volcan", desc: "Une frite en fusion. Brûle souvent.", power: 70, acc: 90, target: "foe", effects: [{ kind: "status", status: "brule", chance: 40 }], fx: "feu" },
+  "rage-ultime": { id: "rage-ultime", name: "Rage ultime", desc: "Toute la frustration d'une connexion qui lâche en finale. Se prépare un tour.", power: 145, acc: 90, target: "foe", charge: 1, fx: "charge" },
+  "lame-nuit": { id: "lame-nuit", name: "Lame de minuit", desc: "Une entaille plus noire que la nuit. Frappe en premier.", power: 55, acc: 100, target: "foe", priority: 1, fx: "ombre" },
+  "eclipse-totale": { id: "eclipse-totale", name: "Éclipse totale", desc: "La lumière disparaît, puis tout s'abat. Peut étourdir. Se prépare un tour.", power: 120, acc: 95, target: "foe", charge: 1, effects: [{ kind: "status", status: "etourdi", chance: 40 }], fx: "lame" },
+  "sel-guerande": { id: "sel-guerande", name: "Fleur de sel", desc: "Le sel des grands jours. Baisse souvent la défense.", power: 45, acc: 100, target: "foe", effects: [{ kind: "stage", stat: "def", n: -1, who: "target", chance: 60 }], fx: "sel" },
+  "frite-colossale": { id: "frite-colossale", name: "Frite colossale", desc: "Une frite de cinq mètres. Personne ne sait d'où elle sort. Se prépare un tour.", power: 135, acc: 90, target: "foe", charge: 1, fx: "frites" },
+  "dague-fantome": { id: "dague-fantome", name: "Dague fantôme", desc: "Lili frappe avant tout le monde, et on ne la voit même pas.", power: 52, acc: 100, target: "foe", priority: 1, fx: "dague" },
+  "coup-maitre": { id: "coup-maitre", name: "Coup de maître", desc: "Correct d'habitude, terrible sur un ennemi affaibli (sous 45 % de PV).", power: 50, acc: 95, target: "foe", effects: [{ kind: "execute", below: 0.45, mult: 2.6 }], fx: "lame" },
+  "drop-sismique": { id: "drop-sismique", name: "Drop sismique", desc: "Les basses fissurent le sol : 2 à 3 coups énormes.", power: 32, acc: 95, target: "foe", hits: [2, 3], fx: "son" },
+  "scratch-supreme": { id: "scratch-supreme", name: "Scratch suprême", desc: "Le scratch des finales. Étourdit souvent.", power: 60, acc: 95, target: "foe", effects: [{ kind: "status", status: "etourdi", chance: 35 }], fx: "son" },
+  "fouet-epineux": { id: "fouet-epineux", name: "Fouet épineux", desc: "Une tige couverte d'épines.", power: 60, acc: 100, target: "foe", fx: "feuille" },
+  "tempete-florets": { id: "tempete-florets", name: "Tempête de florets", desc: "Une rafale de florets : 2 à 4 coups.", power: 26, acc: 95, target: "foe", hits: [2, 4], fx: "feuille" },
   // Brokito (créature sauvage, capturable)
   "fouet-tige": { id: "fouet-tige", name: "Fouet-tige", desc: "Un coup de tige souple et vif.", power: 45, acc: 100, target: "foe", fx: "feuille" },
   "pluie-florets": { id: "pluie-florets", name: "Pluie de florets", desc: "Brokito secoue sa tête : 2 à 3 florets bien durs.", power: 20, acc: 95, target: "foe", hits: [2, 3], fx: "feuille" },
@@ -168,6 +181,10 @@ export interface Growth {
 export interface Member {
   id: string;
   name: string;
+  /** Techniques apprises au fil des niveaux : au niveau `lv`, `move` remplace `replaces`. */
+  learn?: { lv: number; replaces: string; move: string }[];
+  /** Évolution : au niveau `lv`, nouveau nom, nouveaux sprites et statistiques +12 %. */
+  evo?: { lv: number; name: string; sprite: string; front: string };
   /** Sprite de combat (components/rpg/battlers.ts). */
   sprite: string;
   /** Statistiques au niveau 1 et gain par niveau. */
@@ -183,6 +200,11 @@ export const MEMBERS: Record<string, Member> = {
     sprite: "brokito-dos",
     grow: { hp: [40, 5.4], atk: [11, 1.5], def: [11, 1.4], spd: [12, 1.5] },
     moves: ["fouet-tige", "pluie-florets", "racines", "graine-surprise"],
+    learn: [
+      { lv: 8, replaces: "fouet-tige", move: "fouet-epineux" },
+      { lv: 14, replaces: "pluie-florets", move: "tempete-florets" },
+    ],
+    evo: { lv: 14, name: "Brokolosse", sprite: "brokolosse-dos", front: "brokolosse" },
     desc: "Créature végétale des potagers. Têtu, joueur, il pousse plus vite quand on le complimente.",
   },
   sparrow: {
@@ -191,6 +213,10 @@ export const MEMBERS: Record<string, Member> = {
     sprite: "sparrow",
     grow: { hp: [46, 6], atk: [12, 1.6], def: [10, 1.3], spd: [11, 1.4] },
     moves: ["coup-manette", "frite-enflammee", "micro-sieste", "rage-lag"],
+    learn: [
+      { lv: 12, replaces: "frite-enflammee", move: "frite-volcan" },
+      { lv: 20, replaces: "rage-lag", move: "rage-ultime" },
+    ],
     desc: "Gamer de l'extrême, expert en sieste, Élu de la Minute malgré lui.",
   },
   chevalier: {
@@ -199,6 +225,10 @@ export const MEMBERS: Record<string, Member> = {
     sprite: "chevalier",
     grow: { hp: [50, 6], atk: [12, 1.5], def: [12, 1.6], spd: [9, 1.2] },
     moves: ["lame-ombre", "fumigene", "garde-silencieuse", "eclipse"],
+    learn: [
+      { lv: 10, replaces: "lame-ombre", move: "lame-nuit" },
+      { lv: 18, replaces: "eclipse", move: "eclipse-totale" },
+    ],
     desc: "Gardien de la route du Centre-ville. Solennel, dramatique, étonnamment gentil.",
   },
   pokeyz: {
@@ -207,6 +237,10 @@ export const MEMBERS: Record<string, Member> = {
     sprite: "pokeyz",
     grow: { hp: [44, 5.5], atk: [12, 1.5], def: [10, 1.3], spd: [13, 1.6] },
     moves: ["drop-basse", "scratch", "boucle-infinie", "remix"],
+    learn: [
+      { lv: 18, replaces: "drop-basse", move: "drop-sismique" },
+      { lv: 22, replaces: "scratch", move: "scratch-supreme" },
+    ],
     desc: "DJ, pote de Sparrow depuis toujours. Il transforme n'importe quel silence en soirée.",
   },
   lili: {
@@ -215,6 +249,10 @@ export const MEMBERS: Record<string, Member> = {
     sprite: "lili",
     grow: { hp: [40, 5], atk: [12, 1.6], def: [8, 1.1], spd: [14, 1.8] },
     moves: ["dague-eclair", "vol-tire", "poudre-violette", "coup-grace"],
+    learn: [
+      { lv: 12, replaces: "dague-eclair", move: "dague-fantome" },
+      { lv: 18, replaces: "coup-grace", move: "coup-maitre" },
+    ],
     desc: "Voleuse professionnelle, acrobate amateur. Elle a une dent contre le Cadran.",
   },
   gerard: {
@@ -223,6 +261,10 @@ export const MEMBERS: Record<string, Member> = {
     sprite: "gerard",
     grow: { hp: [44, 5.5], atk: [11, 1.5], def: [9, 1.2], spd: [12, 1.5] },
     moves: ["sel-mer", "cornet-soin", "huile-bouillante", "frite-geante"],
+    learn: [
+      { lv: 10, replaces: "sel-mer", move: "sel-guerande" },
+      { lv: 18, replaces: "frite-geante", move: "frite-colossale" },
+    ],
     desc: "Dernier friturier libre de la Cité. Croustillant dehors, tendre dedans.",
   },
 };
@@ -339,7 +381,7 @@ export const FOES: Record<string, Foe> = {
       },
     ],
   },
-  brokito: { id: "brokito", name: "Brokito sauvage", sprite: "brokito", lv: [3, 16], hp: 62, atk: 13, def: 12, spd: 13, moves: ["fouet-tige", "pluie-florets", "racines", "graine-surprise"] },
+  brokito: { id: "brokito", name: "Brokito sauvage", sprite: "brokito", lv: [4, 16], hp: 62, atk: 13, def: 12, spd: 13, moves: ["fouet-tige", "pluie-florets", "racines", "graine-surprise"] },
   trotteuse: { id: "trotteuse", name: "Trotteuse", sprite: "trotteuse", lv: [14, 22], hp: 125, atk: 28, def: 22, spd: 22, moves: ["pique-aiguille", "tic-rapide", "remontage"] },
   coucou: { id: "coucou", name: "Coucou mécanique", sprite: "coucou", lv: [14, 22], hp: 115, atk: 29, def: 20, spd: 18, moves: ["bec-ressort", "coucou-strident", "heure-pile"] },
   "grand-sablier": {
@@ -369,9 +411,9 @@ export const FOES: Record<string, Foe> = {
     name: "Monsieur Minuit",
     sprite: "minuit",
     lv: [17, 25],
-    hp: 420,
-    atk: 30,
-    def: 25,
+    hp: 470,
+    atk: 32,
+    def: 26,
     spd: 22,
     boss: true,
     moves: ["canne-onyx", "minute-volee", "costume-impeccable", "seconde-figee"],

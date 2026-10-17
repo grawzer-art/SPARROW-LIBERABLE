@@ -808,16 +808,24 @@ function minuit(forme: 0 | 1 | 2): Raster {
 // ─── Créatures sauvages ───
 
 /** Brokito : petite créature-brocoli, couronne de florets, bras-feuilles, pattes trapues. */
-function brokito(dos: boolean): Raster {
+function brokito(dos: boolean, evo = false): Raster {
   const r = new Raster(48, 48);
-  const G = "#5f9e4a";
-  const GL = "#8cc66a";
-  const GD = "#3f7a32";
+  // Brokolosse (évolution) : vert plus profond, couronne plus haute, regard décidé
+  const G = evo ? "#3f8a3a" : "#5f9e4a";
+  const GL = evo ? "#6ab85a" : "#8cc66a";
+  const GD = evo ? "#2a5e26" : "#3f7a32";
+  if (evo)
+    for (const [x, y, rad] of [
+      [8, 12, 5],
+      [40, 12, 5],
+      [24, 4, 6],
+    ] as [number, number, number][])
+      r.ball(x, y, rad, rad - 0.5, G, GL, GD);
   // Pattes et ombre
   r.ball(17, 43, 4, 3, GD, G, "#2e5a26");
   r.ball(31, 43, 4, 3, GD, G, "#2e5a26");
   // Corps (tige épaisse, vert clair)
-  r.ball(24, 33, 12, 10, "#a8d878", "#c8ec98", "#7fb058");
+  r.ball(24, 33, evo ? 13 : 12, 10, evo ? "#8cc65e" : "#a8d878", evo ? "#a8dc78" : "#c8ec98", evo ? "#6a9e46" : "#7fb058");
   // Bras-feuilles
   r.ball(9, 31, 5, 3, G, GL, GD);
   r.ball(39, 31, 5, 3, G, GL, GD);
@@ -854,6 +862,10 @@ function brokito(dos: boolean): Raster {
     }
     r.rect(15, 32, 3, 2, "#e88a8a");
     r.rect(31, 32, 3, 2, "#e88a8a");
+    if (evo) {
+      r.rect(16, 24, 6, 2, INK);
+      r.rect(27, 24, 6, 2, INK);
+    }
     r.rect(22, 34, 5, 1, INK);
     r.set(21, 33, INK);
     r.set(27, 33, INK);
@@ -861,10 +873,15 @@ function brokito(dos: boolean): Raster {
     // De dos : une petite feuille-queue
     r.ball(24, 40, 3, 2, G, GL, GD);
   }
-  // Pousse au sommet du crâne
-  r.line(24, 1, 24, 4, GD);
-  r.ball(21.5, 2, 2, 1.2, GL);
-  r.ball(26.5, 2, 2, 1.2, GL);
+  // Pousse au sommet du crâne (fleur dorée une fois évolué)
+  if (evo) {
+    r.ball(24, 2, 3, 2.2, "#e8b830", "#f8dc70", "#a87a18");
+    r.set(24, 2, "#c62828");
+  } else {
+    r.line(24, 1, 24, 4, GD);
+    r.ball(21.5, 2, 2, 1.2, GL);
+    r.ball(26.5, 2, 2, 1.2, GL);
+  }
   r.outline(INK);
   return r;
 }
@@ -872,6 +889,8 @@ function brokito(dos: boolean): Raster {
 const PAINT: Record<string, (tenue?: string) => Raster> = {
   brokito: () => brokito(false),
   "brokito-dos": () => brokito(true),
+  brokolosse: () => brokito(false, true),
+  "brokolosse-dos": () => brokito(true, true),
   trotteuse,
   coucou,
   sablier: () => sablier(false),

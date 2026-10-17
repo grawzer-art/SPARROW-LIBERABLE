@@ -37,7 +37,7 @@ import { MINIGAMES, type GameId } from "@/lib/gotchi/minigames";
 import { solidAt, type Dest, type MapId, type Warp, type Zone } from "@/lib/rpg/mapdef";
 import { mapOf, restoreWhere } from "@/lib/rpg/maps";
 import { CREDITS, FINAL_QUEST } from "@/lib/rpg/ch5";
-import { addCaught, isSeen, monsGainXp, seenKey, toggleTeam } from "@/lib/rpg/monsters";
+import { addCaught, fixLevels, isSeen, ownLevels, seenKey, teamGainXp, toggleTeam } from "@/lib/rpg/monsters";
 import { BATTLES, MEMBERS } from "@/lib/rpg/bestiary";
 import { SPAWN } from "@/lib/rpg/quartier";
 import { applyEffects, status, type Effect } from "@/lib/rpg/quest";
@@ -564,7 +564,7 @@ export function Gotchi() {
           );
       }
       if (res.outcome === "win") {
-        const g = monsGainXp(rpg, res.xp);
+        const g = teamGainXp(rpg, res.xp, res.fought ?? []);
         rpg = g.rpg;
         monNotes.push(...g.ups);
       }
@@ -691,6 +691,8 @@ export function Gotchi() {
     const before = raw ? restore(raw, t) : newState(t);
     const back = raw ? catchUp(before, t) : null;
     let after = back ? back.state : ensureMissions(tick(before, t), t);
+    // Compagnons sans niveau propre (sauvegardes d'avant) : ils gardent le niveau de Sparrow
+    after = { ...after, rpg: fixLevels(after.rpg, after.level) };
     // Reprise : dehors ou dans l'appart
     const outside = restoreWhere(load<unknown>(WHERE_KEY, null), after.rpg);
     if (outside) {
@@ -1468,7 +1470,7 @@ export function Gotchi() {
             <BattleScreen
               key={fight.id}
               id={fight.id}
-              team={{ level: state.level, party: state.rpg.party, gear: state.rpg.gear, skills: state.rpg.skills, bag: state.rpg.bag, titanTurns: muscleStage(state.muscle) >= 4 ? 4 : 3, mons: state.rpg.mons }}
+              team={{ level: state.level, party: state.rpg.party, gear: state.rpg.gear, skills: state.rpg.skills, bag: state.rpg.bag, titanTurns: muscleStage(state.muscle) >= 4 ? 4 : 3, mons: ownLevels(state.rpg) }}
               tenue={state.equip.tenue}
               audio={audio.current}
               reduced={reduced.current}

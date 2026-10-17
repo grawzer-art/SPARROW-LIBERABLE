@@ -68,11 +68,12 @@ export interface Team {
 const stat = (g: [number, number], lv: number) => Math.round(g[0] + g[1] * (lv - 1));
 const noStages = (): Record<Stat, number> => ({ atk: 0, def: 0, spd: 0, acc: 0 });
 
-/** Techniques d'un équipier (les techniques apprises remplacent celles de base). */
-export function movesOf(member: string, skills: string[]): string[] {
+/** Techniques d'un équipier (les techniques apprises remplacent celles de base, puis celles des niveaux). */
+export function movesOf(member: string, skills: string[], lv = 1): string[] {
   const m = MEMBERS[member];
   if (!m) return [];
   let moves = [...m.moves];
+  for (const l of m.learn ?? []) if (lv >= l.lv) moves = moves.map((x) => (x === l.replaces ? l.move : x));
   for (const s of skills) {
     const k = SKILLS[s];
     if (k && k.member === member) moves = moves.map((x) => (x === k.replaces ? k.move : x));
@@ -95,19 +96,21 @@ export function makeAlly(id: string, t: Pick<Team, "level" | "gear" | "skills" |
   const m = MEMBERS[id];
   const lv = Math.max(1, Math.min(99, Math.floor(t.mons?.[id]?.level ?? t.level)));
   const b = id === "sparrow" ? gearBonus(t.gear) : { hp: 0, atk: 0, def: 0, spd: 0 };
-  const maxHp = stat(m.grow.hp, lv) + b.hp;
+  const evo = m.evo && lv >= m.evo.lv ? m.evo : null;
+  const k = evo ? 1.12 : 1;
+  const maxHp = Math.round(stat(m.grow.hp, lv) * k) + b.hp;
   return {
     id,
-    name: m.name,
-    sprite: m.sprite,
+    name: evo?.name ?? m.name,
+    sprite: evo?.sprite ?? m.sprite,
     side: "ally",
     lv,
     hp: maxHp,
     maxHp,
-    atk: stat(m.grow.atk, lv) + b.atk,
-    def: stat(m.grow.def, lv) + b.def,
-    spd: stat(m.grow.spd, lv) + b.spd,
-    moves: movesOf(id, t.skills),
+    atk: Math.round(stat(m.grow.atk, lv) * k) + b.atk,
+    def: Math.round(stat(m.grow.def, lv) * k) + b.def,
+    spd: Math.round(stat(m.grow.spd, lv) * k) + b.spd,
+    moves: movesOf(id, t.skills, lv),
     stages: noStages(),
     status: null,
     charging: null,
@@ -116,12 +119,16 @@ export function makeAlly(id: string, t: Pick<Team, "level" | "gear" | "skills" |
   };
 }
 
-/** Niveau d'un ennemi : il suit Sparrow entre ses bornes. */
-export const foeLevel = (f: Foe, level: number) => Math.max(f.lv[0], Math.min(f.lv[1], level));
+/**
+ * Niveau d'un ennemi : fixé par sa zone (barème du jeu), il ne suit plus Sparrow.
+ * Un ennemi ordinaire a 0 ou +1 niveau de variation ; un boss a toujours son niveau +1.
+ * S'entraîner rend donc vraiment plus fort.
+ */
+export const foeLevel = (f: Foe, roll = 0) => (f.boss ? f.lv[0] + 1 : f.lv[0] + (roll < 0.5 ? 0 : 1));
 
-export function makeFoe(id: string, level: number): Fighter {
+export function makeFoe(id: string, roll = 0): Fighter {
   const f = FOES[id];
-  const lv = foeLevel(f, level);
+  const lv = foeLevel(f, roll);
   const k = 1 + 0.07 * (lv - f.lv[0]);
   const maxHp = Math.round(f.hp * k);
   return {
@@ -170,6 +177,8 @@ export interface Battle {
   stolen: Record<string, number>;
   /** Créature capturée pendant ce combat (espèce et niveau). */
   captured?: { species: string; level: number };
+  /** Équipiers qui sont entrés au combat (eux seuls gagnent de l'expérience). */
+  fought: string[];
 }
 
 export type Action = { kind: "transform"; form?: FormId } | { kind: "move"; move: string } | { kind: "item"; item: string; target?: number } | { kind: "swap"; to: number } | { kind: "flee" };
@@ -198,7 +207,7 @@ export function startBattle(id: string, team: Team, seed = Date.now()): Battle {
   return {
     def,
     allies: members.map((m) => makeAlly(m, team)),
-    foes: def.foes.map((f) => makeFoe(f, team.level)),
+    foes: def.foes.map((f, i) => makeFoe(f, def.tutorial ? 0 : rng((seed ^ (i * 0x9e3779b9)) >>> 0)())),
     a: 0,
     f: 0,
     bag: { ...team.bag },
@@ -209,6 +218,7 @@ export function startBattle(id: string, team: Team, seed = Date.now()): Battle {
     used: {},
     titan: { can: team.skills.includes("titan"), samourai: team.skills.includes("samourai"), used: false, turns: Math.max(1, team.titanTurns ?? 3) },
     stolen: {},
+    fought: ["sparrow"],
   };
 }
 
@@ -220,6 +230,7 @@ const clone = (b: Battle): Battle => ({
   used: { ...b.used },
   titan: { ...b.titan },
   stolen: { ...b.stolen },
+  fought: [...b.fought],
 });
 
 export const ally = (b: Battle) => b.allies[b.a];
@@ -309,6 +320,7 @@ export function playTurn(b0: Battle, action: Action): { battle: Battle; events: 
   if (mustSwap(b)) {
     if (action.kind === "swap" && b.allies[action.to]?.hp > 0) {
       b.a = action.to;
+      if (!b.fought.includes(ally(b).id)) b.fought.push(ally(b).id);
       ev.push({ kind: "enter", side: "ally", index: b.a }, { kind: "text", text: `À toi, ${ally(b).name} !` });
     }
     return { battle: b, events: ev };
@@ -392,6 +404,7 @@ function doAlly(b: Battle, a: Action, ev: BattleEvent[], r: () => number) {
     revert(me, ev, true);
     ev.push({ kind: "text", text: `${me.name}, reviens !` });
     b.a = a.to;
+    if (!b.fought.includes(to.id)) b.fought.push(to.id);
     ev.push({ kind: "enter", side: "ally", index: b.a }, { kind: "text", text: `À toi, ${to.name} !` });
     return;
   }

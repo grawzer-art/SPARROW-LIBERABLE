@@ -29,6 +29,8 @@ export interface BattleEnd {
   outcome: "win" | "lose" | "flee";
   /** Créature capturée (rencontre sauvage). */
   captured?: { species: string; level: number };
+  /** Équipiers entrés au combat (eux seuls gagnent de l'expérience). */
+  fought?: string[];
   xp: number;
   fp: number;
   bag: Record<string, number>;
@@ -107,6 +109,12 @@ function drawCapsule(ctx: CanvasRenderingContext2D, cx: number, cy: number, k: n
   f("#1b1626", -2, -2, 4, 4);
   f("#e8b830", -1, -1, 2, 2);
 }
+
+/** Objets utilisables dans ce combat (les capsules seulement face à une créature sauvage, en tête de liste). */
+const usable = (b: Battle) =>
+  Object.entries(b.bag)
+    .filter(([k, n]) => n > 0 && CONSUMABLES[k] && (!CONSUMABLES[k].capture || b.def.wild))
+    .sort(([a], [c]) => Number(!!CONSUMABLES[c].capture) - Number(!!CONSUMABLES[a].capture));
 
 const freshDisp = (b: Battle): Disp => ({
   a: b.a,
@@ -745,7 +753,7 @@ export function BattleScreen({
       audio.win();
       play(lines, () => {
         setModeBoth("done");
-        onEnd({ outcome: "win", captured: bt.captured, xp: sp.xp, fp: bt.captured ? 0 : sp.fp, bag: bagAfter(bt.bag, { ...sp, drops: { ...(bt.def.drops ?? {}) }, used: {} }), notes: [] });
+        onEnd({ outcome: "win", captured: bt.captured, fought: bt.fought, xp: sp.xp, fp: bt.captured ? 0 : sp.fp, bag: bagAfter(bt.bag, { ...sp, drops: { ...(bt.def.drops ?? {}) }, used: {} }), notes: [] });
       });
     } else if (bt.over === "lose") {
       audio.music(null);
@@ -1043,7 +1051,7 @@ export function BattleScreen({
 
   // ─── Choix du joueur ───
 
-  const items = Object.entries(b.bag).filter(([k, n]) => n > 0 && CONSUMABLES[k]);
+  const items = usable(b);
   const me = ally(b);
 
   const choose = useCallback((m: Mode, i: number) => {
@@ -1068,7 +1076,7 @@ export function BattleScreen({
       const id = ally(bt).moves[i];
       if (id) doTurn.current({ kind: "move", move: id });
     } else if (m === "items") {
-      const list = Object.entries(bt.bag).filter(([k, n]) => n > 0 && CONSUMABLES[k]);
+      const list = usable(bt);
       const it = list[i];
       if (!it) return;
       const c = CONSUMABLES[it[0]];
@@ -1149,8 +1157,13 @@ export function BattleScreen({
           else x = (c + 2) % 4;
           if (x < n || (x >= 4 && x <= last)) setCurBoth(x);
           audio.select();
-        } else if (m === "items" || m === "party" || m === "lost") {
-          const n = m === "items" ? Object.entries(bRef.current.bag).filter(([k, v]) => v > 0 && CONSUMABLES[k]).length : m === "party" ? bRef.current.allies.length : 2;
+        } else if (m === "items") {
+          const n = usable(bRef.current).length;
+          if (!n) return;
+          setCurBoth(dd === "up" || dd === "left" ? (c - 1 + n) % n : (c + 1) % n);
+          audio.select();
+        } else if (m === "party" || m === "lost") {
+          const n = m === "party" ? bRef.current.allies.length : 2;
           if (!n) return;
           if (dd === "up" || dd === "left") setCurBoth((c - 1 + n) % n);
           else setCurBoth((c + 1) % n);
@@ -1272,15 +1285,21 @@ export function BattleScreen({
           </div>
         )}
         {mode === "items" && (
-          <div className="bt-list">
-            {items.map(([k, n], i) => (
-              <button key={k} type="button" className={cur === i ? "is-on" : ""} onClick={() => choose("items", i)}>
-                <span className="gb-cursor">{cur === i ? "▶" : ""}</span>
-                <span className="bt-list__name">{CONSUMABLES[k].name}</span>
-                <b>×{n}</b>
-                {cur === i && <small>{CONSUMABLES[k].desc}</small>}
-              </button>
-            ))}
+          <div className="bt-moves">
+            {items.length ? (
+              <div className="bt-grid bt-grid--items">
+                {items.map(([k, n], i) => (
+                  <button key={k} type="button" className={`${cur === i ? "is-on" : ""}${CONSUMABLES[k].capture ? " is-capture" : ""}`} onClick={() => choose("items", i)} ref={cur === i ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}>
+                    <span className="gb-cursor">{cur === i ? "▶" : ""}</span>
+                    <span className="bt-list__name">{CONSUMABLES[k].name}</span>
+                    <b>×{n}</b>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="bt-info">Le sac est vide.</p>
+            )}
+            {items[cur] && <p className="bt-info">{CONSUMABLES[items[cur][0]].desc}</p>}
             <button type="button" className="bt-back" onClick={back}>
               B : retour
             </button>

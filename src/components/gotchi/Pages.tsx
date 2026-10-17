@@ -9,7 +9,7 @@ import { MINIGAMES, type GameId } from "@/lib/gotchi/minigames";
 import { missionDef } from "@/lib/gotchi/missions";
 import { CONSUMABLES, EQUIPMENT, MEMBERS, MOVES } from "@/lib/rpg/bestiary";
 import { makeAlly } from "@/lib/rpg/combat";
-import { ACTIVE, SPECIES, isSeen, xpNeed } from "@/lib/rpg/monsters";
+import { ACTIVE, SPECIES, isSeen, ownLevels, xpNeed } from "@/lib/rpg/monsters";
 import { battler } from "@/components/rpg/battlers";
 import { QUESTS, RPG_ITEMS, isDone, nextStep, status } from "@/lib/rpg/quest";
 
@@ -245,7 +245,7 @@ export function Page({ page, state, now, sound, room, outside, h, onClose }: Pro
             {["sparrow", ...s.rpg.party].map((id, n) => {
               const m = MEMBERS[id];
               if (!m) return null;
-              const f = makeAlly(id, { level: s.level, gear: s.rpg.gear, skills: s.rpg.skills, mons: s.rpg.mons });
+              const f = makeAlly(id, { level: s.level, gear: s.rpg.gear, skills: s.rpg.skills, mons: ownLevels(s.rpg) });
               return (
                 <div key={id} className="gb-card">
                   <p className="gb-group__title">
@@ -256,8 +256,9 @@ export function Page({ page, state, now, sound, room, outside, h, onClose }: Pro
                   <p className="gb-card__rank">{m.name}</p>
                   <p className="gb-row__meta">
                     Niv {f.lv}
-                    {id === "sparrow" ? ` · ${titleFor(s.level)} · ${MUSCLE_STAGES[muscleStage(s.muscle)][1]}` : ""}
+                    {id === "sparrow" ? ` · ${titleFor(s.level)} · ${MUSCLE_STAGES[muscleStage(s.muscle)][1]}` : ` · XP ${(s.rpg.mons?.[id] ?? s.rpg.levels?.[id])?.xp ?? 0}/${xpNeed(f.lv)}`}
                   </p>
+                  {f.name !== m.name && <p className="gb-row__meta">Évolué : {f.name}</p>}
                   <p className="gb-row__meta">{m.desc}</p>
                   {(
                     [
@@ -296,7 +297,7 @@ export function Page({ page, state, now, sound, room, outside, h, onClose }: Pro
               );
             })}
             {!s.rpg.party.length && <p className="gb-note">D&apos;autres membres rejoindront peut-être l&apos;équipe… La barrière du Centre-ville cache quelqu&apos;un.</p>}
-            <p className="gb-note">Les PV et les statistiques suivent le niveau de Sparrow. L&apos;équipe est soignée après chaque combat.</p>
+            <p className="gb-note">Chaque membre a son propre niveau : seuls ceux qui entrent au combat gagnent de l&apos;expérience. De nouvelles techniques s&apos;apprennent en montant de niveau. L&apos;équipe est soignée après chaque combat.</p>
           </>
         )}
 
@@ -319,7 +320,7 @@ export function Page({ page, state, now, sound, room, outside, h, onClose }: Pro
                     <p className="gb-row__meta">{isSeen(s.rpg, sp.id) ? `Habitat : ${sp.habitat}. Affaiblis-le, puis lance une Capsule d'Écho.` : "Une créature rôde quelque part, dans les herbes hautes…"}</p>
                   </div>
                 );
-              const f = makeAlly(sp.id, { level: s.level, gear: {}, skills: [], mons: s.rpg.mons });
+              const f = makeAlly(sp.id, { level: s.level, gear: {}, skills: [], mons: ownLevels(s.rpg) });
               const active = s.rpg.party.slice(0, ACTIVE).includes(sp.id);
               return (
                 <div key={sp.id} className="gb-card">
@@ -327,9 +328,10 @@ export function Page({ page, state, now, sound, room, outside, h, onClose }: Pro
                     {num} · {sp.type.toUpperCase()} · {active ? "DANS L'ÉQUIPE" : "AU BESTIAIRE"}
                   </p>
                   <div className="gb-mon">
-                    <img className="gb-mon__img" src={battler(sp.sprite).toDataURL()} alt="" width={96} height={96} />
+                    <img className="gb-mon__img" src={battler(m.evo && mon.level >= m.evo.lv ? m.evo.front : sp.sprite).toDataURL()} alt="" width={96} height={96} />
                     <div>
-                      <p className="gb-card__rank">{m.name}</p>
+                      <p className="gb-card__rank">{f.name}</p>
+                      {m.evo && mon.level < m.evo.lv && <p className="gb-row__meta">Évolue au niveau {m.evo.lv}.</p>}
                       <p className="gb-row__meta">
                         Niv {mon.level} · XP {mon.xp}/{xpNeed(mon.level)}
                       </p>
