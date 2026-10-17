@@ -1372,6 +1372,27 @@
   background: rgba(229, 57, 53, 0.12);
 }
 
+.bt-grid--items {
+  grid-template-columns: 1fr;
+  max-height: 84px;
+  overflow-y: auto;
+}
+
+.bt-grid--items button {
+  min-height: 26px;
+  font-size: 11px;
+}
+
+.bt-grid--items button b {
+  margin-left: auto;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.bt-grid--items button.is-capture .bt-list__name {
+  color: #6a3ab8;
+}
+
 .bt-info {
   margin: 4px 0 0;
   padding-top: 4px;

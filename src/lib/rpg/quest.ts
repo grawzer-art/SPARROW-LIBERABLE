@@ -250,7 +250,8 @@ export function applyEffects(s0: State, effects: Effect[], now: number): Applied
     else if (e.kind === "unflag") r = { ...r, flags: r.flags.filter((f) => f !== e.id) };
     else if (e.kind === "seen" && !r.seen.includes(e.id)) r = { ...r, seen: [...r.seen, e.id] };
     else if (e.kind === "join" && MEMBERS[e.id] && !r.party.includes(e.id)) {
-      r = { ...r, party: [...r.party, e.id] };
+      // Il arrive au niveau de Sparrow, puis progresse à son rythme
+      r = { ...r, party: [...r.party, e.id], levels: r.levels?.[e.id] ? r.levels : { ...(r.levels ?? {}), [e.id]: { level: s0.level, xp: 0 } } };
       notes.push(`${MEMBERS[e.id].name} rejoint l'équipe !`);
     } else if (e.kind === "bag" && CONSUMABLES[e.id] && e.n > 0) {
       r = { ...r, bag: { ...r.bag, [e.id]: Math.min(99, (r.bag[e.id] ?? 0) + e.n) } };

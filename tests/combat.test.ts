@@ -153,10 +153,12 @@ describe("Équilibrage (simulation d'un joueur raisonnable)", () => {
     expect(prepared.turns).toBeGreaterThanOrEqual(8);
     expect(bare.rate).toBeLessThan(prepared.rate + 0.0001);
   });
-  it("un joueur de haut niveau garde un combat (niveau ennemi qui suit)", () => {
-    const s = stats("roi-salade", T(30, ["chevalier", "gerard"]));
-    expect(s.rate).toBeGreaterThan(0.95);
-    expect(s.turns).toBeGreaterThanOrEqual(3);
+  it("barème : l'ennemi garde le niveau de sa zone, s'entraîner rend plus fort", () => {
+    const low = stats("roi-salade", T(6, ["chevalier", "gerard"]));
+    const high = stats("roi-salade", T(14, ["chevalier", "gerard"]));
+    expect(high.rate).toBeGreaterThanOrEqual(low.rate);
+    expect(high.turns).toBeLessThan(low.turns);
+    expect(startBattle("roi-salade", T(30, []), 1).foes[0].lv).toBe(FOES["roi-salade"].lv[0] + 1);
   });
 });
 
