@@ -148,6 +148,8 @@ class SupabaseNet implements OnlineNet {
       }
     };
     // Chercher une instance avec de la place (20 joueurs par instance)
+    // Le serveur temps réel peut refuser la première connexion (réveil) : on réessaie un peu
+    let retries = 0;
     for (let instance = 1; instance <= 20; instance++) {
       const ch: RealtimeChannel = this.sb.channel(`online:${ROOM}:${instance}`, { config: { private: true, presence: { key: me.id }, broadcast: { self: false } } });
       const last = new Map<string, Move>();
@@ -183,6 +185,13 @@ class SupabaseNet implements OnlineNet {
       });
       if (!ok) {
         await this.sb.removeChannel(ch);
+        if (retries < 3) {
+          retries++;
+          await new Promise((r) => setTimeout(r, 1500 * retries));
+          await this.sb.realtime.setAuth();
+          instance--;
+          continue;
+        }
         throw new Error("Connexion au quartier impossible. Réessaie dans un instant.");
       }
       // Laisser arriver la présence, puis vérifier qu'il reste de la place
