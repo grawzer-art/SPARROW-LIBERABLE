@@ -91,6 +91,19 @@ export function GameHub() {
           </div>
           <span className="btn btn--primary hub-card__cta">▶ Jouer</span>
         </a>
+
+        <a href="/jeu/online" className="hub-card hub-card--gotchi">
+          <span className="hub-card__new mono">BÊTA</span>
+          <div className="hub-card__art hub-card__art--egg" aria-hidden="true">
+            <GotchiFace />
+          </div>
+          <div className="hub-card__txt">
+            <span className="mono hub-card__tag">JEU 03 · MULTIJOUEUR · SUR INVITATION</span>
+            <h2 className="hub-card__title">SPARROW ONLINE</h2>
+            <p className="mono hub-card__desc">Crée ton héros en pixel art et retrouve les autres joueurs au Quartier 404 : déplacements en temps réel, chat, et Sparrow en personne.</p>
+          </div>
+          <span className="btn btn--primary hub-card__cta">▶ Entrer</span>
+        </a>
       </main>
     </div>
   );

@@ -9,11 +9,12 @@ begin
   if cond is distinct from true then raise exception 'ÉCHEC : %', label; end if;
   raise notice 'ok — %', label;
 end $$;
-create function t.fails(q text, label text) returns void language plpgsql as $$
+create function t.fails(q text, label text, expect text default null) returns void language plpgsql as $$
 begin
   begin
     execute q;
   exception when others then
+    if expect is not null and position(expect in sqlerrm) = 0 then raise exception 'ÉCHEC : % refusé pour une autre raison : %', label, sqlerrm; end if;
     raise notice 'ok — % (refusé : %)', label, sqlerrm;
     return;
   end;
@@ -93,12 +94,13 @@ select public.send_message('quartier-404', 'Deuxième message');
 commit;
 
 -- Rafale : 8 messages dans les 30 dernières secondes → le 9ᵉ est refusé
+update public.chat_messages set created_at = created_at - interval '2 seconds';
 insert into public.chat_messages (room, author, pseudo, body, created_at)
   select 'quartier-404', '11111111-1111-1111-1111-111111111111', 'Alice', 'rafale ' || g, now() - (g || ' seconds')::interval - interval '3 seconds' from generate_series(1, 7) g;
 begin;
 set local role authenticated;
 set local request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
-select t.fails($$select public.send_message('quartier-404', 'un de trop')$$, 'anti-spam : 8 messages par 30 s');
+select t.fails($$select public.send_message('quartier-404', 'un de trop')$$, 'anti-spam : 8 messages par 30 s', 'trop de messages');
 commit;
 
 -- ─── Blocage et signalement ───

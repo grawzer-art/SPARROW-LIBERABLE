@@ -29,7 +29,7 @@ import {
 } from "@/lib/rpg/mapdef";
 import type { Rpg } from "@/lib/rpg/state";
 import { charSprite, type Dir, type Frame } from "./actors";
-import { lightSprite, pixelText } from "./pixel";
+import { lightSprite, pixelText, textWidth } from "./pixel";
 import { LIVE_KINDS, drawLive, drawMuck } from "./tiles2";
 import { buildLayers, drawBarrier, drawClockFace, drawCore, drawFountainWater, drawGate, drawWater, propOf, type Layers, type Light } from "./tiles";
 
@@ -62,7 +62,19 @@ interface Npc {
   approach: (() => void) | null;
 }
 
-export type Interaction = { kind: "npc"; id: string } | { kind: "thing"; thing: Thing } | { kind: "door"; door: Warp } | null;
+export type Interaction = { kind: "npc"; id: string } | { kind: "thing"; thing: Thing } | { kind: "door"; door: Warp } | { kind: "player"; id: string } | null;
+
+/** Autre joueur (SPARROW ONLINE) : position affichée en pixels, case occupée, pseudo. */
+export interface OtherActor {
+  id: string;
+  char: string;
+  name: string;
+  px: number;
+  py: number;
+  tile: Tile;
+  dir: Facing;
+  walking: boolean;
+}
 
 const toDir = (f: Facing): { d: Dir; flip: boolean } => (f === "left" ? { d: "side", flip: true } : f === "right" ? { d: "side", flip: false } : { d: f, flip: false });
 const opposite: Record<Facing, Facing> = { up: "down", down: "up", left: "right", right: "left" };
@@ -94,6 +106,12 @@ export class Overworld {
   /** Événements lus par l'interface. */
   onDoor: ((d: Warp) => void) | null = null;
   onZone: ((z: Zone) => void) | null = null;
+  /** Sprite du joueur (Sparrow dans le jeu solo, le héros du joueur en ligne). */
+  playerChar = "sparrow";
+  /** Pseudo affiché au-dessus du joueur (mode en ligne). */
+  playerName: string | null = null;
+  /** Autres joueurs connectés (mode en ligne). */
+  others: OtherActor[] = [];
   /** Rencontre sauvage dans les hautes herbes. */
   onWild: ((battle: string) => void) | null = null;
   /** Pas faits depuis la dernière rencontre (pas de combat dès la sortie d'un autre). */
@@ -204,13 +222,15 @@ export class Overworld {
   }
 
   private blocked(t: Tile): boolean {
-    return solidAt(this.map, t, this.rpg) || !!this.npcAt(t);
+    return solidAt(this.map, t, this.rpg) || !!this.npcAt(t) || this.others.some((o) => o.tile.x === t.x && o.tile.y === t.y);
   }
 
   /** Ce qu'il y a devant Sparrow (bouton A). */
   facing(f: OwFrame): Interaction {
     this.rpg = f.rpg;
     const front = step(this.tile, this.dir);
+    const other = this.others.find((o) => o.tile.x === front.x && o.tile.y === front.y);
+    if (other) return { kind: "player", id: other.id };
     const npc = this.npcAt(front);
     if (npc) return { kind: "npc", id: npc.def.id };
     // Comme dans les boutiques des RPG portables : on parle au marchand par-dessus le comptoir.
@@ -567,8 +587,22 @@ export class Overworld {
     const { d, flip } = toDir(this.dir);
     actors.push({
       y: me.y,
-      draw: () => this.drawChar(ctx, "sparrow", d, frame, flip, me.x - ox, me.y - oy, walking, f.tenue),
+      draw: () => {
+        this.drawChar(ctx, this.playerChar, d, frame, flip, me.x - ox, me.y - oy, walking, f.tenue);
+        if (this.playerName) this.drawName(ctx, this.playerName, me.x - ox, me.y - oy, true);
+      },
     });
+    for (const o of this.others) {
+      const od = toDir(o.dir);
+      const of: Frame = o.walking ? (((Math.floor(this.t * 6) % 2) + 1) as Frame) : 0;
+      actors.push({
+        y: o.py,
+        draw: () => {
+          this.drawChar(ctx, o.char, od.d, of, od.flip, o.px - ox, o.py - oy, o.walking);
+          this.drawName(ctx, o.name, o.px - ox, o.py - oy, false);
+        },
+      });
+    }
     for (const n of this.npcs) {
       const k = n.from ? Math.min(1, n.t) : 1;
       const nx = n.from ? (n.from.x + (n.x - n.from.x) * k) * TILE : n.x * TILE;
@@ -606,6 +640,16 @@ export class Overworld {
       ctx.fillStyle = `rgba(${this.flashColor},${Math.min(0.85, this.flash)})`;
       ctx.fillRect(0, 0, this.vw, this.vh);
     }
+  }
+
+  /** Pseudo au-dessus d'un joueur, sur un petit fond sombre pour rester lisible. */
+  private drawName(ctx: CanvasRenderingContext2D, name: string, x: number, y: number, me: boolean) {
+    const w = textWidth(name);
+    const X = Math.round(x + 8 - w / 2);
+    const Y = Math.round(y - 13);
+    ctx.fillStyle = "rgba(9,9,20,0.72)";
+    ctx.fillRect(X - 2, Y - 1, w + 4, 7);
+    pixelText(ctx, name, X, Y, me ? "#f2c14e" : "#f8f4e8");
   }
 
   /** Bulle « ! » au-dessus d'un ennemi qui repère Sparrow. */
