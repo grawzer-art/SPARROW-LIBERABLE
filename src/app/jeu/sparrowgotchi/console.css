@@ -1272,6 +1272,10 @@
   background: #6a5acd;
 }
 
+.bt-status--endormi {
+  background: #3a7ab8;
+}
+
 .bt-hp {
   display: flex;
   align-items: center;

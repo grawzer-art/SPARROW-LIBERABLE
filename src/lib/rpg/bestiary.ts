@@ -4,7 +4,7 @@
  */
 
 export type Stat = "atk" | "def" | "spd" | "acc";
-export type StatusId = "etourdi" | "brule";
+export type StatusId = "etourdi" | "brule" | "endormi";
 /** Effet visuel joué par l'écran de combat. */
 export type Fx = "capsule" | "temps" | "sabre" | "son" | "titan" | "dague" | "coup" | "feu" | "soin" | "bonus" | "malus" | "ombre" | "lame" | "sel" | "huile" | "frites" | "feuille" | "sieste" | "charge" | "vinaigre" | "bouclier" | "terre";
 
@@ -140,6 +140,8 @@ export const MOVES: Record<string, Move> = {
   "mousse-aveuglante": { id: "mousse-aveuglante", name: "Mousse aveuglante", desc: "", power: 20, acc: 100, target: "foe", effects: [{ kind: "stage", stat: "acc", n: -1, who: "target" }], fx: "sel" },
   "pompes-infinies": { id: "pompes-infinies", name: "Pompes infinies", desc: "", power: 0, acc: 100, target: "self", effects: [{ kind: "stage", stat: "atk", n: 1, who: "self" }, { kind: "stage", stat: "spd", n: 1, who: "self" }], fx: "bonus" },
   "coup-serviette": { id: "coup-serviette", name: "Coup de serviette", desc: "", power: 45, acc: 100, target: "foe", fx: "coup" },
+  "mantra-sommeil": { id: "mantra-sommeil", name: "Mantra du sommeil", desc: "Un « ommm » interminable. Peut endormir.", power: 0, acc: 85, target: "foe", effects: [{ kind: "status", status: "endormi", chance: 70 }], fx: "malus" },
+  "lueur-hypnose": { id: "lueur-hypnose", name: "Lueur hypnotique", desc: "Une lumière qui tourne, qui tourne… Peut endormir.", power: 0, acc: 85, target: "foe", effects: [{ kind: "status", status: "endormi", chance: 65 }], fx: "malus" },
   planche: { id: "planche", name: "Planche", desc: "", power: 0, acc: 100, target: "self", priority: 2, effects: [{ kind: "guard" }], fx: "bouclier" },
   "biceps-canon": { id: "biceps-canon", name: "Biceps-canon", desc: "", power: 55, acc: 95, target: "foe", fx: "coup" },
   "protocole-gain": { id: "protocole-gain", name: "Protocole du Gain", desc: "", power: 0, acc: 100, target: "self", effects: [{ kind: "stage", stat: "atk", n: 2, who: "self" }], fx: "bonus" },
@@ -346,7 +348,7 @@ export interface Foe {
 export const FOES: Record<string, Foe> = {
   "sbire-metronome": { id: "sbire-metronome", name: "Sbire du Métronome", sprite: "sbire", lv: [9, 17], hp: 110, atk: 25, def: 19, spd: 19, moves: ["pas-cadence", "tempo-force", "shuriken-noire"] },
   tambour: { id: "tambour", name: "Tambour possédé", sprite: "tambour", lv: [9, 17], hp: 135, atk: 24, def: 24, spd: 11, moves: ["coup-baguette", "roulement", "pas-cadence"] },
-  "lanterne-folle": { id: "lanterne-folle", name: "Lanterne Folle", sprite: "lanterne", lv: [9, 17], hp: 105, atk: 26, def: 18, spd: 17, moves: ["flamme-papier", "lueur-folle", "pas-cadence"] },
+  "lanterne-folle": { id: "lanterne-folle", name: "Lanterne Folle", sprite: "lanterne", lv: [9, 17], hp: 105, atk: 26, def: 18, spd: 17, moves: ["flamme-papier", "lueur-folle", "pas-cadence", "lueur-hypnose"] },
   metronome: {
     id: "metronome",
     name: "Le Métronome",
@@ -438,7 +440,7 @@ export const FOES: Record<string, Foe> = {
   },
   "haltere-sauvage": { id: "haltere-sauvage", name: "Haltère Sauvage", sprite: "haltere", lv: [6, 14], hp: 60, atk: 17, def: 18, spd: 8, moves: ["roule-boule", "poids-mort", "chute-libre"] },
   proteinator: { id: "proteinator", name: "Protéinator", sprite: "proteinator", lv: [6, 14], hp: 96, atk: 17, def: 15, spd: 12, boss: true, moves: ["shake-explosif", "gorgee-whey", "mousse-aveuglante"] },
-  "moine-gain": { id: "moine-gain", name: "Moine du Gain", sprite: "moine", lv: [7, 15], hp: 80, atk: 19, def: 16, spd: 14, moves: ["coup-serviette", "pompes-infinies", "planche"] },
+  "moine-gain": { id: "moine-gain", name: "Moine du Gain", sprite: "moine", lv: [7, 15], hp: 80, atk: 19, def: 16, spd: 14, moves: ["coup-serviette", "pompes-infinies", "planche", "mantra-sommeil"] },
   gonflax: {
     id: "gonflax",
     name: "Coach Gonflax",

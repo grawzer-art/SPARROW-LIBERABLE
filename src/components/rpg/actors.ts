@@ -635,6 +635,8 @@ Object.assign(DEFS, {
   navet: variant("raymond", { H: "#2a1a14", M: "#2a1a14", S: "#d8946a", s: "#b8764e", C: "#f1e6f4", c: "#cfc0d8", A: "#8a3a9a", a: "#6a2678" }),
   persil: variant("lili", { X: "#3f8a3a", x: "#2c6a28", H: "#7a4a2a", A: "#f1efe8", C: "#e8e0c8", c: "#c8bfa4", P: "#5a4a3a", p: "#46382a", S: "#f0c9a8" }),
   frida: variant("nico", { X: "#f4eee0", x: "#d8d0c0", W: "#d23a3a", H: "#c86a2a", S: "#e2a982", C: "#d23a3a", c: "#a82a2a", A: "#f4eee0", P: "#3a3a46", p: "#2a2a34" }),
+  // Camomille, l'infirmière (une dans chaque grande région)
+  infirmiere: variant("lili", { X: "#f4f0ea", x: "#d8d2c8", H: "#8a4a2a", A: "#d23a3a", C: "#f1efe8", c: "#cfc8bc", P: "#7a9ab8", p: "#5a7a98", S: "#f0c9a8", r: "#d86a7a" }),
   pois: variant("nico", { X: "#5aa83a", x: "#3f7a28", W: "#a8db7c", H: "#4a3a2a", S: "#f0c9a8", s: "#d8a684", C: "#7cc75a", c: "#5aa83a", A: "#f2c14e", P: "#3a5a8a", p: "#2a4466" }),
 });
 

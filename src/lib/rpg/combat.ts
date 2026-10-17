@@ -63,6 +63,47 @@ export interface Team {
   titanTurns?: number;
   /** Créatures capturées : elles combattent à leur propre niveau. */
   mons?: Record<string, { level: number }>;
+  /** PV gardés depuis le dernier combat (fraction des PV max ; absent = en pleine forme). */
+  hp?: Record<string, number>;
+}
+
+/** Les boss et le tutoriel se jouent toujours en pleine forme (Sparrow reprend son souffle avant). */
+export const freshFight = (def: BattleDef) => !!def.tutorial || def.foes.some((f) => FOES[f]?.boss);
+
+/** Objet de soin utilisable hors combat (depuis le SAC). */
+export const usableOutside = (item: string) => {
+  const c = CONSUMABLES[item];
+  return !!c && !c.capture && !c.use.stage && !!(c.use.heal || c.use.healPct || c.use.revive);
+};
+
+/**
+ * Utilise un soin hors combat sur l'équipier le plus blessé (un K.O. pour un objet de réanimation).
+ * Renvoie les nouveaux PV de l'équipe (fractions), ou null si personne n'en a besoin.
+ */
+export function healOutside(team: Pick<Team, "level" | "gear" | "skills" | "mons" | "party" | "hp">, item: string): { hp: Record<string, number>; who: string; gained: number } | null {
+  const c = CONSUMABLES[item];
+  if (!usableOutside(item)) return null;
+  const hp = { ...(team.hp ?? {}) };
+  const ids = ["sparrow", ...team.party.filter((p) => p !== "sparrow" && MEMBERS[p])];
+  const cand = ids
+    .map((id) => ({ id, f: hp[id] ?? 1 }))
+    .filter((x) => (c.use.revive ? x.f <= 0 : x.f > 0 && x.f < 1))
+    .sort((a, b) => a.f - b.f)[0];
+  if (!cand) return null;
+  const a = makeAlly(cand.id, team);
+  const cur = Math.round(a.maxHp * cand.f);
+  const add = c.use.revive ? Math.round((a.maxHp * c.use.revive) / 100) : (c.use.heal ?? 0) + Math.round((a.maxHp * (c.use.healPct ?? 0)) / 100);
+  const next = Math.min(a.maxHp, cur + add);
+  if (next >= a.maxHp) delete hp[cand.id];
+  else hp[cand.id] = Math.floor((next / a.maxHp) * 1000) / 1000;
+  return { hp, who: a.name, gained: next - cur };
+}
+
+/** PV de l'équipe à garder après le combat (fraction ; les équipiers en pleine forme sont omis). */
+export function hpAfter(b: Battle): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const x of b.allies) if (x.hp < x.maxHp) out[x.id] = Math.max(0, Math.floor((x.hp / x.maxHp) * 1000) / 1000);
+  return out;
 }
 
 const stat = (g: [number, number], lv: number) => Math.round(g[0] + g[1] * (lv - 1));
@@ -204,11 +245,19 @@ export function startBattle(id: string, team: Team, seed = Date.now()): Battle {
   const def = BATTLES[id];
   if (!def) throw new Error(`Combat inconnu : ${id}`);
   const members = ["sparrow", ...team.party.filter((p) => p !== "sparrow" && MEMBERS[p])].slice(0, 5);
+  const allies = members.map((m) => makeAlly(m, team));
+  if (!freshFight(def) && team.hp)
+    for (const x of allies) {
+      const f = team.hp[x.id];
+      if (typeof f === "number" && f >= 0 && f < 1) x.hp = f > 0 ? Math.max(1, Math.round(x.maxHp * f)) : 0;
+    }
+  // Toute l'équipe K.O. (ne devrait pas arriver : une défaite ramène à l'infirmerie) → pleine forme
+  if (allies.every((x) => x.hp <= 0)) for (const x of allies) x.hp = x.maxHp;
   return {
     def,
-    allies: members.map((m) => makeAlly(m, team)),
+    allies,
     foes: def.foes.map((f, i) => makeFoe(f, def.tutorial ? 0 : rng((seed ^ (i * 0x9e3779b9)) >>> 0)())),
-    a: 0,
+    a: Math.max(0, allies.findIndex((x) => x.hp > 0)),
     f: 0,
     bag: { ...team.bag },
     turn: 0,
@@ -218,7 +267,7 @@ export function startBattle(id: string, team: Team, seed = Date.now()): Battle {
     used: {},
     titan: { can: team.skills.includes("titan"), samourai: team.skills.includes("samourai"), used: false, turns: Math.max(1, team.titanTurns ?? 3) },
     stolen: {},
-    fought: ["sparrow"],
+    fought: [allies.find((x) => x.hp > 0)?.id ?? "sparrow"],
   };
 }
 
@@ -506,6 +555,17 @@ function act(b: Battle, user: Fighter, target: Fighter, moveId: string, ev: Batt
     ev.push({ kind: "text", text: `${user.name} est étourdi et ne peut pas agir !` }, { kind: "status", side: user.side, status: null });
     return;
   }
+  // Endormi : dort 1 à 3 tours (un coup reçu peut le réveiller)
+  if (user.status?.id === "endormi") {
+    user.status.turns--;
+    if (user.status.turns > 0) {
+      user.charging = null;
+      ev.push({ kind: "text", text: `${user.name} dort profondément…` });
+      return;
+    }
+    user.status = null;
+    ev.push({ kind: "status", side: user.side, status: null }, { kind: "text", text: `${user.name} se réveille !` });
+  }
   if (m.charge && user.charging !== moveId) {
     user.charging = moveId;
     ev.push({ kind: "charge", side: user.side, who: user.name, move: moveId }, { kind: "text", text: chargeLine(user, m) });
@@ -558,6 +618,10 @@ function act(b: Battle, user: Fighter, target: Fighter, moveId: string, ev: Batt
     }
     if (n > 1) ev.push({ kind: "text", text: `Touché ${landed} fois !` });
   }
+  if (dealt && target.hp > 0 && target.status?.id === "endormi" && r() < 0.5) {
+    target.status = null;
+    ev.push({ kind: "status", side: target.side, status: null }, { kind: "text", text: `Le coup réveille ${target.name} !` });
+  }
   applyEffects(b, m, user, target, ev, r, dealt);
 }
 
@@ -602,9 +666,10 @@ function applyEffects(b: Battle, m: Move, user: Fighter, target: Fighter, ev: Ba
       applyStage(who, e.stat, e.n, ev);
     } else if (e.kind === "status") {
       if (target.hp <= 0 || target.status || r() * 100 >= e.chance) continue;
-      target.status = { id: e.status, turns: e.status === "brule" ? 3 : 1 };
+      // Endormi : 2 à 4 (le premier tour compte), soit 1 à 3 tours perdus
+      target.status = { id: e.status, turns: e.status === "brule" ? 3 : e.status === "endormi" ? 2 + Math.floor(r() * 3) : 1 };
       // Un ennemi étourdi perd aussi l'attaque qu'il préparait : c'est la parade aux attaques annoncées.
-      ev.push({ kind: "status", side: target.side, status: e.status }, { kind: "text", text: e.status === "brule" ? `${target.name} est brûlé !` : `${target.name} est étourdi !` });
+      ev.push({ kind: "status", side: target.side, status: e.status }, { kind: "text", text: e.status === "brule" ? `${target.name} est brûlé !` : e.status === "endormi" ? `${target.name} s'endort !` : `${target.name} est étourdi !` });
     }
   }
 }
@@ -672,13 +737,14 @@ export function chooseFoe(b: Battle, r: () => number): Action {
       const dmg = baseDamage(me, them, m) * hits * (m.acc / 100);
       s = dmg;
       if (dmg >= them.hp) s *= 2.2; // achever
-      if (m.charge) s *= them.guard || them.hp < dmg / 2 ? 0.3 : 0.55; // une attaque annoncée se pare : moins tentante
+      // une attaque annoncée se pare : moins tentante… sauf sur une cible endormie
+      if (m.charge) s *= them.status?.id === "endormi" ? 1.5 : them.guard || them.hp < dmg / 2 ? 0.3 : 0.55;
     }
     for (const e of m.effects ?? []) {
       if (e.kind === "heal") s += hpRatio < 0.4 ? 24 : hpRatio < 0.7 ? 4 : -10;
       if (e.kind === "stage" && e.who === "self") s += me.stages[e.stat] < 1 && b.turn < 6 ? 9 : -6;
       if (e.kind === "stage" && e.who === "target" && !m.power) s += them.stages[e.stat] > -1 ? 8 : -8;
-      if (e.kind === "status") s += them.status ? 0 : (e.chance / 100) * 6;
+      if (e.kind === "status") s += them.status ? -6 : (e.chance / 100) * (e.status === "endormi" ? (b.turn < 4 ? 26 : 12) : 6);
       if (e.kind === "guard") s += them.charging ? 22 : -4;
     }
     return { id, s: Math.max(0.5, s) };

@@ -8,7 +8,7 @@ import { LAYOUT, ROOMS, type RoomId } from "@/lib/gotchi/map";
 import { MINIGAMES, type GameId } from "@/lib/gotchi/minigames";
 import { missionDef } from "@/lib/gotchi/missions";
 import { CONSUMABLES, EQUIPMENT, MEMBERS, MOVES } from "@/lib/rpg/bestiary";
-import { makeAlly } from "@/lib/rpg/combat";
+import { makeAlly, usableOutside } from "@/lib/rpg/combat";
 import { ACTIVE, SPECIES, isSeen, ownLevels, xpNeed } from "@/lib/rpg/monsters";
 import { battler } from "@/components/rpg/battlers";
 import { QUESTS, RPG_ITEMS, isDone, nextStep, status } from "@/lib/rpg/quest";
@@ -66,6 +66,8 @@ export interface PageHandlers {
   equipGear: (id: string) => void;
   /** Intégrer une créature capturée à l'équipe, ou la remettre au Bestiaire. */
   toggleMon: (species: string) => void;
+  /** Utiliser un soin du SAC hors combat (sur l'équipier le plus blessé). */
+  useItem: (id: string) => void;
   goRoom: (r: RoomId) => void;
   toggleSound: () => void;
   exportSave: () => void;
@@ -260,9 +262,21 @@ export function Page({ page, state, now, sound, room, outside, h, onClose }: Pro
                   </p>
                   {f.name !== m.name && <p className="gb-row__meta">Évolué : {f.name}</p>}
                   <p className="gb-row__meta">{m.desc}</p>
+                  {(() => {
+                    const fr = s.rpg.hp?.[id] ?? 1;
+                    const cur = fr <= 0 ? 0 : Math.max(1, Math.round(f.maxHp * fr));
+                    return (
+                      <div className="gb-gauge">
+                        <span>PV</span>
+                        <div className="gb-bar gb-bar--red">
+                          <i style={{ transform: `scaleX(${cur / f.maxHp})` }} />
+                        </div>
+                        <b>{cur ? `${cur}/${f.maxHp}` : "K.O."}</b>
+                      </div>
+                    );
+                  })()}
                   {(
                     [
-                      ["PV", f.maxHp, 200],
                       ["ATTAQUE", f.atk, 60],
                       ["DÉFENSE", f.def, 60],
                       ["VITESSE", f.spd, 60],
@@ -297,7 +311,7 @@ export function Page({ page, state, now, sound, room, outside, h, onClose }: Pro
               );
             })}
             {!s.rpg.party.length && <p className="gb-note">D&apos;autres membres rejoindront peut-être l&apos;équipe… La barrière du Centre-ville cache quelqu&apos;un.</p>}
-            <p className="gb-note">Chaque membre a son propre niveau : seuls ceux qui entrent au combat gagnent de l&apos;expérience. De nouvelles techniques s&apos;apprennent en montant de niveau. L&apos;équipe est soignée après chaque combat.</p>
+            <p className="gb-note">Chaque membre a son propre niveau : seuls ceux qui entrent au combat gagnent de l&apos;expérience. De nouvelles techniques s&apos;apprennent en montant de niveau. Les PV ne remontent pas tout seuls entre deux combats : infirmière Camomille (une par région), appartement de Sparrow, ou soins du SAC. Les boss se jouent toujours en pleine forme.</p>
           </>
         )}
 
@@ -446,7 +460,7 @@ export function Page({ page, state, now, sound, room, outside, h, onClose }: Pro
             </div>
             {slot === "objets" ? (
               <>
-                {Object.entries(s.rpg.bag).filter(([k, n]) => n > 0 && CONSUMABLES[k]).length > 0 && <p className="gb-group__title">SAC (UTILISABLE EN COMBAT)</p>}
+                {Object.entries(s.rpg.bag).filter(([k, n]) => n > 0 && CONSUMABLES[k]).length > 0 && <p className="gb-group__title">SAC</p>}
                 {Object.entries(s.rpg.bag)
                   .filter(([k, n]) => n > 0 && CONSUMABLES[k])
                   .map(([k, n]) => (
@@ -458,6 +472,11 @@ export function Page({ page, state, now, sound, room, outside, h, onClose }: Pro
                         </p>
                         <p className="gb-row__meta">{CONSUMABLES[k].desc}</p>
                       </div>
+                      {usableOutside(k) && (
+                        <button type="button" className="gb-btn" onClick={() => h.useItem(k)}>
+                          UTILISER
+                        </button>
+                      )}
                     </div>
                   ))}
                 {s.rpg.items.length > 0 && <p className="gb-group__title">OBJETS D&apos;AVENTURE</p>}
