@@ -12,7 +12,7 @@ import { charSprite, registerChar } from "@/components/rpg/actors";
 import { OW_W, Overworld, type OtherActor } from "@/components/rpg/overworld";
 import { DEFAULT_LOOK, LOOK_KEYS, OPTIONS, PSEUDO_RE, heroDef, lookId, randomLook, type Look } from "@/lib/online/hero";
 import { errText, onlineNet, type ChatMessage, type OnlineNet, type Peer, type Profile, type Room } from "@/lib/online/net";
-import { ChatLimiter, MAX_MESSAGE, SendPolicy, STALE_MS, Track, cleanMessage, dirOf } from "@/lib/online/sync";
+import { ChatLimiter, MAX_MESSAGE, SendPolicy, Track, cleanMessage, dirOf } from "@/lib/online/sync";
 import { ONLINE_MAP, ONLINE_RPG, SPARROW_LINES, spawnTile } from "@/lib/online/world";
 import { solidAt } from "@/lib/rpg/mapdef";
 
@@ -25,6 +25,25 @@ const heroChar = (l: Look) => {
 };
 
 const time = (t: number) => new Date(t).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+
+/** Couleur de pseudo stable (même joueur → même couleur sur tous les écrans). */
+const NAME_COLORS = ["#ffd166", "#7bdff2", "#f4978e", "#b8e986", "#e0aaff", "#ffb703", "#90e0ef", "#ff8fab"];
+const nameColor = (s: string) => NAME_COLORS[[...s.toLowerCase()].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % NAME_COLORS.length];
+const BUBBLE_MS = 7000;
+
+/** Derniers messages en petit, en haut à droite du jeu (ne bloque rien, s'efface seul). */
+function ChatBubbles({ list }: { list: { id: number; pseudo: string; body: string }[] }) {
+  if (!list.length) return null;
+  return (
+    <div className="ol-bubbles mono" aria-live="polite">
+      {list.slice(-3).map((m) => (
+        <p key={m.id} className="ol-bubble">
+          <b style={{ color: nameColor(m.pseudo) }}>{m.pseudo}</b> {m.body}
+        </p>
+      ))}
+    </div>
+  );
+}
 
 /** Aperçu du héros en grand, qui tourne sur lui-même. */
 function HeroPreview({ look }: { look: Look }) {
@@ -189,6 +208,9 @@ export function OnlineGame() {
   const [chatOpen, setChatOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [unread, setUnread] = useState(0);
+  const [bubbles, setBubbles] = useState<{ id: number; pseudo: string; body: string }[]>([]);
+  const [diagOn, setDiagOn] = useState(false);
+  const [, tick] = useState(0);
   const [draft, setDraft] = useState("");
   const [chatErr, setChatErr] = useState("");
   const [blocked, setBlocked] = useState<string[]>([]);
@@ -236,7 +258,14 @@ export function OnlineGame() {
   }, [boot]);
 
   // ─── Monde : carte, salon temps réel, chat ───
-  const join = useCallback(async () => {
+  // Connexion et départ du salon passent l'un après l'autre (jamais deux canaux à la fois)
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  const serial = useCallback(<T,>(f: () => Promise<T>) => {
+    const run = queue.current.then(f, f);
+    queue.current = run.catch(() => null);
+    return run;
+  }, []);
+  const joinNow = useCallback(async () => {
     const net = netRef.current;
     const o = ow.current;
     if (!net || !o || !me || room.current) return;
@@ -257,12 +286,17 @@ export function OnlineGame() {
             } else tracks.current.set(p.id, { t: new Track({ x: p.move.x, y: p.move.y, dir: dirOf(p.move.d) }, now), peer: p, char: heroChar(p.look) });
           }
           for (const id of [...tracks.current.keys()]) if (!seen.has(id)) tracks.current.delete(id);
+          // Compteur et avatars : même source (la présence du salon)
           setCount(tracks.current.size + 1);
         },
         onMove: (id, m) => tracks.current.get(id)?.t.push(m, performance.now()),
         onLeave: (id) => {
           tracks.current.delete(id);
           setCount(tracks.current.size + 1);
+        },
+        onStatus: (st) => {
+          setStatus(st === "on" ? "on" : "joining");
+          if (st === "on") policy.current.reset();
         },
       });
       room.current = r;
@@ -274,14 +308,20 @@ export function OnlineGame() {
       setStatusMsg(errText(e));
     }
   }, [me]);
+  const join = useCallback(() => serial(joinNow), [serial, joinNow]);
 
-  const leave = useCallback(async () => {
-    const r = room.current;
-    room.current = null;
-    tracks.current.clear();
-    setStatus("off");
-    await r?.leave().catch(() => null);
-  }, []);
+  const leave = useCallback(
+    () =>
+      serial(async () => {
+        const r = room.current;
+        room.current = null;
+        tracks.current.clear();
+        setCount(1);
+        setStatus("off");
+        await r?.leave().catch(() => null);
+      }),
+    [serial],
+  );
 
   useEffect(() => {
     if (screen !== "world" || !me) return;
@@ -304,6 +344,9 @@ export function OnlineGame() {
     const off = net.onChat((m) => {
       if (blockedRef.current.includes(m.author)) return;
       setMessages((list) => (list.some((x) => x.id === m.id) ? list : [...list.slice(-99), m]));
+      // Bulle en jeu : 3 au plus, effacée après quelques secondes
+      setBubbles((b) => (b.some((x) => x.id === m.id) ? b : [...b.slice(-2), { id: m.id, pseudo: m.pseudo, body: m.body }]));
+      setTimeout(() => setBubbles((b) => b.filter((x) => x.id !== m.id)), BUBBLE_MS);
       if (!chatOpenRef.current && m.author !== me.id) setUnread((n) => n + 1);
     });
     // iPhone : appli en arrière-plan → on quitte le salon ; retour → on revient
@@ -325,10 +368,7 @@ export function OnlineGame() {
       const ctx = canvas.current?.getContext("2d");
       const others: OtherActor[] = [];
       for (const [id, x] of tracks.current) {
-        if (now - x.t.seen > STALE_MS) {
-          tracks.current.delete(id);
-          continue;
-        }
+        // Pas de disparition « au silence » : seule la présence du salon retire un joueur
         x.t.step(dt);
         others.push({ id, char: x.char, name: x.peer.pseudo, px: x.t.px, py: x.t.py, tile: x.t.tile, dir: x.t.dir, walking: x.t.walking });
       }
@@ -349,10 +389,15 @@ export function OnlineGame() {
           me: () => ({ x: o.x, y: o.y, dir: o.dir, moving: o.moving, pseudo: me.pseudo, char: o.playerChar }),
           others: () => o.others.map((x) => ({ id: x.id, name: x.name, tile: x.tile, px: x.px, py: x.py, walking: x.walking })),
           status: () => (room.current ? "on" : "off"),
+          count: () => tracks.current.size + 1,
+          diag: () => net.diag,
           solid: (x: number, y: number) => solidAt(ONLINE_MAP, { x, y }, ONLINE_RPG),
         },
       });
+    const typing = () => document.activeElement instanceof HTMLInputElement;
     const fit = () => {
+      // Clavier iPhone ouvert : on ne redimensionne pas le jeu (il reste tel quel derrière)
+      if (typing()) return;
       const box = canvas.current?.parentElement?.getBoundingClientRect();
       if (box && box.width > 10) {
         const h = Math.max(150, Math.min(420, Math.floor((OW_W * box.height) / box.width)));
@@ -362,6 +407,14 @@ export function OnlineGame() {
     };
     fit();
     window.addEventListener("resize", fit);
+    // Clavier refermé : l'écran revient exactement à sa place
+    const unfocus = () =>
+      setTimeout(() => {
+        if (typing()) return;
+        window.scrollTo(0, 0);
+        fit();
+      }, 60);
+    document.addEventListener("focusout", unfocus);
     return () => {
       cancelAnimationFrame(raf);
       off();
@@ -369,6 +422,7 @@ export function OnlineGame() {
       window.removeEventListener("online", online);
       window.removeEventListener("pagehide", hide);
       window.removeEventListener("resize", fit);
+      document.removeEventListener("focusout", unfocus);
       void leave();
     };
   }, [screen, me, join, leave]);
@@ -477,6 +531,12 @@ export function OnlineGame() {
   };
 
   const net = netRef.current;
+  useEffect(() => {
+    if (!diagOn) return;
+    const t = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [diagOn]);
+  const dg = net?.diag;
   return (
     <div className="gb-wrap">
       <main className="gb">
@@ -485,7 +545,9 @@ export function OnlineGame() {
             ‹
           </a>
           <span className="gb-top__lvl">ONLINE</span>
-          <span className="gb-top__place">{screen === "world" ? `Quartier 404 · ${count || 1} en ligne${instance > 1 ? ` · salle ${instance}` : ""}` : "Bêta privée"}</span>
+          <button type="button" className="gb-top__place ol-place" onClick={() => screen === "world" && setDiagOn((v) => !v)} aria-label="Joueurs en ligne (toucher pour le diagnostic)">
+            {screen === "world" ? `Quartier 404 · ${count || 1} en ligne${instance > 1 ? ` · salle ${instance}` : ""}` : "Bêta privée"}
+          </button>
           {screen === "world" && <span className={`ol-dot is-${status}`} aria-label={status === "on" ? "Connecté" : "Hors ligne"} />}
         </header>
 
@@ -533,6 +595,12 @@ export function OnlineGame() {
             <button type="button" className="ol-banner mono" onClick={() => void join()}>
               {statusMsg || "Connexion perdue."} Toucher pour réessayer.
             </button>
+          )}
+          {screen === "world" && !chatOpen && <ChatBubbles list={bubbles} />}
+          {screen === "world" && diagOn && dg && (
+            <pre className="ol-diag" onClick={() => setDiagOn(false)}>
+              {`canal ${dg.channel || "-"} · ${dg.state || "-"}\npresence ${dg.presence} · affichés ${count ? count - 1 : 0}/${dg.peers}\nenvoyés ${dg.sent} · reçus ${dg.recv}\nsynchro ${dg.lastSync ? Math.round((Date.now() - dg.lastSync) / 1000) + " s" : "-"}\n${dg.log.slice(-6).join("\n")}`}
+            </pre>
           )}
           {toast && <span className="gb-banner mono">{toast}</span>}
           {talk && (

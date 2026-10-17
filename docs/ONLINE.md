@@ -14,8 +14,21 @@ Le jeu solo, ses sauvegardes et le reste de l'application ne sont pas touchés. 
 | Bêta privée | Un code d'invitation est obligatoire pour créer un héros. |
 | Monde | Le Quartier 404 partagé : même décor que le jeu solo, mais les portes de l'aventure solo sont fermées. Sparrow y est présent comme PNJ, avec ses dialogues. |
 | Temps réel | Présence, déplacements, pseudo au-dessus de chaque joueur, collisions entre joueurs. A face à un joueur ouvre sa fiche (bloquer, signaler). |
-| Réseau | Envoi seulement au changement de case, plus un battement toutes les 5 s. Interpolation des mouvements. Instances de 20 joueurs. Départ en arrière-plan iPhone, retour, et reconnexion. |
+| Réseau | Envoi seulement au changement de case, plus un battement toutes les 15 s. Interpolation des mouvements. Instances de 20 joueurs. Départ en arrière-plan iPhone, retour, et reconnexion. |
 | Chat | Salon général du Quartier 404 : pseudo, heure, 50 derniers messages, temps réel. Anti-spam : 1,5 s entre deux messages, 8 messages par 30 s, pas de doublon. Bloquer et signaler. |
+
+## Correctifs bêta (test réel à deux iPhone)
+
+- **Joueurs invisibles, compteurs différents.** Cause : supabase-js réutilise un canal existant du même nom, et ne le retire de sa liste que si sa fermeture répond « ok ». Après un départ mal fermé (arrière-plan, réseau, premier refus du serveur), la reconnexion récupérait un canal mort ou en cours de fermeture : le joueur n'était plus présent, ou ses mouvements ne partaient plus. De plus, un avatar sans mouvement reçu depuis 15 s était effacé, sans que le compteur change.
+- **Correction :**
+  - les anciens canaux sont réellement fermés et retirés avant chaque connexion ;
+  - connexion et départ s'enchaînent sans jamais se chevaucher ;
+  - la présence du salon est la seule source des avatars ET du compteur ;
+  - en cas de reconnexion automatique du canal, la présence est renvoyée ;
+  - un même compte connecté deux fois n'affiche qu'un avatar.
+- **Diagnostic :** toucher « N en ligne » affiche l'état du canal, la présence, les joueurs affichés, les messages envoyés et reçus, et les derniers événements.
+- **Bulles de chat** en haut à droite du jeu : 3 au plus, effacées après 7 s, sans bloquer le toucher.
+- **Zoom iPhone à la saisie :** la règle de police du champ était invalide (`font: 16px/1.2 inherit`), donc la taille réelle était inférieure à 16 px. Le champ est maintenant à 16 px. Le jeu n'est plus redimensionné quand le clavier s'ouvre, et l'écran revient à sa place à la fermeture. Le zoom d'accessibilité n'est pas bloqué.
 
 ## Sécurité (côté serveur)
 
@@ -82,6 +95,7 @@ Sans ces variables, la page en ligne affiche simplement que le mode n'est pas en
 | Commande | Ce qu'elle vérifie |
 |---|---|
 | `bash scripts/test-online-db.sh` | 41 tests de sécurité sur un vrai PostgreSQL 16, avec émulation de `auth.uid()`, des rôles `anon` / `authenticated` et de `realtime.messages`. |
+| `npx vitest run tests/online-presence.test.ts` | Présence Supabase avec un faux client qui reproduit le piège de supabase-js : canal mal fermé puis reconnexion, double connexion d'un compte, premier refus du serveur, reconnexion automatique. |
 | `npx vitest run tests/online.test.ts` | Héros (toutes les combinaisons, validation identique au SQL), politique d'envoi, interpolation, instances, anti-spam, carte et cases d'apparition. |
 | Test à deux navigateurs (contextes iPhone séparés) | Via le relais local `scripts/online-dev-relay.mjs`, qui reproduit les règles du serveur. Voir le détail ci-dessous. |
 
