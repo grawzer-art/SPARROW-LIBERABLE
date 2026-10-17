@@ -23,8 +23,8 @@ export const ONLINE_RPG: Rpg = { ...emptyRpg(), quests: { "ville-figee": "termin
 
 /** Cases d'apparition, autour de la fontaine. */
 const SPAWNS: Tile[] = [
-  { x: 14, y: 21 },
-  { x: 20, y: 21 },
+  { x: 15, y: 21 },
+  { x: 19, y: 22 },
   { x: 14, y: 16 },
   { x: 20, y: 16 },
   { x: 12, y: 19 },

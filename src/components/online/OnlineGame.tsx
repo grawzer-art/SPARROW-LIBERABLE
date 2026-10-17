@@ -14,6 +14,7 @@ import { DEFAULT_LOOK, LOOK_KEYS, OPTIONS, PSEUDO_RE, heroDef, lookId, randomLoo
 import { errText, onlineNet, type ChatMessage, type OnlineNet, type Peer, type Profile, type Room } from "@/lib/online/net";
 import { ChatLimiter, MAX_MESSAGE, SendPolicy, STALE_MS, Track, cleanMessage, dirOf } from "@/lib/online/sync";
 import { ONLINE_MAP, ONLINE_RPG, SPARROW_LINES, spawnTile } from "@/lib/online/world";
+import { solidAt } from "@/lib/rpg/mapdef";
 
 type Screen = "boot" | "config" | "auth" | "hero" | "world";
 
@@ -341,10 +342,20 @@ export function OnlineGame() {
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
+    // Accès de test (?debug), en lecture seule
+    if (new URLSearchParams(location.search).has("debug"))
+      Object.assign(window, {
+        __online: {
+          me: () => ({ x: o.x, y: o.y, dir: o.dir, moving: o.moving, pseudo: me.pseudo, char: o.playerChar }),
+          others: () => o.others.map((x) => ({ id: x.id, name: x.name, tile: x.tile, px: x.px, py: x.py, walking: x.walking })),
+          status: () => (room.current ? "on" : "off"),
+          solid: (x: number, y: number) => solidAt(ONLINE_MAP, { x, y }, ONLINE_RPG),
+        },
+      });
     const fit = () => {
       const box = canvas.current?.parentElement?.getBoundingClientRect();
       if (box && box.width > 10) {
-        const h = Math.max(150, Math.min(260, Math.floor((OW_W * box.height) / box.width)));
+        const h = Math.max(150, Math.min(420, Math.floor((OW_W * box.height) / box.width)));
         if (canvas.current) canvas.current.height = h;
         o.setView(OW_W, h);
       }

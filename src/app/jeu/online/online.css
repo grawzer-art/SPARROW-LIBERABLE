@@ -143,6 +143,9 @@
 
 .ol-card {
   inset: auto 6px 6px;
+  /* Au-dessus du chat (fiche ouverte depuis un message) */
+  z-index: 7;
+  box-shadow: 0 -4px 0 rgba(9, 9, 20, 0.35);
 }
 
 .ol-chat {
