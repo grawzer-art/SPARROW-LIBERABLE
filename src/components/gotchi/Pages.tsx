@@ -9,7 +9,8 @@ import { MINIGAMES, type GameId } from "@/lib/gotchi/minigames";
 import { missionDef } from "@/lib/gotchi/missions";
 import { CONSUMABLES, EQUIPMENT, MEMBERS, MOVES } from "@/lib/rpg/bestiary";
 import { makeAlly, usableOutside } from "@/lib/rpg/combat";
-import { ACTIVE, SPECIES, isSeen, ownLevels, xpNeed } from "@/lib/rpg/monsters";
+import { ACTIVE, EVOLUTIONS, RARITY_LABEL, SPECIES, evolvedForms, isSeen, ownLevels, xpNeed } from "@/lib/rpg/monsters";
+import { TYPE_LABEL } from "@/lib/rpg/types";
 import { battler } from "@/components/rpg/battlers";
 import { QUESTS, RPG_ITEMS, isDone, nextStep, status } from "@/lib/rpg/quest";
 
@@ -318,12 +319,23 @@ export function Page({ page, state, now, sound, room, outside, h, onClose }: Pro
         {page === "bestiaire" && (
           <>
             <p className="gb-note">
-              Créatures capturées : {Object.keys(s.rpg.mons ?? {}).length} / {SPECIES.length}. Équipe de combat : Sparrow + {ACTIVE} compagnons (les premiers de la liste).
+              Collection : {SPECIES.filter((x) => s.rpg.mons?.[x.id]).length} / {SPECIES.length} espèces · formes évoluées : {evolvedForms(s.rpg).length} / {EVOLUTIONS.length}. Équipe de combat : Sparrow + {ACTIVE} compagnons (les premiers de la liste).
             </p>
             {SPECIES.map((sp) => {
               const m = MEMBERS[sp.id];
-              const mon = s.rpg.mons?.[sp.id];
+              const mon = m ? s.rpg.mons?.[sp.id] : undefined;
               const num = `N°${String(sp.n).padStart(3, "0")}`;
+              const seen = !!m && isSeen(s.rpg, sp.id);
+              if (!mon && !seen)
+                return (
+                  <div key={sp.id} className="gb-card is-locked">
+                    <p className="gb-group__title">
+                      {num} · INCONNU · {RARITY_LABEL[sp.rarity].toUpperCase()}
+                    </p>
+                    <p className="gb-card__rank">???</p>
+                    <p className="gb-row__meta">{sp.rarity === "legendaire" ? `Région : ${sp.region}. Une créature légendaire : on dit qu'une quête secrète mène jusqu'à elle.` : `Région : ${sp.region}. Une créature rôde quelque part…`}</p>
+                  </div>
+                );
               if (!mon)
                 return (
                   <div key={sp.id} className="gb-card is-locked">
@@ -339,10 +351,10 @@ export function Page({ page, state, now, sound, room, outside, h, onClose }: Pro
               return (
                 <div key={sp.id} className="gb-card">
                   <p className="gb-group__title">
-                    {num} · {sp.type.toUpperCase()} · {active ? "DANS L'ÉQUIPE" : "AU BESTIAIRE"}
+                    {num} · {TYPE_LABEL[sp.type].toUpperCase()} · {RARITY_LABEL[sp.rarity].toUpperCase()} · {active ? "DANS L'ÉQUIPE" : "AU BESTIAIRE"}
                   </p>
                   <div className="gb-mon">
-                    <img className="gb-mon__img" src={battler(m.evo && mon.level >= m.evo.lv ? m.evo.front : sp.sprite).toDataURL()} alt="" width={96} height={96} />
+                    <img className="gb-mon__img" src={battler(m.evo && mon.level >= m.evo.lv ? m.evo.front : (sp.sprite ?? sp.id)).toDataURL()} alt="" width={96} height={96} />
                     <div>
                       <p className="gb-card__rank">{f.name}</p>
                       {m.evo && mon.level < m.evo.lv && <p className="gb-row__meta">Évolue au niveau {m.evo.lv}.</p>}

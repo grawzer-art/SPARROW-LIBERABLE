@@ -1,5 +1,6 @@
 import { MOVES } from "@/lib/rpg/bestiary";
 import { ally, baseDamage, canTransform, foe, forced, mustSwap, type Action, type Battle } from "@/lib/rpg/combat";
+import { typeMult } from "@/lib/rpg/types";
 
 /** Un joueur raisonnable : se soigne quand ça va mal, se protège des attaques annoncées, sinon frappe fort. */
 export function policy(b: Battle): Action {
@@ -19,6 +20,11 @@ export function policy(b: Battle): Action {
   if (low && (b.bag.frites ?? 0) > 0) return { kind: "item", item: "frites" };
   if (low) {
     const other = b.allies.findIndex((x, i) => i !== b.a && x.hp / x.maxHp > 0.6);
+    if (other >= 0) return { kind: "swap", to: other };
+  }
+  // Types : face à un ennemi qui le surclasse, on fait entrer un équipier en forme qui ne craint rien (au début du combat)
+  if (b.turn < 3 && !me.form && typeMult(them.type, me.type) > 1) {
+    const other = b.allies.findIndex((x, i) => i !== b.a && x.hp / x.maxHp > 0.7 && typeMult(them.type, x.type) <= 1);
     if (other >= 0) return { kind: "swap", to: other };
   }
   if (them.charging && me.moves.includes("garde-silencieuse")) return { kind: "move", move: "garde-silencieuse" };

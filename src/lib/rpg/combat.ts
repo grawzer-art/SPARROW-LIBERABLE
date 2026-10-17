@@ -11,6 +11,7 @@
  */
 
 import { BATTLES, CONSUMABLES, EQUIPMENT, FOES, FORMS, MEMBERS, MOVES, SKILLS, type BattleDef, type FormId, type Foe, type Move, type Stat, type StatusId } from "./bestiary";
+import { FIGHTER_TYPE, MOVE_TYPE, SAME, effLine, typeMult, type ElemType } from "./types";
 
 // ─── Hasard reproductible (tests, rejouabilité) ───
 
@@ -48,9 +49,11 @@ export interface Fighter {
   guard: boolean;
   /** Phase de boss atteinte (index dans `phases`, −1 = aucune). */
   phase: number;
+  /** Type officiel (faiblesses / résistances). */
+  type?: ElemType;
   foe?: string;
   /** Transformation en cours (SPARROW TITAN) et statistiques d'origine. */
-  form?: { turns: number; base: { atk: number; def: number; spd: number; maxHp: number; moves: string[]; sprite: string } } | null;
+  form?: { turns: number; base: { atk: number; def: number; spd: number; maxHp: number; moves: string[]; sprite: string; type?: ElemType } } | null;
 }
 
 export interface Team {
@@ -157,6 +160,7 @@ export function makeAlly(id: string, t: Pick<Team, "level" | "gear" | "skills" |
     charging: null,
     guard: false,
     phase: -1,
+    type: FIGHTER_TYPE[id],
   };
 }
 
@@ -190,6 +194,7 @@ export function makeFoe(id: string, roll = 0): Fighter {
     guard: false,
     phase: -1,
     foe: id,
+    type: FIGHTER_TYPE[id],
   };
 }
 
@@ -236,6 +241,8 @@ export type BattleEvent =
   | { kind: "faint"; side: Side; who: string }
   | { kind: "enter"; side: Side; index: number }
   | { kind: "phase"; text: string; sprite?: string }
+  /** Efficacité du type (super efficace > 1, peu efficace < 1). */
+  | { kind: "eff"; side: Side; mult: number }
   | { kind: "transform"; side: Side; on: boolean; sprite: string }
   /** Lancer de capsule : nombre de secousses (0 à 3), puis réussite ou échec. */
   | { kind: "capture"; shakes: number; ok: boolean }
@@ -304,7 +311,8 @@ export const forms = (b: Battle): FormId[] => (["titan", "samourai"] as FormId[]
 function transform(b: Battle, me: Fighter, form: FormId, ev: BattleEvent[]) {
   const F = FORMS[form];
   b.titan.used = true;
-  me.form = { turns: b.titan.turns, base: { atk: me.atk, def: me.def, spd: me.spd, maxHp: me.maxHp, moves: [...me.moves], sprite: me.sprite } };
+  me.form = { turns: b.titan.turns, base: { atk: me.atk, def: me.def, spd: me.spd, maxHp: me.maxHp, moves: [...me.moves], sprite: me.sprite, type: me.type } };
+  me.type = FIGHTER_TYPE[form] ?? me.type;
   const bonus = Math.round(me.maxHp * F.hp);
   me.atk = Math.round(me.atk * F.atk);
   me.def = Math.round(me.def * F.def);
@@ -334,6 +342,7 @@ function revert(me: Fighter, ev: BattleEvent[], quiet = false) {
   me.hp = Math.min(me.hp, me.maxHp);
   me.moves = f.base.moves;
   me.sprite = f.base.sprite;
+  me.type = f.base.type;
   me.charging = null;
   me.form = null;
   if (quiet) return;
@@ -349,9 +358,16 @@ export function forced(b: Battle): Action | null {
 }
 
 /** Dégâts d'une technique (sans hasard : utile à l'IA et aux tests). */
+/** Multiplicateur de type d'une technique sur une cible (et bonus de même type pour l'attaquant). */
+export function typeBonus(user: Fighter, target: Fighter, m: Move) {
+  const t = MOVE_TYPE[m.id];
+  return { vs: typeMult(t, target.type), same: t && t === user.type ? SAME : 1 };
+}
+
 export function baseDamage(user: Fighter, target: Fighter, m: Move): number {
   if (!m.power) return 0;
-  return (m.power * (eff(user, "atk") / Math.max(1, eff(target, "def"))) * (user.lv + 9)) / 60;
+  const k = typeBonus(user, target, m);
+  return ((m.power * (eff(user, "atk") / Math.max(1, eff(target, "def"))) * (user.lv + 9)) / 60) * k.vs * k.same;
 }
 
 /** Vue d'une technique pour le menu (puissance / précision). */
@@ -617,6 +633,8 @@ function act(b: Battle, user: Fighter, target: Fighter, moveId: string, ev: Batt
       ev.push({ kind: "text", text: `${target.name} encaisse en garde.` });
     }
     if (n > 1) ev.push({ kind: "text", text: `Touché ${landed} fois !` });
+    const line = landed ? effLine(typeBonus(user, target, m).vs) : null;
+    if (line) ev.push({ kind: "eff", side: target.side, mult: typeBonus(user, target, m).vs }, { kind: "text", text: line });
   }
   if (dealt && target.hp > 0 && target.status?.id === "endormi" && r() < 0.5) {
     target.status = null;

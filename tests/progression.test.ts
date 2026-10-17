@@ -59,15 +59,15 @@ describe("Progression V2 — techniques et évolution", () => {
     const r: Rpg = { ...emptyRpg(), party: ["gerard"], levels: { gerard: { level: 9, xp: 0 } } };
     expect(teamGainXp(r, xpNeed(9), ["gerard"]).ups).toContain("Gérard la Frite apprend Fleur de sel !");
   });
-  it("Brokito évolue en Brokolosse au niveau 14 (plus fort)", () => {
-    const before = makeAlly("brokito", { level: 1, gear: {}, skills: [], mons: { brokito: { level: 13 } } });
-    const after = makeAlly("brokito", { level: 1, gear: {}, skills: [], mons: { brokito: { level: 14 } } });
+  it("Brokito évolue en Brokolosse au niveau 16, niveau officiel (plus fort)", () => {
+    const before = makeAlly("brokito", { level: 1, gear: {}, skills: [], mons: { brokito: { level: 15 } } });
+    const after = makeAlly("brokito", { level: 1, gear: {}, skills: [], mons: { brokito: { level: 16 } } });
     expect(before.name).toBe("Brokito");
     expect(after.name).toBe("Brokolosse");
     expect(after.sprite).toBe("brokolosse-dos");
     expect(after.maxHp).toBeGreaterThan(before.maxHp * 1.1);
-    const r: Rpg = { ...emptyRpg(), party: ["brokito"], mons: { brokito: { level: 13, xp: 0, caught: 0 } } };
-    expect(teamGainXp(r, xpNeed(13), ["brokito"]).ups).toContain("Quoi ? Brokito évolue en Brokolosse !");
+    const r: Rpg = { ...emptyRpg(), party: ["brokito"], mons: { brokito: { level: 15, xp: 0, caught: 0 } } };
+    expect(teamGainXp(r, xpNeed(15), ["brokito"]).ups).toContain("Quoi ? Brokito évolue en Brokolosse !");
   });
 });
 
