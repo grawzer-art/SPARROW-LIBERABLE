@@ -721,7 +721,7 @@ export function Gotchi() {
         const npcName = f?.kind === "npc" ? (o.map.npcs.find((n) => n.id === f.id)?.name ?? "") : "";
         const hint =
           f?.kind === "npc"
-            ? `Parler à ${npcName === "???" ? "l'inconnu" : npcName}`
+            ? `Parler ${npcName === "???" ? "à l'inconnu" : /^(Roi|Chevalier|Soldat|Garde|Client|Vieux|Petit|Maître|Monsieur) /.test(npcName) ? `au ${npcName}` : /^(Patate|Mamie) /.test(npcName) ? `à ${npcName}` : `à ${npcName}`}`
             : f?.kind === "door"
               ? f.door.to === "appart"
                 ? "Rentrer chez soi"
