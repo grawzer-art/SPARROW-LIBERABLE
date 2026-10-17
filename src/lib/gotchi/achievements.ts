@@ -38,6 +38,11 @@ export const TROPHIES: Trophy[] = [
   { id: "t-garde-robe", name: "Fashion week", desc: "Posséder 8 objets.", coins: 60, check: (s) => s.owned.length >= 8 },
   { id: "t-fidele", name: "Pote fidèle", desc: "Venir 5 jours différents.", coins: 60, check: (s) => s.days.length >= 5 },
   { id: "t-cache", name: "Fouineur", desc: "Trouver 5 objets cachés.", coins: 50, check: (s) => c(s).caches >= 5 },
+  { id: "t-muscu-1", name: "Premier biceps", desc: "Terminer une séance de muscu.", coins: 15, check: (s) => c(s).trainings >= 1 && c(s).reps >= 1 },
+  { id: "t-reps-200", name: "Ça pousse", desc: "200 répétitions au total.", coins: 80, check: (s) => c(s).reps >= 200 },
+  { id: "t-costaud", name: "Le t-shirt craque", desc: "Atteindre le stade Costaud.", coins: 60, check: (s) => s.muscle >= 90 },
+  { id: "t-titan", name: "SPARROW TITAN", desc: "Atteindre la transformation ultime.", coins: 250, secret: true, check: (s) => s.muscle >= 400 },
+  { id: "t-deco", name: "Décorateur d'intérieur", desc: "Améliorer un meuble de l'appartement.", coins: 30, check: (s) => s.owned.some((id) => /^(pc|lit|sport|canape)-/.test(id)) },
   // Secrets
   {
     id: "t-nuit",

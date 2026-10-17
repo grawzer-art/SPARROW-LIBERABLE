@@ -1,61 +1,61 @@
 /**
- * SPARROWGOTCHI 3.0 — l'appartement de Sparrow (rendu canvas pixel art).
+ * SPARROWGOTCHI — le monde façon console portable (rendu canvas 160 × 144).
  *
- * Quatre pièces côte à côte (Chambre, Coin gaming, Salon, Cuisine) ; la caméra suit
- * Sparrow. Le joueur le dirige au joystick (collisions avec les meubles) ou touche un
- * objet / un endroit pour qu'il y aille. Sans contrôle pendant un moment, il reprend
- * sa vie autonome. Chaque action reste une séquence : il marche jusqu'au meuble, puis l'anime.
+ * Une pièce = un écran ; on change d'écran en passant une porte. Le joueur dirige Sparrow
+ * à la croix (8 directions, B pour courir) ou touche un objet / un endroit pour qu'il y
+ * aille (chemin calculé, même à travers plusieurs pièces). Sans contrôle, il reprend sa vie
+ * autonome. Chaque action reste une séquence : il marche jusqu'au meuble, puis l'anime.
  */
 
 import { bake } from "../game/sprites";
 import type { Anim, Mood, Scene } from "@/lib/gotchi/engine";
 import {
-  BACK,
-  R,
-  ROOM_W,
+  ROOMS,
+  SCREEN_H,
+  SCREEN_W,
   START,
-  WALL,
-  WORLD_W,
+  doorAt,
+  doorCrossed,
+  doorExit,
   move,
-  nearby,
+  nearbySpot,
   nearestStandable,
-  objectAt,
-  objectById,
-  path,
-  roomOf,
-  type Interactable,
-  type ObjectId,
+  pathInRoom,
+  roomRoute,
+  spotAt,
+  spotById,
+  type Door,
+  type Facing,
+  type Place,
   type Pos,
-} from "@/lib/gotchi/room";
-import { CAPE, FURNITURE, HATS, PROPS, sparrow, type Body, type Eyes, type Legs, type Look, type Mouth } from "./sprites";
+  type RoomId,
+  type Spot,
+  type SpotId,
+} from "@/lib/gotchi/map";
+import { drawRoom, floorItems, type DecorState } from "./decor";
+import { CAPE, HATS, PROPS, sparrow, sparrowBack, type Body, type Eyes, type Legs, type Look, type Mouth } from "./sprites";
 
-export { ROOM_W, WORLD_W };
-export const VIEW_W = 112;
-export const VIEW_H = 64;
-export const ROOMS = [
-  { id: "chambre", label: "Chambre" },
-  { id: "gaming", label: "Coin gaming" },
-  { id: "salon", label: "Salon" },
-  { id: "cuisine", label: "Cuisine" },
-] as const;
-const BASE = BACK; // ligne de base des meubles collés au mur
-const WALK = 46; // vitesse au joystick (px/s)
+export const VIEW_W = SCREEN_W;
+export const VIEW_H = SCREEN_H;
+const WALK = 44; // px/s à la croix
+const RUN = 1.7;
 
-/** Ce que fait Sparrow en ce moment (action du joueur, événement ou vie autonome). */
-export type Activity = Anim | "use" | "danse" | "rire" | "panne" | "legendaire";
+/** Ce que fait Sparrow (action du joueur, événement ou vie autonome). */
+export type Activity = Anim | "use" | "danse" | "rire" | "panne" | "legendaire" | "muscu";
 
 interface Seq {
   act: Activity;
   of?: string;
-  spot: ObjectId | null;
+  spot: SpotId | null;
+  goal: Place;
+  pts: Pos[];
   phase: "go" | "act";
   t: number;
   dur: number;
   auto: boolean;
-  route: Pos[];
-  /** Réplique à afficher : appelée à l'arrivée, ou tout de suite si la séquence est interrompue. */
+  /** Réplique : à l'arrivée, ou tout de suite si la séquence est interrompue. */
   onAct?: () => void;
-  /** Appelée seulement s'il arrive vraiment (ex. ouvrir le mini-jeu au PC). */
+  /** Seulement s'il arrive vraiment (ex. ouvrir un mini-jeu). */
   onArrive?: () => void;
 }
 
@@ -63,18 +63,21 @@ export interface Frame {
   mood: Mood;
   look: Look;
   deco: string[];
+  tiers: DecorState["tiers"];
   pcBroken: boolean;
-  cache: { x: number; y: number } | null;
+  hour: number;
+  cache: Place | null;
   reduced: boolean;
 }
 
 export type Hit =
   | { kind: "cache" }
   | { kind: "sparrow" }
-  | { kind: "object"; obj: Interactable }
+  | { kind: "spot"; spot: Spot }
+  | { kind: "door"; door: Door }
   | { kind: "floor"; pos: Pos };
 
-const SCENE_SPOT: Partial<Record<Scene, ObjectId>> = {
+const SCENE_SPOT: Partial<Record<Scene, SpotId>> = {
   frigo: "frigo",
   pc: "pc",
   canape: "canape",
@@ -91,13 +94,13 @@ const SCENE_ACT: Partial<Record<Scene, Activity>> = {
   panne: "panne",
   legendaire: "legendaire",
   douche: "douche",
-  canape: "sieste",
+  canape: "use",
   lit: "sieste",
   pc: "dofus",
   frigo: "frites",
 };
 
-function spotFor(act: Activity, of?: string): ObjectId | null {
+function spotFor(act: Activity, of?: string): SpotId | null {
   switch (act) {
     case "frites":
     case "gras":
@@ -106,18 +109,20 @@ function spotFor(act: Activity, of?: string): ObjectId | null {
     case "salade":
     case "grimace":
     case "miracle":
-      return "table";
+      return "frigo";
     case "refus":
-      return of === "salade" ? "table" : of === "dofus" ? "pc" : of === "sieste" ? "canape" : null;
+      return of === "salade" ? "frigo" : of === "dofus" ? "pc" : of === "sieste" ? "lit" : of === "douche" ? "douche" : null;
     case "dofus":
     case "rage":
     case "drop":
     case "victoire":
-      return "pc";
+      return of === "muscu" ? "banc" : "pc";
     case "sieste":
-      return "canape";
+      return "lit";
     case "douche":
-      return "douche";
+      return of === "lavabo" ? "lavabo" : "douche";
+    case "muscu":
+      return "banc";
     default:
       return null;
   }
@@ -133,7 +138,6 @@ function img(key: string, rows: () => string[], flip = false) {
   }
   return c;
 }
-const fur = (k: string) => img(`f:${k}`, () => FURNITURE[k]);
 const prop = (k: string) => img(`p:${k}`, () => PROPS[k]);
 
 function z(ctx: CanvasRenderingContext2D, x: number, y: number, s: number) {
@@ -143,16 +147,24 @@ function z(ctx: CanvasRenderingContext2D, x: number, y: number, s: number) {
   ctx.fillRect(x, y + s - 1, s, 1);
 }
 
+/** Où il arrive quand il passe la porte `d` de la pièce actuelle. */
+function doorEntry(d: Door): Pos {
+  const opposite: Record<Door, Door> = { N: "S", S: "N", E: "W", W: "E" };
+  return doorExit(opposite[d]).approach;
+}
+
 export class World {
+  room: RoomId;
   x: number;
   y: number;
-  dir: 1 | -1 = 1;
-  cam: number;
-  /** Direction du joystick (-1..1). */
+  facing: Facing = "down";
+  /** Direction de la croix (-1..1) et bouton B (courir). */
   input = { x: 0, y: 0 };
-  /** Statistiques de déplacement lues par l'interface (répliques contextuelles). */
+  run = false;
+  /** Compteurs lus par l'interface (répliques contextuelles, bandeau de pièce). */
   bumps = 0;
   walked = 0;
+  roomChanges = 0;
   private seq: Seq | null = null;
   private idleUntil = 2;
   private manualUntil = 0;
@@ -160,12 +172,13 @@ export class World {
   private wasBlocked = false;
   private t = 0;
   private flash = 0;
+  private fade = 0;
   private walkPhase = 0;
 
-  constructor(pos: Pos = START) {
-    this.x = pos.x;
-    this.y = pos.y;
-    this.cam = Math.max(0, Math.min(WORLD_W - VIEW_W, pos.x - VIEW_W / 2));
+  constructor(p: Place = START) {
+    this.room = p.room;
+    this.x = p.x;
+    this.y = p.y;
   }
 
   get busy() {
@@ -177,30 +190,22 @@ export class World {
     return this.t < this.manualUntil;
   }
 
-  get room() {
-    return roomOf(this.x);
+  get place(): Place {
+    return { room: this.room, x: Math.round(this.x), y: Math.round(this.y) };
   }
 
-  get pos(): Pos {
-    return { x: Math.round(this.x), y: Math.round(this.y) };
-  }
-
-  /** Objet utilisable juste à côté de lui (pour le bouton d'action). */
-  near(): Interactable | null {
+  /** Objet utilisable juste devant lui (bouton A). */
+  near(): Spot | null {
     if (this.seq && !this.seq.auto) return null;
-    return nearby({ x: this.x, y: this.y });
+    return nearbySpot(this.room, { x: this.x, y: this.y });
   }
 
-  nearCache(c: { x: number; y: number } | null) {
-    return !!c && Math.hypot(c.x - this.x, (c.y - this.y) * 1.5) < 13;
+  nearCache(c: Place | null) {
+    return !!c && c.room === this.room && Math.hypot(c.x - this.x, c.y - this.y) < 12;
   }
 
-  private route(to: Pos) {
-    return path({ x: this.x, y: this.y }, to);
-  }
-
-  /** Lance une séquence (action du joueur ou événement). onAct : quand il arrive au meuble. */
-  play(act: Activity, opts: { of?: string; scene?: Scene; onAct?: () => void; reduced?: boolean } = {}) {
+  /** Lance une séquence (action du joueur ou événement). */
+  play(act: Activity, opts: { of?: string; scene?: Scene; onAct?: () => void; onArrive?: () => void; reduced?: boolean } = {}) {
     this.cancel();
     let a = act;
     let spot = spotFor(act, opts.of);
@@ -209,157 +214,205 @@ export class World {
       a = SCENE_ACT[opts.scene] ?? (act === "event" ? "parler" : act);
     }
     if (a === "legendaire") this.flash = 2.2;
-    const goal = spot ? objectById(spot).stand : null;
-    if (goal && opts.reduced) {
-      this.x = goal.x;
-      this.y = goal.y;
-    }
+    const target = spot ? spotById(spot) : null;
+    const goal: Place = target ? { room: target.room, ...target.stand } : this.place;
     this.seq = {
       act: a,
       of: opts.of,
       spot,
-      phase: goal ? "go" : "act",
+      goal,
+      pts: [],
+      phase: target ? "go" : "act",
       t: 0,
       dur: a === "legendaire" ? 3.2 : 2.6,
       auto: false,
-      route: goal ? this.route(goal) : [],
       onAct: opts.onAct,
+      onArrive: opts.onArrive,
     };
-    if (!goal || opts.reduced) this.startAct();
+    if (target && opts.reduced) this.teleport(goal);
+    if (!target || opts.reduced) this.startAct();
   }
 
-  /** Va jusqu'à un objet (puis onArrive) ou jusqu'à un point du sol. */
-  goTo(target: ObjectId | Pos, onArrive?: () => void, reduced = false) {
+  /** Va jusqu'à un objet (puis onArrive) ou un endroit, même dans une autre pièce. */
+  goTo(target: SpotId | Place, onArrive?: () => void, reduced = false) {
     this.cancel();
-    const obj = typeof target === "string" ? objectById(target) : null;
-    const goal = obj ? obj.stand : nearestStandable(target as Pos);
+    const spot = typeof target === "string" ? spotById(target) : null;
+    const p = target as Place;
+    const goal: Place = spot ? { room: spot.room, ...spot.stand } : { room: p.room, ...nearestStandable(p.room, p) };
+    this.seq = { act: "use", spot: spot?.id ?? null, goal, pts: [], phase: "go", t: 0, dur: spot ? 1.6 : 0.05, auto: false, onArrive };
     if (reduced) {
-      this.x = goal.x;
-      this.y = goal.y;
+      this.teleport(goal);
+      this.startAct();
     }
-    this.seq = { act: "use", spot: obj?.id ?? null, phase: "go", t: 0, dur: obj ? 1.4 : 0.1, auto: false, route: this.route(goal), onArrive };
-    if (reduced) this.startAct();
   }
 
-  /** Le joueur touche une pièce : Sparrow y va. */
-  goRoom(i: number, reduced = false) {
-    this.goTo({ x: R(i, 60), y: 58 }, undefined, reduced);
+  /** Passe une porte (toucher une porte à l'écran). */
+  goDoor(d: Door, reduced = false) {
+    const next = ROOMS[this.room].doors[d];
+    if (next) this.goTo({ room: next, ...doorEntry(d) }, undefined, reduced);
   }
 
-  /** Interrompt la séquence en cours sans jamais perdre sa réplique. */
-  private cancel() {
+  /** Bouton B : on arrête ce qu'il fait (sans perdre sa réplique). */
+  cancel() {
     const s = this.seq;
     this.seq = null;
     s?.onAct?.();
+  }
+
+  private teleport(p: Place) {
+    if (p.room !== this.room) this.enterRoom(p.room);
+    this.x = p.x;
+    this.y = p.y;
+  }
+
+  private enterRoom(r: RoomId) {
+    this.room = r;
+    this.roomChanges += 1;
+    this.fade = 0.25;
   }
 
   private startAct() {
     const s = this.seq!;
     s.phase = "act";
     s.t = 0;
-    if (s.spot) this.dir = objectById(s.spot).face;
-    const act = s.onAct;
-    const arrive = s.onArrive;
+    if (s.spot) this.facing = spotById(s.spot).face;
+    const a = s.onAct;
+    const b = s.onArrive;
     s.onAct = undefined;
     s.onArrive = undefined;
-    act?.();
-    arrive?.();
+    a?.();
+    b?.();
   }
 
-  /** Qu'y a-t-il sous ce point (coordonnées canvas) ? */
-  hit(px: number, py: number, f: Pick<Frame, "cache">): Hit {
-    const wx = px + this.cam;
-    if (f.cache && Math.abs(wx - f.cache.x) < 7 && Math.abs(py - f.cache.y) < 7) return { kind: "cache" };
-    if (Math.abs(wx - this.x) < 8 && py > this.y - 22 && py <= this.y + 2) return { kind: "sparrow" };
-    const obj = objectAt(wx, py);
-    if (obj) return { kind: "object", obj };
-    return { kind: "floor", pos: { x: wx, y: Math.max(py, WALL + 6) } };
+  /** Qu'y a-t-il sous ce point de l'écran ? */
+  hit(px: number, py: number, cachePlace: Place | null): Hit {
+    if (cachePlace && cachePlace.room === this.room && Math.abs(px - cachePlace.x) < 8 && Math.abs(py - cachePlace.y) < 8) return { kind: "cache" };
+    if (Math.abs(px - this.x) < 8 && py > this.y - 21 && py <= this.y + 2) return { kind: "sparrow" };
+    const spot = spotAt(this.room, px, py);
+    if (spot) return { kind: "spot", spot };
+    const door = doorAt(this.room, px, py);
+    if (door) return { kind: "door", door };
+    return { kind: "floor", pos: { x: px, y: py } };
   }
 
-  /** Vie autonome : il va voir ses meubles selon son état. */
+  /** Vie autonome : il va voir ses meubles selon son état (parfois dans une autre pièce). */
   private brain(mood: Mood) {
     const r = Math.random();
-    let spot: ObjectId | null = null;
+    let spot: SpotId | null = null;
     if (mood === "dofus" || mood === "focus" || mood === "rage") spot = "pc";
-    else if (mood === "gras" || mood === "creve") spot = "canape";
-    else if (mood === "affame" || mood === "crise") spot = r < 0.6 ? "frigo" : null;
+    else if (mood === "gras" || mood === "creve") spot = r < 0.5 ? "canape" : "lit";
+    else if (mood === "affame" || mood === "crise") spot = r < 0.6 ? "friteuse" : "frigo";
     else if (mood === "boude") spot = "fenetre";
-    else if (r < 0.22) spot = "pc";
-    else if (r < 0.36) spot = "frigo";
-    else if (r < 0.5) spot = "canape";
-    else if (r < 0.6) spot = "fenetre";
-    else if (r < 0.67) spot = "tele";
-    else if (r < 0.72) spot = "lit";
-    const goal = spot
-      ? objectById(spot).stand
-      : nearestStandable({ x: this.x + (Math.random() - 0.5) * 90, y: 50 + Math.random() * 12 });
-    this.seq = { act: "use", spot, phase: "go", t: 0, dur: spot ? 3 + Math.random() * 4 : 0.1, auto: true, route: this.route(goal) };
+    else {
+      const all: SpotId[] = ["lit", "fenetre", "lavabo", "canape", "frigo", "friteuse", "pc", "banc", "miroir"];
+      const here = all.filter((id) => spotById(id).room === this.room);
+      const fav: SpotId[] = ["pc", "canape", "friteuse", "banc", "fenetre"];
+      if (r < 0.15) spot = fav[Math.floor(Math.random() * fav.length)];
+      else if (r < 0.55 && here.length) spot = here[Math.floor(Math.random() * here.length)];
+    }
+    const goal: Place = spot
+      ? { room: spotById(spot).room, ...spotById(spot).stand }
+      : { room: this.room, ...nearestStandable(this.room, { x: 24 + Math.random() * 112, y: 50 + Math.random() * 76 }) };
+    this.seq = { act: "use", spot, goal, pts: [], phase: "go", t: 0, dur: spot ? 3 + Math.random() * 4 : 0.05, auto: true };
+  }
+
+  /** Calcule le prochain tronçon (jusqu'à la porte suivante, ou jusqu'au but). */
+  private plan(s: Seq): boolean {
+    const here = { x: this.x, y: this.y };
+    if (s.goal.room !== this.room) {
+      const hop = roomRoute(this.room, s.goal.room)[0];
+      if (!hop) return false;
+      const { approach, exit } = doorExit(hop.door);
+      const p = pathInRoom(this.room, here, approach);
+      if (!p) return false;
+      s.pts = [...p, exit];
+      return true;
+    }
+    const p = pathInRoom(this.room, here, s.goal);
+    if (!p) return false;
+    s.pts = p;
+    return true;
   }
 
   private update(dt: number, f: Frame) {
     this.t += dt;
     this.flash = Math.max(0, this.flash - dt);
+    this.fade = Math.max(0, this.fade - dt);
     this.moving = false;
+    if (this.fade > 0.12) return; // petite pause pendant le changement d'écran
     const lazy = f.mood === "gras" || f.mood === "creve";
-    const ix = this.input.x;
-    const iy = this.input.y;
+    const { x: ix, y: iy } = this.input;
     const mag = Math.hypot(ix, iy);
 
     if (mag > 0.15) {
-      // Contrôle manuel : il obéit (en traînant un peu des pieds s'il est Fritoman).
       if (this.seq) this.cancel();
       this.manualUntil = this.t + 14;
-      const sp = WALK * Math.min(1, mag) * (lazy ? 0.7 : 1);
-      const dx = (ix / mag) * sp * dt * Math.min(1, mag);
-      const dy = (iy / mag) * sp * dt * Math.min(1, mag) * 0.75;
-      const r = move({ x: this.x, y: this.y }, dx, dy);
+      const sp = WALK * (this.run ? RUN : 1) * (lazy ? 0.7 : 1) * Math.min(1, mag);
+      const r = move(this.room, { x: this.x, y: this.y }, (ix / mag) * sp * dt, (iy / mag) * sp * dt);
       const moved = Math.hypot(r.pos.x - this.x, r.pos.y - this.y);
       if (r.blocked && moved < 0.05 && !this.wasBlocked) this.bumps += 1;
       this.wasBlocked = r.blocked && moved < 0.05;
       this.walked += moved;
       this.x = r.pos.x;
       this.y = r.pos.y;
-      if (Math.abs(ix) > 0.2) this.dir = ix > 0 ? 1 : -1;
+      this.facing = Math.abs(ix) > Math.abs(iy) ? (ix > 0 ? "right" : "left") : iy > 0 ? "down" : "up";
       if (moved > 0) {
         this.moving = true;
-        this.walkPhase += dt * 9;
+        this.walkPhase += dt * (this.run ? 13 : 9);
       }
-    } else {
-      this.wasBlocked = false;
-      const s = this.seq;
-      if (!s) {
-        if (this.t > this.idleUntil && !this.manual) this.brain(f.mood);
-      } else if (s.phase === "go") {
-        const next = s.route[0];
-        if (!next) {
-          if (s.spot || !s.auto) this.startAct();
-          else this.endSeq();
-        } else {
-          const dx = next.x - this.x;
-          const dy = next.y - this.y;
-          const dist = Math.hypot(dx, dy);
-          const total = s.route.reduce((a, p, i) => a + Math.hypot(p.x - (i ? s.route[i - 1].x : this.x), p.y - (i ? s.route[i - 1].y : this.y)), 0);
-          const speed = (s.auto ? 22 : total > 120 ? 110 : 55) * (lazy ? 0.6 : 1);
-          if (dist < 1) {
-            this.x = next.x;
-            this.y = next.y;
-            s.route.shift();
-          } else {
-            const k = Math.min(dist, speed * dt) / dist;
-            this.x += dx * k;
-            this.y += dy * k;
-            if (Math.abs(dx) > 0.3) this.dir = dx > 0 ? 1 : -1;
-            this.moving = true;
-            this.walkPhase += dt * (speed > 50 ? 12 : 7);
-          }
-        }
-      } else {
-        s.t += dt;
-        if (s.t >= s.dur) this.endSeq();
+      this.checkDoor();
+      return;
+    }
+    this.wasBlocked = false;
+    const s = this.seq;
+    if (!s) {
+      if (this.t > this.idleUntil && !this.manual) this.brain(f.mood);
+      return;
+    }
+    if (s.phase === "act") {
+      s.t += dt;
+      if (s.t >= s.dur) this.endSeq();
+      return;
+    }
+    if (!s.pts.length) {
+      if (s.goal.room === this.room && Math.hypot(s.goal.x - this.x, s.goal.y - this.y) < 1) {
+        if (s.spot || !s.auto) this.startAct();
+        else this.endSeq();
+        return;
+      }
+      if (!this.plan(s)) {
+        this.endSeq();
+        return;
       }
     }
-    const camTarget = Math.max(0, Math.min(WORLD_W - VIEW_W, this.x - VIEW_W / 2));
-    this.cam = f.reduced ? camTarget : this.cam + (camTarget - this.cam) * Math.min(1, dt * 4);
+    const next = s.pts[0];
+    const dx = next.x - this.x;
+    const dy = next.y - this.y;
+    const dist = Math.hypot(dx, dy);
+    const far = s.goal.room !== this.room;
+    const speed = (s.auto ? 26 : far ? 80 : 56) * (lazy ? 0.65 : 1);
+    if (dist < 1) {
+      this.x = next.x;
+      this.y = next.y;
+      s.pts.shift();
+    } else {
+      const k = Math.min(dist, speed * dt) / dist;
+      this.x += dx * k;
+      this.y += dy * k;
+      this.facing = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "down" : "up";
+      this.moving = true;
+      this.walkPhase += dt * (speed > 50 ? 12 : 7);
+    }
+    if (this.checkDoor()) s.pts = [];
+  }
+
+  private checkDoor(): boolean {
+    const to = doorCrossed(this.room, { x: this.x, y: this.y });
+    if (!to) return false;
+    this.enterRoom(to.room);
+    this.x = to.x;
+    this.y = to.y;
+    return true;
   }
 
   private endSeq() {
@@ -372,164 +425,65 @@ export class World {
     this.update(Math.min(dt, 0.1), f);
     ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, VIEW_W, VIEW_H);
-    ctx.save();
-    ctx.translate(-Math.round(this.cam), 0);
-    this.drawRooms(ctx, f);
-    // Profondeur : le canapé et la table sont au milieu de la pièce.
-    const front = this.y < 57;
-    if (!front) this.drawFloorItems(ctx);
-    this.drawSparrow(ctx, f);
-    if (front) this.drawFloorItems(ctx);
-    if (this.seq?.act === "douche" && this.seq.phase === "act") {
-      ctx.fillStyle = "#9fb4c8";
-      for (let i = 0; i < 6; i++) ctx.fillRect(R(0, 90) + i * 2, Math.round(((this.t * 34 + i * 7) % 18) + 33), 1, 2);
+    const using = this.seq?.phase === "act" && this.seq.spot ? this.seq.spot : null;
+    const d: DecorState = { t: this.t, hour: f.hour, deco: new Set(f.deco), tiers: f.tiers, pcBroken: f.pcBroken, using };
+    drawRoom(ctx, this.room, d);
+    const sit = this.sitPos();
+    const sy = sit ? sit.y : this.y;
+    const items = floorItems(this.room, d).sort((a, b) => a.base - b.base);
+    let drawn = false;
+    for (const it of items) {
+      if (!drawn && it.base > sy) {
+        this.drawSparrow(ctx, f, sit);
+        drawn = true;
+      }
+      it.draw(ctx);
     }
-    if (f.cache && Math.floor(this.t * 3) % 3 !== 0) ctx.drawImage(prop("eclat"), f.cache.x - 2, f.cache.y - 2);
-    // Repère discret de l'objet à portée
+    if (!drawn) this.drawSparrow(ctx, f, sit);
+
+    if (f.cache && f.cache.room === this.room && Math.floor(this.t * 3) % 3 !== 0) ctx.drawImage(prop("eclat"), f.cache.x - 2, f.cache.y - 4);
+    // Repère de l'objet à portée
     const n = this.near();
     if (n && !this.seq && Math.floor(this.t * 2) % 2 === 0) {
       ctx.fillStyle = "#f2c14e";
       const cx = Math.round((n.tap.x1 + n.tap.x2) / 2);
-      ctx.fillRect(cx - 1, n.tap.y1 - 4, 3, 1);
-      ctx.fillRect(cx, n.tap.y1 - 3, 1, 1);
+      const ty = Math.max(2, n.tap.y1 - 5);
+      ctx.fillRect(cx - 2, ty, 5, 1);
+      ctx.fillRect(cx - 1, ty + 1, 3, 1);
+      ctx.fillRect(cx, ty + 2, 1, 1);
     }
-    ctx.restore();
     if (this.flash > 0 && !f.reduced) {
       ctx.fillStyle = `rgba(242,193,78,${Math.min(0.55, this.flash / 4)})`;
       ctx.fillRect(0, 0, VIEW_W, VIEW_H);
       for (let i = 0; i < 6; i++) {
         const a = this.t * 2 + i;
-        ctx.drawImage(prop("etoile"), Math.round(VIEW_W / 2 + Math.cos(a) * 40 - 3), Math.round(26 + Math.sin(a * 1.3) * 18));
+        ctx.drawImage(prop("etoile"), Math.round(VIEW_W / 2 + Math.cos(a) * 50 - 3), Math.round(70 + Math.sin(a * 1.3) * 40));
       }
     }
+    if (this.fade > 0 && !f.reduced) {
+      ctx.fillStyle = `rgba(0,0,0,${Math.min(1, this.fade * 4)})`;
+      ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    }
   }
 
-  private drawFloorItems(ctx: CanvasRenderingContext2D) {
-    ctx.drawImage(prop("canape"), R(2, 28), 54);
-    ctx.drawImage(fur("plan"), R(3, 80), 54);
+  /** S'il est installé sur un meuble (lit, canapé, chaise, banc). */
+  private sitPos(): (Pos & { face: Facing }) | null {
+    const s = this.seq;
+    if (!s || s.phase !== "act" || !s.spot || s.act === "refus") return null;
+    const sp = spotById(s.spot);
+    if (!sp.sit) return null;
+    return { ...sp.sit, face: sp.sitFace ?? sp.face };
   }
 
-  private drawRooms(ctx: CanvasRenderingContext2D, f: Frame) {
-    const t = this.t;
-    const walls = ["#26212b", "#1b1b29", "#2b2224", "#20262b"];
-    for (let i = 0; i < ROOMS.length; i++) {
-      const x0 = i * ROOM_W;
-      if (x0 + ROOM_W < this.cam - 2 || x0 > this.cam + VIEW_W + 2) continue;
-      ctx.fillStyle = walls[i];
-      ctx.fillRect(x0, 0, ROOM_W, WALL);
-      // Sol en lattes
-      ctx.fillStyle = "#3a2c22";
-      ctx.fillRect(x0, WALL, ROOM_W, VIEW_H - WALL);
-      ctx.fillStyle = "#2e231b";
-      for (let y = WALL + 4; y < VIEW_H; y += 5) ctx.fillRect(x0, y, ROOM_W, 1);
-      // Plinthe rouge (direction artistique)
-      ctx.fillStyle = "#9e1f1c";
-      ctx.fillRect(x0, WALL - 2, ROOM_W, 2);
-      // Papier peint discret + plafonnier
-      ctx.fillStyle = "rgba(255,255,255,0.025)";
-      for (let x = x0 + 4; x < x0 + ROOM_W; x += 8) ctx.fillRect(x, 0, 3, WALL - 2);
-      ctx.fillStyle = "#090909";
-      ctx.fillRect(x0 + ROOM_W / 2, 0, 1, 4);
-      ctx.fillStyle = "#3b3b3b";
-      ctx.fillRect(x0 + ROOM_W / 2 - 3, 4, 7, 2);
-      ctx.fillStyle = "rgba(242,193,78,0.07)";
-      ctx.beginPath();
-      ctx.moveTo(x0 + ROOM_W / 2 - 3, 6);
-      ctx.lineTo(x0 + ROOM_W / 2 + 4, 6);
-      ctx.lineTo(x0 + ROOM_W / 2 + 26, WALL);
-      ctx.lineTo(x0 + ROOM_W / 2 - 25, WALL);
-      ctx.fill();
-      // Cloison
-      ctx.fillStyle = "#090909";
-      ctx.fillRect(x0, 0, 2, WALL);
-    }
-    const px = (c: string, x: number, y: number, w: number, h: number) => {
-      ctx.fillStyle = c;
-      ctx.fillRect(x, y, w, h);
-    };
-    // Calendrier 2031 dans la chambre (le compte à rebours veille)
-    px("#f1efe8", R(0, 74), 14, 9, 11);
-    px("#e53935", R(0, 74), 14, 9, 3);
-    px("#090909", R(0, 76), 19, 5, 1);
-    px("#090909", R(0, 76), 21, 3, 1);
-    // Table de nuit + lampe
-    px("#a8692e", R(0, 32), BASE - 7, 7, 7);
-    px("#f2c14e", R(0, 33), BASE - 12, 5, 3);
-    px("#3b3b3b", R(0, 35), BASE - 9, 1, 2);
-    // Coin gaming : étagère à figurines + bande LED
-    px("#3b3b3b", R(1, 12), 28, 22, 2);
-    px("#e53935", R(1, 14), 24, 3, 4);
-    px("#f2c14e", R(1, 20), 23, 3, 5);
-    px("#6fae4b", R(1, 27), 25, 3, 3);
-    px(Math.floor(t * 2) % 2 ? "#9e1f1c" : "#e53935", R(1, 2), WALL - 4, ROOM_W - 2, 1);
-    // Salon : cadre « bat-frite » + lampadaire
-    px("#090909", R(2, 44), 12, 18, 12);
-    px("#1b1b29", R(2, 45), 13, 16, 10);
-    px("#f2c14e", R(2, 50), 16, 6, 4);
-    px("#3b3b3b", R(2, 16), BASE - 26, 1, 26);
-    px("#f2c14e", R(2, 13), BASE - 30, 7, 4);
-    // Cuisine : faïence, étagère à bocaux, hotte
-    ctx.fillStyle = "rgba(255,255,255,0.05)";
-    for (let y = 24; y < WALL - 2; y += 4) ctx.fillRect(R(3, 24), y, 86, 1);
-    for (let x = R(3, 24); x < R(3, 110); x += 6) ctx.fillRect(x, 24, 1, WALL - 26);
-    px("#3b3b3b", R(3, 78), 16, 26, 2);
-    px("#e53935", R(3, 80), 11, 4, 5);
-    px("#f2c14e", R(3, 87), 12, 4, 4);
-    px("#6fae4b", R(3, 94), 11, 4, 5);
-    px("#777777", R(3, 46), 22, 14, 4);
-    px("#5a5a6e", R(3, 50), 14, 6, 8);
-    const deco = new Set(f.deco);
-    // ── Chambre
-    ctx.drawImage(fur("lit"), R(0, 6), BASE - 6);
-    ctx.drawImage(fur("fenetre"), R(0, 52), 12);
-    ctx.drawImage(fur("douche"), R(0, 88), BASE - 20);
-    // ── Coin gaming
-    if (deco.has("dec-neons")) {
-      ctx.globalAlpha = 0.6 + Math.sin(t * 3) * 0.2;
-      ctx.drawImage(fur("neons"), R(1, 40), 4);
-      ctx.globalAlpha = 1;
-    }
-    if (deco.has("dec-poster")) ctx.drawImage(fur("poster"), R(1, 14), 12);
-    ctx.drawImage(fur("bureau"), R(1, 46), BASE - 14);
-    if (f.pcBroken) {
-      ctx.drawImage(fur("ecranNoir"), R(1, 52) + 1, BASE - 13);
-      ctx.drawImage(prop("vapeur"), R(1, 56), BASE - 22 - (Math.floor(t * 4) % 2));
-    } else if (Math.floor(t * 2) % 2) {
-      ctx.fillStyle = "#e53935";
-      ctx.fillRect(R(1, 60), BASE - 11, 2, 1);
-    }
-    if (deco.has("dec-dofrite")) {
-      ctx.drawImage(fur("oeuf"), R(1, 86), BASE - 16 - (Math.floor(t * 2) % 2));
-      if (Math.floor(t * 3) % 4 === 0) ctx.drawImage(prop("eclat"), R(1, 92), BASE - 20);
-    }
-    // ── Salon
-    if (deco.has("dec-tapis")) ctx.drawImage(fur("tapis"), R(2, 26), 60);
-    ctx.drawImage(fur("tele"), R(2, 78), BASE - 11);
-    if (Math.floor(t * 5) % 3 === 0) {
-      ctx.fillStyle = "#9fb4c8";
-      ctx.fillRect(R(2, 81), BASE - 8, 8, 1);
-    }
-    if (deco.has("dec-plante")) ctx.drawImage(fur("plante"), R(2, 98), BASE - 8);
-    // ── Cuisine
-    ctx.drawImage(fur("frigo"), R(3, 8), BASE - 20);
-    if (this.seq?.spot === "frigo" && this.seq.phase === "act") {
-      ctx.fillStyle = "#f2c14e";
-      ctx.fillRect(R(3, 9), BASE - 19, 10, 4);
-    }
-    ctx.drawImage(fur("plan"), R(3, 44), BASE - 6);
-    ctx.drawImage(fur(deco.has("dec-friteuse") ? "friteuseOr" : "friteuse"), R(3, 48), BASE - 12);
-    if (Math.floor(t * 2) % 2) ctx.drawImage(prop("vapeur"), R(3, 50), BASE - 19);
-  }
-
-  private drawSparrow(ctx: CanvasRenderingContext2D, f: Frame) {
+  private drawSparrow(ctx: CanvasRenderingContext2D, f: Frame, sit: (Pos & { face: Facing }) | null) {
     const s = this.seq;
     const t = this.t;
     const fast = Math.floor(t * 8) % 2;
     const frame = Math.floor(t * 3) % 2;
     const acting = s?.phase === "act" ? s : null;
-    const walking = this.moving;
     const act = acting?.act;
-    const atSpot = acting?.spot ? objectById(acting.spot) : null;
+    const walking = this.moving;
+    const facing = sit ? sit.face : this.facing;
 
     let eyes: Eyes = "lunettes";
     let mouth: Mouth = "neutre";
@@ -537,7 +491,6 @@ export class World {
     let legs: Legs = walking ? (Math.floor(this.walkPhase) % 2 ? "walkA" : "walkB") : "stand";
     let shake = 0;
     let bob = walking || f.reduced ? 0 : frame;
-    let flip = this.dir < 0;
     let arms = false;
     const fx: [string, number, number][] = [];
 
@@ -574,7 +527,6 @@ export class World {
         break;
       case "boude":
         mouth = "triste";
-        if (!walking && !act) flip = !flip;
         break;
       case "crise":
         eyes = "triste";
@@ -583,11 +535,8 @@ export class World {
         break;
     }
     if (!act && !walking && eyes === "lunettes" && t % 4 < 0.12) eyes = "fermes";
-
-    // Posture « assise » au meuble (PC, canapé, lit) — aussi en vie autonome
-    if (atSpot?.pose === "assis") legs = "assis";
-    const atPc = acting?.spot === "pc";
-    if (atPc && !f.pcBroken) body = "manette";
+    if (sit) legs = "assis";
+    if (acting?.spot === "pc" && sit && !f.pcBroken) body = "manette";
 
     if (act) {
       const at = acting!.t;
@@ -617,7 +566,7 @@ export class World {
           eyes = at > 0.8 ? "grands" : "lunettes";
           mouth = at > 0.8 ? "sourire" : "mache";
           if (at < 0.9) fx.push(["salade", 13, 11]);
-          else fx.push(["coeur", 15, -4 - Math.floor(at * 3) % 3]);
+          else fx.push(["coeur", 15, -4 - (Math.floor(at * 3) % 3)]);
           break;
         case "refus":
           eyes = "grands";
@@ -627,7 +576,6 @@ export class World {
           break;
         case "boude":
           mouth = "triste";
-          flip = !flip;
           fx.push(["bulle", 13, -6]);
           break;
         case "dofus":
@@ -645,7 +593,6 @@ export class World {
           eyes = act === "drop" ? "grands" : "focus";
           mouth = "sourire";
           arms = at > 0.6;
-          if (arms) legs = "stand";
           bob = fast;
           for (let i = 0; i < 4; i++) {
             const a = t * 3 + (i * Math.PI) / 2;
@@ -662,8 +609,7 @@ export class World {
           break;
         case "parler":
         case "event":
-        case "use":
-          if (act !== "use") mouth = fast ? "ouverte" : "neutre";
+          mouth = fast ? "ouverte" : "neutre";
           break;
         case "rire":
           eyes = "fermes";
@@ -672,7 +618,6 @@ export class World {
           break;
         case "danse":
           mouth = "sourire";
-          flip = Math.floor(t * 4) % 2 === 0;
           legs = fast ? "walkA" : "walkB";
           arms = Math.floor(t * 2) % 2 === 0;
           bob = fast;
@@ -693,30 +638,44 @@ export class World {
           mouth = "ouverte";
           shake = 2;
           break;
+        case "muscu":
+          arms = fast === 1;
+          mouth = "ouverte";
+          break;
       }
     }
     if (f.reduced) shake = 0;
 
-    const sx = Math.round(this.x - 8 + (shake ? (fast ? shake : -shake) : 0));
-    const seated = legs === "assis";
-    const sy = Math.round(this.y) - 20 - bob + (seated ? 2 : 0);
+    const fx0 = sit ? sit.x : this.x;
+    const fy0 = sit ? sit.y : this.y;
+    const sx = Math.round(fx0 - 8 + (shake ? (fast ? shake : -shake) : 0));
+    const sy = Math.round(fy0) - 20 - bob + (legs === "assis" ? 2 : 0);
+    const back = facing === "up";
+    const flip = facing === "left";
+    const look = f.look;
 
-    if (f.look.tenue === "ten-cape") ctx.drawImage(img("cape", () => CAPE, flip), sx, sy + 15);
-    const key = `h:${eyes}:${mouth}:${body}:${legs}:${f.look.lunettes}:${f.look.tenue}:${f.look.barbe ? 1 : 0}`;
-    ctx.drawImage(img(key, () => sparrow(eyes, mouth, body, legs, f.look), flip), sx, sy);
-    const hat = f.look.tete ? HATS[f.look.tete] : undefined;
-    if (hat) ctx.drawImage(img(`hat:${f.look.tete}`, () => hat.rows, flip), sx, sy + hat.dy);
+    // Ombre au sol
+    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    ctx.fillRect(Math.round(fx0) - 6, Math.round(fy0) - 1, 12, 2);
+    // Aura du TITAN
+    if ((look.muscle ?? 0) >= 4 && !f.reduced) {
+      ctx.fillStyle = `rgba(242,193,78,${0.18 + Math.sin(t * 4) * 0.08})`;
+      ctx.fillRect(sx - 2, sy - 2, 20, 24);
+    }
+    if (look.tenue === "ten-cape" && !back) ctx.drawImage(img("cape", () => CAPE, flip), sx, sy + 15);
+    const key = `h:${back ? "dos" : `${eyes}:${mouth}`}:${body}:${legs}:${look.lunettes}:${look.tenue}:${look.barbe ? 1 : 0}:${look.muscle ?? 0}`;
+    ctx.drawImage(img(key, () => (back ? sparrowBack(body, legs, look) : sparrow(eyes, mouth, body, legs, look)), flip), sx, sy);
+    if (look.tenue === "ten-cape" && back) ctx.drawImage(img("cape", () => CAPE), sx, sy + 13);
+    const hat = look.tete ? HATS[look.tete] : undefined;
+    if (hat) ctx.drawImage(img(`hat:${look.tete}`, () => hat.rows, flip), sx, sy + hat.dy);
     if (arms) {
       ctx.fillStyle = "#e9b18a";
-      ctx.fillRect(sx + 1, sy + 11, 2, 4);
-      ctx.fillRect(sx + 13, sy + 11, 2, 4);
+      ctx.fillRect(sx + 1, sy + 10, 2, 5);
+      ctx.fillRect(sx + 13, sy + 10, 2, 5);
     }
-    // Chaise de bureau devant ses jambes
-    if (atPc && seated) ctx.drawImage(img("chaise", () => FURNITURE.chaise, true), sx + 8, Math.round(this.y) - 7);
+    if (back) return; // de dos : pas d'expressions
+    for (const [k, ox, oy] of fx) ctx.drawImage(prop(k), sx + ox, sy + oy);
 
-    for (const [k, px, py] of fx) ctx.drawImage(prop(k), sx + px, sy + py);
-
-    // Effets d'état
     if ((act === "sieste" || f.mood === "creve") && !walking) {
       const k = (t * 1.2) % 1;
       z(ctx, sx + 16, Math.round(sy + 1 - k * 6), 4);

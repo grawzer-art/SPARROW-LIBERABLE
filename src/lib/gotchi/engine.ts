@@ -26,7 +26,7 @@ import {
 } from "./core";
 import { talk, welcome, pickFresh } from "./dialogue";
 import { pickEvent, type GameEvent, type Scene } from "./events";
-import { ITEMS, RARES, itemById, type Item } from "./items";
+import { ITEMS, MUSCLE_STAGES, RARES, itemById, muscleStage, tierOf, type Item } from "./items";
 import { LINES } from "./lines";
 import { claimMission, claimable, ensureMissions, track } from "./missions";
 
@@ -264,7 +264,8 @@ export function act(s0: State, a: Action, now: number, rand: Rand = Math.random)
     }
     case "sieste": {
       // Uniquement des micro-siestes : il refuse s'il est en forme.
-      if (s.stats.energie > 70 || rand() < 0.35) {
+      const lit = tierOf(s.owned, "lit");
+      if (s.stats.energie > 70 || rand() < 0.35 - (lit - 1) * 0.1) {
         d = { energie: 6 };
         line = pick(LINES.siesteRefus, s, rand);
         anim = "refus";
@@ -272,7 +273,7 @@ export function act(s0: State, a: Action, now: number, rand: Rand = Math.random)
         xp = 1;
         coins = 0;
       } else {
-        d = { energie: 28, humeur: 4 };
+        d = { energie: 28 + (lit - 1) * 6, humeur: 4 };
         line = pick(LINES.sieste, s, rand);
         s = track(bump(s, "siestes"), "sieste", 1, now);
       }
@@ -393,6 +394,7 @@ export function buy(s: State, id: string, now: number): { state: State; ok: bool
 export function equip(s: State, id: string): State {
   const it = itemById(id);
   if (!it || !s.owned.includes(id)) return s;
+  if (it.slot === "meuble") return s; // un meuble possédé est installé d'office
   if (it.slot === "deco") {
     const deco = s.equip.deco.includes(id) ? s.equip.deco.filter((d) => d !== id) : [...s.equip.deco, id];
     return { ...s, equip: { ...s.equip, deco } };
@@ -401,6 +403,7 @@ export function equip(s: State, id: string): State {
 }
 
 export const isEquipped = (s: State, id: string) =>
+  (itemById(id)?.slot === "meuble" && s.owned.includes(id)) ||
   s.equip.lunettes === id || s.equip.tenue === id || s.equip.tete === id || s.equip.deco.includes(id);
 
 /** Applique l'équipement puis vérifie les trophées (cape + masque…). */
@@ -432,7 +435,8 @@ export function farmReward(
   const before = ensureMissions(tick(s0, now), now);
   const notes: Note[] = [];
   const score = Math.max(0, Math.floor(r.score));
-  const coins = Math.round(score / 8);
+  // Le PC amélioré rapporte plus.
+  const coins = Math.round((score / 8) * (1 + (tierOf(before.owned, "pc") - 1) * 0.15));
   const xp = Math.round(score / 12) + 5;
   let s = apply(before, { energie: -8, fun: 30, humeur: 8, satiete: -5 });
   s = bump(bump(s, "farms"), "dofus");
@@ -457,12 +461,11 @@ export function farmReward(
 
 // ─── Objet caché du jour ───
 
-/** Position (en pixels-monde) de l'objet caché du jour, ou null s'il est déjà trouvé. */
-export function cacheSpot(s: State, now: number, worldW: number): { x: number; y: number } | null {
+/** Graine de l'objet caché du jour (0..1), ou null s'il est déjà trouvé. La carte la convertit en position. */
+export function cacheSeed(s: State, now: number): number | null {
   const day = parisDay(now);
   if (s.cacheDay === day) return null;
-  const r = seeded(`cache:${day}`);
-  return { x: 8 + Math.floor(r() * (worldW - 16)), y: 53 + Math.floor(r() * 8) };
+  return seeded(`cache:${day}`)();
 }
 
 export function findCache(s0: State, now: number, rand: Rand = Math.random): Result | null {
@@ -500,3 +503,46 @@ export function claim(s: State, id: string, now: number): { state: State; notes:
 }
 
 export { claimable, ensureMissions } from "./missions";
+
+// ─── Mini-jeu de musculation ───
+
+export interface MuscuResult {
+  reps: number;
+  perfects: number;
+  bestCombo: number;
+  /** Séance écourtée par une crampe (3 ratés). */
+  crampe: boolean;
+}
+
+export function muscuReward(
+  s0: State,
+  r: MuscuResult,
+  now: number,
+): { state: State; coins: number; xp: number; gained: number; stageUp: string | null; notes: Note[]; record: boolean } {
+  const before = ensureMissions(tick(s0, now), now);
+  const notes: Note[] = [];
+  const reps = Math.max(0, Math.floor(r.reps));
+  const score = reps * 10 + r.perfects * 5;
+  const bonus = 1 + (tierOf(before.owned, "sport") - 1) * 0.25;
+  const gained = Math.round((reps + r.perfects * 0.5) * bonus);
+  const coins = Math.round(reps * 1.5 + r.bestCombo);
+  const xp = reps + 5;
+  const stage0 = muscleStage(before.muscle);
+  let s = apply(before, { energie: -12, forme: 10, humeur: r.crampe ? -4 : 8, satiete: -8 });
+  s = { ...s, muscle: s.muscle + gained, bestMuscu: Math.max(s.bestMuscu, score), lastAction: { a: "muscu", t: now } };
+  const record = score > before.bestMuscu;
+  s = bump(bump(s, "trainings"), "reps", reps);
+  s = track(s, "muscu", 1, now);
+  s = track(s, "reps", reps, now);
+  const stage1 = muscleStage(s.muscle);
+  let stageUp: string | null = null;
+  if (stage1 > stage0) {
+    stageUp = MUSCLE_STAGES[stage1][1];
+    notes.push({ kind: "level", txt: `ÉVOLUTION : ${stageUp} !` });
+    s = log(s, `Évolution musculaire : ${stageUp}`, "level", now);
+  }
+  s = log(s, `Séance de muscu : ${reps} reps, +${gained} muscle`, "info", now);
+  s = reward(s, xp, coins, now, notes);
+  s = settle(before, s, now, notes);
+  return { state: s, coins, xp, gained, stageUp, notes, record };
+}

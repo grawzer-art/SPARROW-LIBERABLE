@@ -173,11 +173,24 @@ export const PLAY_LINES = {
     "Je fais plus de pas en 5 minutes qu'en une semaine. Merci, je crois.",
     "C'est un appartement, pas un marathon.",
   ],
-  room: [
-    ["La chambre. Je n'y dors pas, j'y stocke des chaussettes.", "Le lit me regarde. Je ne le regarde pas."],
-    ["Mon bureau. Mon trône. Mon destin.", "Le PC m'appelle. Je l'entends ronronner."],
-    ["Le salon. Territoire officiel du canapé.", "Ici, j'ai fait 300 siestes de 4 minutes."],
-    ["La cuisine. Mon sanctuaire.", "Ça sent la friture. Je suis chez moi."],
+  room: {
+    chambre: ["La chambre. Je n'y dors pas, j'y stocke des chaussettes.", "Le lit me regarde. Je ne le regarde pas."],
+    gaming: ["Mon bureau. Mon trône. Mon destin.", "Le PC m'appelle. Je l'entends ronronner."],
+    salon: ["Le salon. Territoire officiel du canapé.", "Ici, j'ai fait 300 siestes de 4 minutes."],
+    cuisine: ["La cuisine. Mon sanctuaire.", "Ça sent la friture. Je suis chez moi."],
+    muscu: ["La salle de sport. Ça sent l'effort. Et un peu les frites.", "Ici, on soulève. Des haltères, et parfois une frite."],
+  } as Record<string, string[]>,
+  canape: [
+    "Encore une émission de cuisine sans frites. Je zappe.",
+    "La télé, c'est comme un PC, mais sans les monstres.",
+    "Je regarde la télé, mais je pense à mon farm.",
+  ],
+  miroir: [
+    ["Miroir, mon beau miroir… Ah. C'est moi. D'accord.", "Pour l'instant, mes muscles sont en mode furtif."],
+    ["Je suis sec. Comme une frite trop cuite, mais en beau.", "On voit un début de biceps. Ou c'est la lumière."],
+    ["Costaud ! Le t-shirt commence à souffrir.", "Regarde ce bras. Non, l'autre. Pareil, en fait."],
+    ["Bodybuildé. Je pourrais porter le frigo. Je ne le ferai pas.", "Mes épaules ont leurs propres épaules."],
+    ["SPARROW TITAN. Le miroir a peur de moi.", "Je suis devenu une légende. Une légende qui mange des frites."],
   ],
   frigo: [
     "Le frigo contient : de la mayo, de l'espoir, et une salade suspecte.",
@@ -189,11 +202,6 @@ export const PLAY_LINES = {
     "Je regarde passer les pigeons. Ils me jugent.",
     "Il fait beau. Parfait pour rester à l'intérieur.",
   ],
-  tele: [
-    "Encore une émission de cuisine sans frites. Je zappe.",
-    "La télé, c'est comme un PC, mais sans les monstres.",
-    "Je regarde la télé, mais je pense à mon farm.",
-  ],
   lit: [
     "Le lit ? Non. J'ai des responsabilités. Et un PC.",
     "Je m'assois sur le lit. Je ne m'allonge pas. C'est une règle.",
@@ -201,12 +209,16 @@ export const PLAY_LINES = {
   ],
 };
 
-export type PlayLine = "start" | "bump" | "long" | "frigo" | "fenetre" | "tele" | "lit";
+export type PlayLine = "start" | "bump" | "long" | "frigo" | "fenetre" | "canape" | "lit";
 
 export function playLine(kind: PlayLine, said: string[], rand: Rand = Math.random): string {
   return pickFresh(PLAY_LINES[kind], said, rand);
 }
 
-export function roomLine(room: number, said: string[], rand: Rand = Math.random): string {
-  return pickFresh(PLAY_LINES.room[Math.max(0, Math.min(3, room))], said, rand);
+export function roomLine(room: string, said: string[], rand: Rand = Math.random): string {
+  return pickFresh(PLAY_LINES.room[room] ?? PLAY_LINES.room.salon, said, rand);
+}
+
+export function mirrorLine(stage: number, said: string[], rand: Rand = Math.random): string {
+  return pickFresh(PLAY_LINES.miroir[Math.max(0, Math.min(4, stage))], said, rand);
 }

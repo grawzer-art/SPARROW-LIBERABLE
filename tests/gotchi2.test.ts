@@ -6,7 +6,7 @@ import {
   act,
   applyEvent,
   buy,
-  cacheSpot,
+  cacheSeed,
   catchUp,
   claim,
   ensureMissions,
@@ -236,10 +236,10 @@ describe("Sparrowgotchi 2.0 — mini-jeu de farm", () => {
 describe("Sparrowgotchi 2.0 — objet caché", () => {
   it("une fois par jour, position stable", () => {
     const s = newState(T0);
-    expect(cacheSpot(s, T0, 448)).toEqual(cacheSpot(s, T0 + H, 448));
+    expect(cacheSeed(s, T0)).toEqual(cacheSeed(s, T0 + H));
     const r = findCache(s, T0)!;
     expect(r.state.counters.caches).toBe(1);
-    expect(cacheSpot(r.state, T0, 448)).toBeNull();
+    expect(cacheSeed(r.state, T0)).toBeNull();
     expect(findCache(r.state, T0)).toBeNull();
   });
 });

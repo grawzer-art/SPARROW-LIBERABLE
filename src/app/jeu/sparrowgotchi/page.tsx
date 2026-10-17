@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Gotchi } from "@/components/gotchi/Gotchi";
 import "./gotchi.css";
+import "./console.css";
 
 export const metadata: Metadata = {
   title: "Sparrowgotchi — SPARROW",
