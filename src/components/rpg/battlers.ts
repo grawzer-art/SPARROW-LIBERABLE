@@ -804,7 +804,74 @@ function minuit(forme: 0 | 1 | 2): Raster {
   return r;
 }
 
+
+// ─── Créatures sauvages ───
+
+/** Brokito : petite créature-brocoli, couronne de florets, bras-feuilles, pattes trapues. */
+function brokito(dos: boolean): Raster {
+  const r = new Raster(48, 48);
+  const G = "#5f9e4a";
+  const GL = "#8cc66a";
+  const GD = "#3f7a32";
+  // Pattes et ombre
+  r.ball(17, 43, 4, 3, GD, G, "#2e5a26");
+  r.ball(31, 43, 4, 3, GD, G, "#2e5a26");
+  // Corps (tige épaisse, vert clair)
+  r.ball(24, 33, 12, 10, "#a8d878", "#c8ec98", "#7fb058");
+  // Bras-feuilles
+  r.ball(9, 31, 5, 3, G, GL, GD);
+  r.ball(39, 31, 5, 3, G, GL, GD);
+  r.line(5, 30, 13, 32, GD);
+  r.line(35, 32, 43, 30, GD);
+  // Couronne de florets
+  for (const [x, y, rad] of [
+    [24, 12, 8],
+    [14, 16, 7],
+    [34, 16, 7],
+    [18, 9, 6],
+    [30, 9, 6],
+    [24, 20, 8],
+    [12, 22, 5],
+    [36, 22, 5],
+  ] as [number, number, number][])
+    r.ball(x, y, rad, rad - 0.5, G, GL, GD);
+  for (const [x, y] of [
+    [20, 7],
+    [27, 6],
+    [15, 13],
+    [32, 12],
+    [22, 15],
+    [11, 19],
+    [36, 19],
+  ])
+    r.rect(x, y, 2, 2, GL);
+  if (!dos) {
+    // Visage : grands yeux malicieux, joues roses, petite bouche
+    for (const ex of [17, 27]) {
+      r.rect(ex, 26, 5, 5, "#f8f4e8");
+      r.rect(ex + 2, 27, 2, 3, INK);
+      r.set(ex + 2, 27, "#ffffff");
+    }
+    r.rect(15, 32, 3, 2, "#e88a8a");
+    r.rect(31, 32, 3, 2, "#e88a8a");
+    r.rect(22, 34, 5, 1, INK);
+    r.set(21, 33, INK);
+    r.set(27, 33, INK);
+  } else {
+    // De dos : une petite feuille-queue
+    r.ball(24, 40, 3, 2, G, GL, GD);
+  }
+  // Pousse au sommet du crâne
+  r.line(24, 1, 24, 4, GD);
+  r.ball(21.5, 2, 2, 1.2, GL);
+  r.ball(26.5, 2, 2, 1.2, GL);
+  r.outline(INK);
+  return r;
+}
+
 const PAINT: Record<string, (tenue?: string) => Raster> = {
+  brokito: () => brokito(false),
+  "brokito-dos": () => brokito(true),
   trotteuse,
   coucou,
   sablier: () => sablier(false),

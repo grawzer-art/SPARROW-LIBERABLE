@@ -21,6 +21,14 @@ export interface Rpg {
   owned: string[];
   /** Techniques apprises en plus des techniques de base. */
   skills: string[];
+  /** Créatures capturées (Bestiaire), par espèce : niveau, expérience, date de capture. */
+  mons?: Record<string, MonSave>;
+}
+
+export interface MonSave {
+  level: number;
+  xp: number;
+  caught: number;
 }
 
 export const emptyRpg = (): Rpg => ({
@@ -52,5 +60,10 @@ export function restoreRpg(raw: unknown): Rpg {
   const owned = strs(o.owned);
   const gear: Rpg["gear"] = {};
   for (const slot of ["arme", "armure", "accessoire"] as const) if (typeof g[slot] === "string" && owned.includes(g[slot]!)) gear[slot] = g[slot];
-  return { quests, done: strs(o.done), items: strs(o.items), flags: strs(o.flags), seen: strs(o.seen), bag, party: strs(o.party), gear, owned, skills: strs(o.skills) };
+  const mons: Record<string, MonSave> = {};
+  if (o.mons && typeof o.mons === "object")
+    for (const [k, v] of Object.entries(o.mons as Record<string, Partial<MonSave>>))
+      if (v && typeof v.level === "number" && v.level >= 1)
+        mons[k] = { level: Math.min(99, Math.floor(v.level)), xp: typeof v.xp === "number" && v.xp > 0 ? Math.floor(v.xp) : 0, caught: typeof v.caught === "number" ? v.caught : 0 };
+  return { quests, done: strs(o.done), items: strs(o.items), flags: strs(o.flags), seen: strs(o.seen), bag, party: strs(o.party), gear, owned, skills: strs(o.skills), ...(Object.keys(mons).length ? { mons } : {}) };
 }

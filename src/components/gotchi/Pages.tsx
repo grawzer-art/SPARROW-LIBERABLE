@@ -9,15 +9,18 @@ import { MINIGAMES, type GameId } from "@/lib/gotchi/minigames";
 import { missionDef } from "@/lib/gotchi/missions";
 import { CONSUMABLES, EQUIPMENT, MEMBERS, MOVES } from "@/lib/rpg/bestiary";
 import { makeAlly } from "@/lib/rpg/combat";
+import { ACTIVE, SPECIES, isSeen, xpNeed } from "@/lib/rpg/monsters";
+import { battler } from "@/components/rpg/battlers";
 import { QUESTS, RPG_ITEMS, isDone, nextStep, status } from "@/lib/rpg/quest";
 
-export type PageId = "quetes" | "jeux" | "missions" | "inventaire" | "appart" | "profil" | "equipe" | "options";
+export type PageId = "quetes" | "jeux" | "missions" | "inventaire" | "appart" | "profil" | "equipe" | "bestiaire" | "options";
 
 export const MENU: { id: PageId; label: string; icon: string }[] = [
   { id: "quetes", label: "Quêtes", icon: "!" },
   { id: "inventaire", label: "Inventaire", icon: "◆" },
   { id: "missions", label: "Missions", icon: "✓" },
   { id: "equipe", label: "Équipe", icon: "♥" },
+  { id: "bestiaire", label: "Bestiaire", icon: "✿" },
   { id: "appart", label: "Appartement", icon: "⌂" },
   { id: "profil", label: "Profil", icon: "☺" },
   { id: "jeux", label: "Mini-jeux", icon: "★" },
@@ -32,6 +35,7 @@ const TITLE: Record<PageId, string> = {
   appart: "APPARTEMENT",
   profil: "PROFIL · ÉVOLUTION",
   equipe: "ÉQUIPE",
+  bestiaire: "BESTIAIRE",
   options: "OPTIONS",
 };
 
@@ -60,6 +64,8 @@ export interface PageHandlers {
   equip: (id: string) => void;
   /** Équiper / retirer un équipement de combat. */
   equipGear: (id: string) => void;
+  /** Intégrer une créature capturée à l'équipe, ou la remettre au Bestiaire. */
+  toggleMon: (species: string) => void;
   goRoom: (r: RoomId) => void;
   toggleSound: () => void;
   exportSave: () => void;
@@ -239,10 +245,14 @@ export function Page({ page, state, now, sound, room, outside, h, onClose }: Pro
             {["sparrow", ...s.rpg.party].map((id, n) => {
               const m = MEMBERS[id];
               if (!m) return null;
-              const f = makeAlly(id, { level: s.level, gear: s.rpg.gear, skills: s.rpg.skills });
+              const f = makeAlly(id, { level: s.level, gear: s.rpg.gear, skills: s.rpg.skills, mons: s.rpg.mons });
               return (
                 <div key={id} className="gb-card">
-                  <p className="gb-group__title">MEMBRE N°{n + 1}</p>
+                  <p className="gb-group__title">
+                    MEMBRE N°{n + 1}
+                    {n > ACTIVE ? " · EN RÉSERVE" : ""}
+                    {s.rpg.mons?.[id] ? " · CRÉATURE" : ""}
+                  </p>
                   <p className="gb-card__rank">{m.name}</p>
                   <p className="gb-row__meta">
                     Niv {f.lv}
@@ -287,6 +297,84 @@ export function Page({ page, state, now, sound, room, outside, h, onClose }: Pro
             })}
             {!s.rpg.party.length && <p className="gb-note">D&apos;autres membres rejoindront peut-être l&apos;équipe… La barrière du Centre-ville cache quelqu&apos;un.</p>}
             <p className="gb-note">Les PV et les statistiques suivent le niveau de Sparrow. L&apos;équipe est soignée après chaque combat.</p>
+          </>
+        )}
+
+        {page === "bestiaire" && (
+          <>
+            <p className="gb-note">
+              Créatures capturées : {Object.keys(s.rpg.mons ?? {}).length} / {SPECIES.length}. Équipe de combat : Sparrow + {ACTIVE} compagnons (les premiers de la liste).
+            </p>
+            {SPECIES.map((sp) => {
+              const m = MEMBERS[sp.id];
+              const mon = s.rpg.mons?.[sp.id];
+              const num = `N°${String(sp.n).padStart(3, "0")}`;
+              if (!mon)
+                return (
+                  <div key={sp.id} className="gb-card is-locked">
+                    <p className="gb-group__title">
+                      {num} · {isSeen(s.rpg, sp.id) ? "VU, PAS CAPTURÉ" : "INCONNU"}
+                    </p>
+                    <p className="gb-card__rank">{isSeen(s.rpg, sp.id) ? m.name : "???"}</p>
+                    <p className="gb-row__meta">{isSeen(s.rpg, sp.id) ? `Habitat : ${sp.habitat}. Affaiblis-le, puis lance une Capsule d'Écho.` : "Une créature rôde quelque part, dans les herbes hautes…"}</p>
+                  </div>
+                );
+              const f = makeAlly(sp.id, { level: s.level, gear: {}, skills: [], mons: s.rpg.mons });
+              const active = s.rpg.party.slice(0, ACTIVE).includes(sp.id);
+              return (
+                <div key={sp.id} className="gb-card">
+                  <p className="gb-group__title">
+                    {num} · {sp.type.toUpperCase()} · {active ? "DANS L'ÉQUIPE" : "AU BESTIAIRE"}
+                  </p>
+                  <div className="gb-mon">
+                    <img className="gb-mon__img" src={battler(sp.sprite).toDataURL()} alt="" width={96} height={96} />
+                    <div>
+                      <p className="gb-card__rank">{m.name}</p>
+                      <p className="gb-row__meta">
+                        Niv {mon.level} · XP {mon.xp}/{xpNeed(mon.level)}
+                      </p>
+                      <div className="gb-bar">
+                        <i style={{ transform: `scaleX(${Math.min(1, mon.xp / xpNeed(mon.level))})` }} />
+                      </div>
+                      <p className="gb-row__meta">Habitat : {sp.habitat}</p>
+                    </div>
+                  </div>
+                  <p className="gb-row__meta">{m.desc}</p>
+                  {(
+                    [
+                      ["PV", f.maxHp, 200],
+                      ["ATTAQUE", f.atk, 60],
+                      ["DÉFENSE", f.def, 60],
+                      ["VITESSE", f.spd, 60],
+                    ] as [string, number, number][]
+                  ).map(([k, v, max]) => (
+                    <div key={k} className="gb-gauge">
+                      <span>{k}</span>
+                      <div className="gb-bar gb-bar--red">
+                        <i style={{ transform: `scaleX(${Math.min(1, v / max)})` }} />
+                      </div>
+                      <b>{v}</b>
+                    </div>
+                  ))}
+                  <p className="gb-group__title">CAPACITÉS</p>
+                  {f.moves.map((mid) => {
+                    const mv = MOVES[mid];
+                    return (
+                      <p key={mid} className="gb-rank">
+                        ★ {mv.name}{" "}
+                        <small>
+                          · PUI {mv.power ? (mv.hits ? `${mv.power}×${mv.hits[0]}-${mv.hits[1]}` : mv.power) : "—"} · PRÉ {mv.acc} — {mv.desc}
+                        </small>
+                      </p>
+                    );
+                  })}
+                  <button type="button" className="gb-btn" onClick={() => h.toggleMon(sp.id)}>
+                    {active ? "Remettre au Bestiaire" : "Intégrer à l'équipe"}
+                  </button>
+                  {!active && s.rpg.party.length >= ACTIVE && <p className="gb-row__meta">L&apos;équipe est pleine : {MEMBERS[s.rpg.party[ACTIVE - 1]]?.name} passera en réserve (il reste dans l&apos;équipe, sans combattre).</p>}
+                </div>
+              );
+            })}
           </>
         )}
 

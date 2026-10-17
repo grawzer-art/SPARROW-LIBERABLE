@@ -130,6 +130,8 @@ function cite(): MapDef {
     { id: "palais", at: { x: 19, y: 6 }, to: { map: "palais", x: 12, y: 15, dir: "up" }, needs: roiVaincu, lockedKey: "palais-porte" },
   );
   def.spawn = { x: 19, y: 30, dir: "up" };
+  // Hautes herbes du potager royal : des Brokito sauvages y poussent
+  def.wild = [{ ground: "potager", battle: "brokito-sauvage", rate: 0.22 }];
 
   def.zones.push(
     { id: "cite-place", name: "Place des Cornets", x1: 12, y1: 13, x2: 27, y2: 23 },

@@ -154,7 +154,12 @@ export interface MapDef {
   zones: Zone[];
   npcs: NpcDef[];
   spawn: Tile & { dir: Facing };
+  /** Hautes herbes : marcher sur ce sol peut déclencher une rencontre sauvage. */
+  wild?: { ground: Ground; battle: string; rate: number }[];
 }
+
+/** Rencontre sauvage possible sur cette case (sans tirage au sort). */
+export const wildAt = (m: MapDef, t: Tile) => m.wild?.find((w) => m.ground[t.y]?.[t.x] === w.ground) ?? null;
 
 // ─── Construction ───
 

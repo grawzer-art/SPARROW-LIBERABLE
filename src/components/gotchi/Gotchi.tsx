@@ -37,6 +37,8 @@ import { MINIGAMES, type GameId } from "@/lib/gotchi/minigames";
 import { solidAt, type Dest, type MapId, type Warp, type Zone } from "@/lib/rpg/mapdef";
 import { mapOf, restoreWhere } from "@/lib/rpg/maps";
 import { CREDITS, FINAL_QUEST } from "@/lib/rpg/ch5";
+import { addCaught, isSeen, monsGainXp, seenKey, toggleTeam } from "@/lib/rpg/monsters";
+import { BATTLES, MEMBERS } from "@/lib/rpg/bestiary";
 import { SPAWN } from "@/lib/rpg/quartier";
 import { applyEffects, status, type Effect } from "@/lib/rpg/quest";
 import { buyRpg, equipRpg } from "@/lib/rpg/shop";
@@ -525,6 +527,7 @@ export function Gotchi() {
     setPage(null);
     navigator.vibrate?.([30, 30, 60]);
   }, []);
+  const startFightRef = useRef(startFight);
 
   const endFight = useCallback(
     (res: BattleEnd) => {
@@ -541,8 +544,33 @@ export function Gotchi() {
       }
       // Le sac est mis à jour même après une défaite (objets consommés) ; jamais de perte de progression.
       const applied = applyEffects({ ...s, rpg: { ...s.rpg, bag: res.bag } }, eff, Date.now());
+      // Créatures : capture, puis expérience de celles qui ont combattu
+      let rpg = applied.state.rpg;
+      const monNotes: string[] = [];
+      if (res.captured) {
+        const firstMon = !Object.keys(rpg.mons ?? {}).length;
+        rpg = addCaught(rpg, res.captured.species, res.captured.level, Date.now());
+        monNotes.push(`${MEMBERS[res.captured.species]?.name} ajouté au BESTIAIRE (niv ${res.captured.level})`);
+        if (firstMon)
+          setTimeout(
+            () =>
+              openConvRef.current({
+                lines: [
+                  { who: "", text: `${MEMBERS[res.captured!.species]?.name} est rangé dans le BESTIAIRE.` },
+                  { who: "", text: "START › BESTIAIRE : tu peux voir ses capacités et l'intégrer à l'équipe. Il gagne de l'expérience à chaque combat." },
+                ],
+              }),
+            350,
+          );
+      }
+      if (res.outcome === "win") {
+        const g = monsGainXp(rpg, res.xp);
+        rpg = g.rpg;
+        monNotes.push(...g.ups);
+      }
+      if (rpg !== applied.state.rpg) applied.state = { ...applied.state, rpg };
       commit(applied.state);
-      notify([...(res.outcome === "win" ? res.notes : []), ...applied.notes]);
+      notify([...(res.outcome === "win" ? res.notes : []), ...applied.notes, ...monNotes]);
       if (o) {
         o.resume(applied.state.rpg);
         o.frozen = false;
@@ -589,6 +617,36 @@ export function Gotchi() {
   });
 
   /** Un ennemi repère Sparrow : « ! », il s'approche, il parle, puis combat. */
+  /** Rencontre sauvage dans les hautes herbes (la première fois : conseils et capsules offertes). */
+  const onWild = useCallback((battle: string) => {
+    const o = ow.current;
+    const s = stateRef.current;
+    if (!o || !s || convRef.current || fightRef.current || overlay.current.shop || overlay.current.cook) return;
+    const sp = BATTLES[battle]?.wild;
+    if (!sp) return;
+    o.frozen = true;
+    audio.current.hit();
+    navigator.vibrate?.([30, 30, 30]);
+    const name = MEMBERS[sp]?.name ?? sp;
+    const first = !s.rpg.flags.includes("capsules-offertes");
+    const eff: Effect[] = isSeen(s.rpg, sp) ? [] : [{ kind: "flag", id: seenKey(sp) }];
+    if (first) {
+      const who = s.rpg.party.includes("gerard") ? "Gérard la Frite" : "Sparrow";
+      openConvRef.current({
+        lines: [
+          { who: "", text: "Les feuilles du potager s'agitent… Quelque chose en jaillit !" },
+          { who, text: `Un ${name} sauvage ! Une vraie créature des potagers. Si tu l'affaiblis, tu peux tenter de le capturer.` },
+          { who, text: "Tiens, prends ces Capsules d'Écho. En combat : OBJETS, puis Capsule d'Écho. Moins il a de PV, plus ça marche." },
+        ],
+        effects: [...eff, { kind: "flag", id: "capsules-offertes" }, { kind: "bag", id: "capsule-echo", n: 5 }],
+        then: { kind: "battle", id: battle },
+      });
+      return;
+    }
+    if (eff.length) rpgApplyRef.current(eff);
+    setTimeout(() => startFightRef.current({ id: battle }), 250);
+  }, []);
+
   const onSpot = useCallback((id: string) => {
     const o = ow.current;
     if (!o || convRef.current) return;
@@ -756,6 +814,7 @@ export function Gotchi() {
         o.onDoor = onDoor;
         o.onZone = onZone;
         o.onSpot = onSpot;
+        o.onWild = onWild;
         const f = o.facing(owFrameOf(s, reduced.current));
         const npcName = f?.kind === "npc" ? (o.map.npcs.find((n) => n.id === f.id)?.name ?? "") : "";
         const hint =
@@ -788,7 +847,7 @@ export function Gotchi() {
       }
     }, 120);
     return () => clearInterval(id);
-  }, [cacheOf, goOutside, notify, onDoor, onSpot, onZone]);
+  }, [cacheOf, goOutside, notify, onDoor, onSpot, onWild, onZone]);
 
   // Effet machine à écrire (répliques et dialogues)
   const shownText = conv ? conv.lines[conv.i].text : line;
@@ -1389,7 +1448,7 @@ export function Gotchi() {
             <BattleScreen
               key={fight.id}
               id={fight.id}
-              team={{ level: state.level, party: state.rpg.party, gear: state.rpg.gear, skills: state.rpg.skills, bag: state.rpg.bag, titanTurns: muscleStage(state.muscle) >= 4 ? 4 : 3 }}
+              team={{ level: state.level, party: state.rpg.party, gear: state.rpg.gear, skills: state.rpg.skills, bag: state.rpg.bag, titanTurns: muscleStage(state.muscle) >= 4 ? 4 : 3, mons: state.rpg.mons }}
               tenue={state.equip.tenue}
               audio={audio.current}
               reduced={reduced.current}
@@ -1489,6 +1548,12 @@ export function Gotchi() {
               buy: doBuy,
               equip: doEquip,
               equipGear: doEquipGear,
+              toggleMon: (sp) => {
+                const st = stateRef.current;
+                if (!st) return;
+                commit({ ...st, rpg: toggleTeam(st.rpg, sp) });
+                audio.current.coin();
+              },
               goRoom: (r) => {
                 setPage(null);
                 world.current?.goTo({ room: r, x: 80, y: 90 }, undefined, reduced.current);
