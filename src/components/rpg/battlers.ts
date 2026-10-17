@@ -358,8 +358,6 @@ function gerardBack(): Raster {
 function sparrowTitan(tenue?: string): Raster {
   const r = new Raster(56, 56);
   const [c, cl, cd] = OUTFIT[tenue ?? ""] ?? ["#3b3b3b", "#545454", "#262626"];
-  // Aura dorée
-  r.ball(28, 34, 27, 22, "#f8dc70", undefined, undefined, (x, y) => (x + y) % 3 !== 0 || y > 50);
   // Dos et épaules énormes (tenue déchirée aux épaules)
   r.ball(28, 50, 25, 14, c, cl, cd, (_x, y) => y > 55);
   r.ball(7, 40, 8, 10, "#e9b18a", "#f5c7a3", "#c98b66");
@@ -377,6 +375,13 @@ function sparrowTitan(tenue?: string): Raster {
   r.line(17, 22, 24, 22, "#101010");
   r.line(32, 22, 39, 22, "#101010");
   r.outline(INK);
+  // Aura dorée, posée après le contour : des étincelles autour de la silhouette
+  for (let y = 2; y < 54; y++)
+    for (let x = 1; x < 55; x++) {
+      if (r.get(x, y)) continue;
+      const near = r.get(x - 2, y) || r.get(x + 2, y) || r.get(x, y - 2) || r.get(x, y + 2);
+      if (near && (x * 7 + y * 3) % 5 === 0) r.set(x, y, y < 20 ? "#fff3b0" : "#f8dc70");
+    }
   return r;
 }
 
