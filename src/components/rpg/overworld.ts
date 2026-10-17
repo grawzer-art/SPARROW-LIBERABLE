@@ -252,6 +252,27 @@ export class Overworld {
     if (on) n.dir = opposite[this.dir];
   }
 
+  /** Sparrow ne peut plus bouger (gelé, ou repéré par un ennemi). */
+  get stuck() {
+    return this.frozen || this.spotted;
+  }
+
+  /** Un ennemi est encore en train de s'avancer vers Sparrow. */
+  get approaching() {
+    return this.npcs.some((n) => n.approach);
+  }
+
+  /** Sortie de secours : rien n'attend Sparrow, il retrouve le contrôle (sans être re-repéré tout de suite). */
+  unstick() {
+    this.frozen = false;
+    this.spotted = false;
+    this.calm = true;
+    for (const n of this.npcs) {
+      n.alert = 0;
+      n.approach = null;
+    }
+  }
+
   /** Après un combat (victoire, fuite, retraite) : on peut de nouveau être repéré. */
   resume(rpg: Rpg) {
     this.rpg = rpg;

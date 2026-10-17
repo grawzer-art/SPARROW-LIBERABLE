@@ -205,10 +205,10 @@ export function Gotchi() {
     ro.observe(box);
     return () => ro.disconnect();
   }, []);
-  const uiRef = useRef({ menu, page, game, conv: false, fight: false });
+  const uiRef = useRef({ menu, page, game, conv: false, fight: false, chapter: false, credits: false });
   useEffect(() => {
-    uiRef.current = { menu, page, game, conv: !!conv, fight: !!fight };
-  }, [menu, page, game, conv, fight]);
+    uiRef.current = { menu, page, game, conv: !!conv, fight: !!fight, chapter: !!chapter, credits };
+  }, [menu, page, game, conv, fight, chapter, credits]);
 
   const toast = useCallback((m: string) => {
     setToastText(m);
@@ -649,7 +649,9 @@ export function Gotchi() {
 
   const onSpot = useCallback((id: string) => {
     const o = ow.current;
-    if (!o || convRef.current) return;
+    if (!o) return;
+    // Déjà occupé (dialogue, combat, boutique…) : on oublie ce repérage au lieu de bloquer Sparrow
+    if (convRef.current || fightRef.current || overlay.current.shop || overlay.current.cook) return o.unstick();
     o.frozen = true;
     audio.current.hit();
     navigator.vibrate?.([40, 30, 40]);
@@ -733,6 +735,9 @@ export function Gotchi() {
           overlay: () => ({ ...overlay.current, fight: fightRef.current }),
           rpg: () => stateRef.current?.rpg,
           overview: () => ow.current?.overview() ?? null,
+          jam: () => {
+            if (ow.current) ow.current.frozen = true;
+          },
         },
       });
   }, [commit, say, startFight]);
@@ -775,6 +780,20 @@ export function Gotchi() {
         say(kind === "room" ? roomLine(w.room, s.said) : playLine(kind, s.said));
       } else if (kind === "bump") ps.bumps = w.bumps;
     }, 1000);
+    // Garde-fou : Sparrow gelé sans rien à l'écran (dialogue, combat, menu, carte…) → il retrouve le contrôle.
+    let stuckMs = 0;
+    const guard = setInterval(() => {
+      const o = ow.current;
+      const u = uiRef.current;
+      const idle =
+        !!o && whereRef.current !== "appart" && o.stuck && !convRef.current && !fightRef.current && !overlay.current.shop && !overlay.current.cook && u.page === null && u.menu === null && !u.game && !u.chapter && !u.credits;
+      stuckMs = idle ? stuckMs + 500 : 0;
+      // Un ennemi qui s'avance a un peu plus de temps pour arriver
+      if (o && stuckMs >= (o.approaching ? 6000 : 3000)) {
+        stuckMs = 0;
+        o.unstick();
+      }
+    }, 500);
     const ev = setInterval(() => {
       const s = stateRef.current;
       const w = world.current;
@@ -797,6 +816,7 @@ export function Gotchi() {
     };
     document.addEventListener("visibilitychange", onVis);
     return () => {
+      clearInterval(guard);
       clearInterval(id);
       clearInterval(ev);
       document.removeEventListener("visibilitychange", onVis);
