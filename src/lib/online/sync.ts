@@ -2,7 +2,7 @@
  * SPARROW ONLINE — synchronisation des déplacements (logique pure, testable).
  *
  * - On n'envoie PAS la position à chaque image : seulement quand le joueur change de case ou de
- *   direction (au plus ~16 fois par seconde), plus un battement toutes les 5 s à l'arrêt.
+ *   direction (au plus ~16 fois par seconde), plus un battement toutes les 15 s à l'arrêt.
  * - Chez les autres, chaque joueur glisse d'une case à l'autre (interpolation) ; s'il a pris
  *   du retard (réseau lent) il accélère, et s'il est trop loin il est replacé directement.
  */
@@ -12,10 +12,8 @@ import type { Facing, Tile } from "@/lib/rpg/mapdef";
 export const ROOM = "quartier-404";
 /** Joueurs par instance du quartier (au-delà, une nouvelle instance s'ouvre). */
 export const MAX_PER_INSTANCE = 20;
-export const HEARTBEAT_MS = 5000;
+export const HEARTBEAT_MS = 15000;
 export const MIN_SEND_MS = 60;
-/** Un joueur silencieux depuis ce délai est considéré comme parti. */
-export const STALE_MS = 15000;
 const TILE = 16;
 const STEP_S = 0.2;
 

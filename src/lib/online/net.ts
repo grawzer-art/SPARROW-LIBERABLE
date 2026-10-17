@@ -41,7 +41,23 @@ export interface RoomHandlers {
   onPeers: (peers: Peer[]) => void;
   onMove: (id: string, m: Move) => void;
   onLeave: (id: string) => void;
+  /** Canal perdu puis retrouvé (reconnexion automatique). */
+  onStatus?: (s: "on" | "lost") => void;
 }
+
+/** Diagnostic de connexion (affiché en touchant le compteur « en ligne »). */
+export interface Diag {
+  channel: string;
+  state: string;
+  instance: number;
+  presence: number;
+  peers: number;
+  sent: number;
+  recv: number;
+  lastSync: number;
+  log: string[];
+}
+export const newDiag = (): Diag => ({ channel: "", state: "", instance: 0, presence: 0, peers: 0, sent: 0, recv: 0, lastSync: 0, log: [] });
 
 export interface Room {
   instance: number;
@@ -51,6 +67,7 @@ export interface Room {
 
 export interface OnlineNet {
   readonly kind: "supabase" | "relay";
+  readonly diag?: Diag;
   session(): Promise<{ id: string; email: string } | null>;
   signUp(email: string, password: string): Promise<{ confirm: boolean }>;
   signIn(email: string, password: string): Promise<void>;
@@ -94,7 +111,7 @@ const toMessage = (r: { id: number; author: string; pseudo: string; body: string
 
 // ════════════════════════════ Supabase ════════════════════════════
 
-class SupabaseNet implements OnlineNet {
+export class SupabaseNet implements OnlineNet {
   readonly kind = "supabase";
   private sb: SupabaseClient;
   constructor(url: string, key: string) {
@@ -136,55 +153,99 @@ class SupabaseNet implements OnlineNet {
     if (error) throw error;
     return toProfile(data);
   }
+  readonly diag: Diag = newDiag();
+  private log(e: string) {
+    this.diag.log = [...this.diag.log.slice(-11), `${new Date().toISOString().slice(11, 19)} ${e}`];
+  }
+  /**
+   * Ferme VRAIMENT les anciens salons. supabase-js réutilise un canal existant du même nom
+   * (et ne le retire de sa liste que si la fermeture réussit) : sans ce nettoyage, une reconnexion
+   * récupérait un canal mort ou en cours de fermeture → joueur invisible, compteur faux.
+   */
+  private async purge() {
+    for (const c of this.sb.getChannels()) {
+      if (!c.topic.startsWith(`realtime:online:${ROOM}:`)) continue;
+      const st = await c.unsubscribe().catch(() => "error");
+      c.teardown();
+      (this.sb.realtime as unknown as { _remove(c: RealtimeChannel): void })._remove(c);
+      this.log(`purge ${c.topic.slice(9)} (${st})`);
+    }
+  }
   async join(me: Profile, first: Move, h: RoomHandlers): Promise<Room> {
+    await this.purge();
     // Salons privés : le jeton de session est transmis au serveur temps réel (règles RLS)
     await this.sb.realtime.setAuth();
+    const d = this.diag;
     const profiles = new Map<string, Profile>();
     const profileOf = async (ids: string[]) => {
       const missing = ids.filter((i) => !profiles.has(i));
       if (missing.length) {
-        const { data } = await this.sb.from("profiles").select("id,pseudo,look,level").in("id", missing);
+        const { data, error } = await this.sb.from("profiles").select("id,pseudo,look,level").in("id", missing);
+        if (error) this.log(`profils : ${error.message}`);
         for (const r of data ?? []) profiles.set(r.id, toProfile(r));
       }
     };
-    // Chercher une instance avec de la place (20 joueurs par instance)
     // Le serveur temps réel peut refuser la première connexion (réveil) : on réessaie un peu
     let retries = 0;
     for (let instance = 1; instance <= 20; instance++) {
-      const ch: RealtimeChannel = this.sb.channel(`online:${ROOM}:${instance}`, { config: { private: true, presence: { key: me.id }, broadcast: { self: false } } });
+      const topic = `online:${ROOM}:${instance}`;
+      const ch: RealtimeChannel = this.sb.channel(topic, { config: { private: true, presence: { key: me.id }, broadcast: { self: false } } });
+      d.channel = topic;
+      // Dernière position connue de chacun (déplacements reçus, sinon présence)
       const last = new Map<string, Move>();
+      let mine = first;
+      let joined = false;
+      let gen = 0;
+      // La présence est LA source des joueurs affichés et du compteur
       const emit = async () => {
+        const g = ++gen;
         const state = ch.presenceState<{ m: Move }>();
         const ids = Object.keys(state).filter((id) => id !== me.id);
+        d.presence = Object.keys(state).length;
+        d.lastSync = Date.now();
         // Le pseudo et l'apparence viennent de la base (jamais de ce que le client annonce)
         await profileOf(ids);
-        h.onPeers(
-          ids.flatMap((id) => {
-            const p = profiles.get(id);
-            const m = last.get(id) ?? state[id]?.[0]?.m;
-            return p && m && isMove(m) ? [{ ...p, move: m }] : [];
-          }),
-        );
+        if (g !== gen) return; // une synchro plus récente est arrivée entre-temps
+        const peers = ids.flatMap((id) => {
+          const p = profiles.get(id);
+          const metas = state[id] ?? [];
+          // Plusieurs connexions pour un même compte : on garde la plus récente
+          const m = last.get(id) ?? metas.map((x) => x.m).filter(isMove).sort((x, y) => y.s - x.s)[0];
+          return p && m ? [{ ...p, move: m }] : [];
+        });
+        d.peers = peers.length;
+        h.onPeers(peers);
       };
       ch.on("presence", { event: "sync" }, () => void emit());
-      ch.on("presence", { event: "leave" }, ({ key }) => {
-        last.delete(key);
-        h.onLeave(key);
-      });
       ch.on("broadcast", { event: "mv" }, ({ payload }) => {
         const p = payload as { id?: string; m?: unknown };
         if (!p?.id || p.id === me.id || !isMove(p.m)) return;
+        d.recv++;
         last.set(p.id, p.m);
         h.onMove(p.id, p.m);
       });
       const ok = await new Promise<boolean>((resolve) => {
-        ch.subscribe((status) => {
-          if (status === "SUBSCRIBED") resolve(true);
-          else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") resolve(false);
+        const timer = setTimeout(() => resolve(false), 12000);
+        ch.subscribe((status, err) => {
+          d.state = status;
+          this.log(`${topic} ${status}${err ? ` ${err.message}` : ""}`);
+          if (status === "SUBSCRIBED") {
+            clearTimeout(timer);
+            if (joined) {
+              // Reconnexion automatique du canal : la présence est perdue côté serveur, on la renvoie
+              void ch.track({ m: mine });
+              h.onStatus?.("on");
+            }
+            resolve(true);
+          } else {
+            if (joined) h.onStatus?.("lost");
+            clearTimeout(timer);
+            resolve(false);
+          }
         });
       });
       if (!ok) {
-        await this.sb.removeChannel(ch);
+        await this.purge();
         if (retries < 3) {
           retries++;
           await new Promise((r) => setTimeout(r, 1500 * retries));
@@ -196,25 +257,40 @@ class SupabaseNet implements OnlineNet {
       }
       // Laisser arriver la présence, puis vérifier qu'il reste de la place
       await new Promise((r) => setTimeout(r, 600));
-      if (Object.keys(ch.presenceState()).length >= 20) {
-        await this.sb.removeChannel(ch);
+      if (Object.keys(ch.presenceState()).filter((id) => id !== me.id).length >= 20) {
+        await this.purge();
         continue;
       }
-      await ch.track({ m: first });
+      const tr = await ch.track({ m: first });
+      this.log(`track ${tr}`);
+      joined = true;
+      d.instance = instance;
       let lastTrack = Date.now();
+      let pending: ReturnType<typeof setTimeout> | undefined;
       return {
         instance,
         move: (m) => {
+          mine = m;
+          d.sent++;
           void ch.send({ type: "broadcast", event: "mv", payload: { id: me.id, m } });
-          // La présence garde la dernière position pour ceux qui arrivent (sans saturer)
+          // La présence garde la dernière position pour ceux qui arrivent : au plus toutes les 3 s,
+          // et une fois à l'arrêt (sans saturer le quota temps réel)
+          clearTimeout(pending);
           if (Date.now() - lastTrack > 3000) {
             lastTrack = Date.now();
             void ch.track({ m });
-          }
+          } else
+            pending = setTimeout(() => {
+              lastTrack = Date.now();
+              void ch.track({ m: mine });
+            }, 1200);
         },
         leave: async () => {
-          await ch.untrack();
-          await this.sb.removeChannel(ch);
+          clearTimeout(pending);
+          joined = false;
+          d.state = "LEFT";
+          await ch.untrack().catch(() => null);
+          await this.purge();
         },
       };
     }
