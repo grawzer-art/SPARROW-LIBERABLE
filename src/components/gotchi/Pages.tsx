@@ -171,7 +171,8 @@ export function Page({ page, state, now, sound, room, outside, h, onClose }: Pro
                     status(s.rpg, q.id) !== "disponible" ||
                     (q.id === "frites-perdues" && status(s.rpg, "ville-figee") === "terminee") ||
                     (q.id === "confrerie" && status(s.rpg, "frites-perdues") === "terminee") ||
-                    (q.id === "samourai" && status(s.rpg, "confrerie") === "terminee"),
+                    (q.id === "samourai" && status(s.rpg, "confrerie") === "terminee") ||
+                    (q.id === "minuit" && status(s.rpg, "samourai") === "terminee"),
                 ).map((q) => {
                   const st = status(s.rpg, q.id);
                   const nx = nextStep(s.rpg, q.id);
@@ -206,10 +207,13 @@ export function Page({ page, state, now, sound, room, outside, h, onClose }: Pro
                           ? { n: 4, name: "La Voie du Samouraï", hint: "Termine « La Confrérie du Muscle » pour débloquer la suite." }
                           : status(s.rpg, "samourai") !== "terminee"
                             ? { n: 5, name: "Protocole Minuit", hint: "Termine « La Voie du Samouraï » pour débloquer la suite." }
-                            : { n: 5, name: "Protocole Minuit", hint: "Le prochain chapitre arrive bientôt." };
+                            : status(s.rpg, "minuit") !== "terminee"
+                              ? null
+                              : { n: 0, name: "Mode libre", hint: "Les cinq chapitres sont terminés. Finis les quêtes secondaires, et défie l'Écho de Minuit au sommet de la Tour." };
+                  if (!next) return null;
                   return (
                     <div className="gb-card is-locked">
-                      <p className="gb-group__title">CHAPITRE {next.n} · VERROUILLÉ</p>
+                      <p className="gb-group__title">{next.n ? `CHAPITRE ${next.n} · VERROUILLÉ` : "AVENTURE TERMINÉE"}</p>
                       <p className="gb-card__rank">{next.name}</p>
                       <p className="gb-row__meta">{next.hint}</p>
                     </div>

@@ -694,6 +694,29 @@ export function drawLive(ctx: Ctx, p: Prop, state: boolean, t: number, ox: numbe
       }
       break;
     }
+    case "cadran": {
+      // Cadran sur pied : 23:59 (rouge, aiguilles bloquées) ou 00:00 (vert, les aiguilles réunies)
+      f("rgba(8,6,20,0.4)", X + 3, Y + 14, 10, 2);
+      f(Q.metalD, X + 7, Y + 9, 2, 6);
+      f(Q.metalD, X + 4, Y + 13, 8, 2);
+      f("#1b1626", X + 1, Y - 6, 14, 14);
+      f(state ? "#3ccf6a" : "#c62828", X + 2, Y - 5, 12, 12);
+      f("#f1efe8", X + 3, Y - 4, 10, 10);
+      f("#1b1626", X + 7, Y - 3, 2, 1);
+      f("#1b1626", X + 7, Y + 5, 2, 1);
+      f("#1b1626", X + 3, Y + 1, 1, 1);
+      f("#1b1626", X + 12, Y + 1, 1, 1);
+      if (state) f("#1b1626", X + 7, Y - 3, 2, 5);
+      else {
+        f("#1b1626", X + 7, Y - 3, 1, 5);
+        f("#1b1626", X + 5, Y - 2, 2, 1);
+        f("#1b1626", X + 6, Y - 1, 1, 2);
+        if (Math.floor(t * 2) % 2 === 0) f("#c62828", X + 8, Y + 1, 3, 1);
+      }
+      f(Q.gold, X + 7, Y + 1, 2, 2);
+      if (state) f(`rgba(60,207,106,${0.18 + Math.sin(t * 4 + p.x) * 0.06})`, X - 1, Y - 8, 18, 18);
+      break;
+    }
     case "sachet":
       if (state) break;
       f(Q.woodL, X + 5, Y + 7, 6, 6);
@@ -703,4 +726,4 @@ export function drawLive(ctx: Ctx, p: Prop, state: boolean, t: number, ox: numbe
   }
 }
 
-export const LIVE_KINDS = new Set(["coffre", "vanne", "flux", "grille", "sachet", "lampion"]);
+export const LIVE_KINDS = new Set(["coffre", "vanne", "flux", "grille", "sachet", "lampion", "cadran"]);

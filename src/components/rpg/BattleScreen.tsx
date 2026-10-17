@@ -213,6 +213,56 @@ function background(kind: Battle["def"]["bg"], h: number): HTMLCanvasElement {
     band(horizon, h, fest ? ["#3a2a2a", "#2e2222"] : ["#6a8a5a", "#5a7a4a", "#4a6a3e"]);
     x.fillStyle = fest ? "#4a3434" : "#f8b8c8";
     for (let i = 0; i < 30; i++) x.fillRect(Math.floor(hash(i, 5, 7) * W), horizon + 4 + Math.floor(hash(i, 6, 7) * (h - horizon - 6)), 2, 1);
+  } else if (kind === "tour") {
+    // Intérieur de la Tour : murs violets, engrenages en ombre chinoise
+    band(0, horizon, ["#2a1e3a", "#33264a", "#3d2e56"]);
+    const gear = (cx: number, cy: number, r: number, c: string) => {
+      x.fillStyle = c;
+      for (let yy = -r - 3; yy <= r + 3; yy++)
+        for (let xx = -r - 3; xx <= r + 3; xx++) {
+          const d = Math.hypot(xx, yy);
+          const ang = Math.atan2(yy, xx);
+          const tooth = Math.cos(ang * 8) > 0.4 ? 3 : 0;
+          if (d <= r + tooth && d > r * 0.35) x.fillRect(cx + xx, cy + yy, 1, 1);
+        }
+    };
+    gear(40, Math.round(horizon * 0.45), 22, "#241a33");
+    gear(205, Math.round(horizon * 0.35), 30, "#241a33");
+    gear(120, Math.round(horizon * 0.2), 14, "#2c2040");
+    x.fillStyle = "#e8b830";
+    for (const cx of [70, 170]) x.fillRect(cx, 0, 2, horizon);
+    band(horizon, h, ["#4a3e5a", "#3e3450", "#352c46"]);
+    x.fillStyle = "#2a2238";
+    for (let gx = 0; gx < W; gx += 20) for (let gy = horizon; gy < h; gy += 10) if (((gx / 20) + Math.floor((gy - horizon) / 10)) % 2 === 0) x.fillRect(gx, gy, 20, 10);
+  } else if (kind === "sommet") {
+    // Sommet : ciel étoilé et le grand cadran de la Tour
+    band(0, horizon, ["#0a0818", "#120e26", "#1c1634"]);
+    for (let i = 0; i < 60; i++) {
+      x.fillStyle = hash(i, 7, 9) > 0.8 ? "#f8f4e8" : "#6a6090";
+      x.fillRect(Math.floor(hash(i, 1, 9) * W), Math.floor(hash(i, 2, 9) * horizon), 1, 1);
+    }
+    const cx = 120;
+    const cy = Math.round(horizon * 0.55);
+    const R = Math.min(52, Math.round(horizon * 0.5));
+    for (let yy = -R; yy <= R; yy++)
+      for (let xx = -R; xx <= R; xx++) {
+        const d = Math.hypot(xx, yy);
+        if (d > R) continue;
+        x.fillStyle = d > R - 3 ? "#e8b830" : d > R - 5 ? "#8a6a20" : "#e8e0c8";
+        x.fillRect(cx + xx, cy + yy, 1, 1);
+      }
+    x.fillStyle = "#1b1626";
+    for (let k = 0; k < 12; k++) {
+      const ang = (k / 12) * Math.PI * 2;
+      const len = k % 3 === 0 ? 7 : 4;
+      for (let t = 0; t < len; t++) x.fillRect(Math.round(cx + Math.cos(ang) * (R - 7 - t)), Math.round(cy + Math.sin(ang) * (R - 7 - t)), 2, 2);
+    }
+    // Aiguilles sur 23:59
+    for (let t = 0; t < R - 14; t++) x.fillRect(Math.round(cx + Math.cos(-Math.PI / 2 - 0.1) * t), Math.round(cy + Math.sin(-Math.PI / 2 - 0.1) * t), 2, 2);
+    for (let t = 0; t < R - 24; t++) x.fillRect(Math.round(cx + Math.cos(-Math.PI / 2 - 0.05) * t), Math.round(cy + Math.sin(-Math.PI / 2 - 0.05) * t), 3, 3);
+    band(horizon, h, ["#2a2236", "#221c2e", "#1a1524"]);
+    x.fillStyle = "#a66cff";
+    x.fillRect(0, horizon, W, 1);
   } else if (kind === "dojo") {
     band(0, horizon, ["#6a4a2e", "#7a5a38", "#5a3a22"]);
     // Shoji et lune
@@ -308,6 +358,8 @@ const PLAT: Record<Battle["def"]["bg"], [string, string]> = {
   cerisiers: ["#7a9a6a", "#5a7a4a"],
   festival: ["#5a4040", "#3a2a2a"],
   dojo: ["#a89858", "#8a7a48"],
+  tour: ["#4a3a5a", "#2e2440"],
+  sommet: ["#3a3046", "#221a2e"],
 };
 
 const FX_COLORS: Record<Fx, string[]> = {
@@ -318,6 +370,7 @@ const FX_COLORS: Record<Fx, string[]> = {
   malus: ["#6aa8ff", "#a6c8ff"],
   ombre: ["#5a3a8a", "#2a1a40", "#a66cff"],
   lame: ["#ffffff", "#c8d0ff"],
+  temps: ["#a66cff", "#e8b830", "#f8f4e8"],
   sel: ["#ffffff", "#e8e8f0"],
   huile: ["#f2c14e", "#ffe88a"],
   frites: ["#f2c14e", "#f8dc8c", "#c9952e"],
@@ -472,6 +525,13 @@ export function BattleScreen({
       case "bouclier":
       case "charge":
         push({ x: src.x, y: src.y + 4, life: 0.7, max: 0.7, kind: "ring", s: fx === "charge" ? 30 : 26 });
+        break;
+      case "temps":
+        // Aiguilles qui tournent autour de la cible
+        for (let i = 0; i < 20; i++) {
+          const ang = (i / 20) * Math.PI * 2;
+          push({ x: tgt.x + Math.cos(ang) * 8, y: tgt.y + Math.sin(ang) * 6, vx: Math.cos(ang + 1.2) * 70, vy: Math.sin(ang + 1.2) * 55, life: 0.55, max: 0.55, s: 2 });
+        }
         break;
       case "ombre":
         for (let i = 0; i < 16; i++) {

@@ -6,7 +6,7 @@
 export type Stat = "atk" | "def" | "spd" | "acc";
 export type StatusId = "etourdi" | "brule";
 /** Effet visuel joué par l'écran de combat. */
-export type Fx = "sabre" | "son" | "titan" | "dague" | "coup" | "feu" | "soin" | "bonus" | "malus" | "ombre" | "lame" | "sel" | "huile" | "frites" | "feuille" | "sieste" | "charge" | "vinaigre" | "bouclier" | "terre";
+export type Fx = "temps" | "sabre" | "son" | "titan" | "dague" | "coup" | "feu" | "soin" | "bonus" | "malus" | "ombre" | "lame" | "sel" | "huile" | "frites" | "feuille" | "sieste" | "charge" | "vinaigre" | "bouclier" | "terre";
 
 export type MoveEffect =
   | { kind: "stage"; stat: Stat; n: number; who: "self" | "target"; chance?: number }
@@ -94,6 +94,25 @@ export const MOVES: Record<string, Move> = {
   "coupe-seconde": { id: "coupe-seconde", name: "Coupe-seconde", desc: "", power: 130, acc: 90, target: "foe", charge: 1, effects: [{ kind: "status", status: "etourdi", chance: 25 }], fx: "sabre" },
   "minute-ultime": { id: "minute-ultime", name: "Minute ultime", desc: "", power: 75, acc: 95, target: "foe", priority: 1, fx: "sabre" },
   "regard-futur": { id: "regard-futur", name: "Regard du futur", desc: "", power: 0, acc: 100, target: "foe", effects: [{ kind: "stage", stat: "def", n: -2, who: "target" }], fx: "malus" },
+  // Ennemis du chapitre 5
+  "pique-aiguille": { id: "pique-aiguille", name: "Pique-aiguille", desc: "", power: 55, acc: 95, target: "foe", fx: "lame" },
+  "tic-rapide": { id: "tic-rapide", name: "Tic rapide", desc: "", power: 22, acc: 95, target: "foe", hits: [2, 3], priority: 1, fx: "dague" },
+  remontage: { id: "remontage", name: "Remontage", desc: "", power: 0, acc: 100, target: "self", effects: [{ kind: "stage", stat: "atk", n: 1, who: "self" }, { kind: "stage", stat: "spd", n: 1, who: "self" }], fx: "bonus" },
+  "bec-ressort": { id: "bec-ressort", name: "Bec à ressort", desc: "", power: 55, acc: 95, target: "foe", fx: "coup" },
+  "coucou-strident": { id: "coucou-strident", name: "COUCOU !", desc: "", power: 0, acc: 100, target: "foe", effects: [{ kind: "stage", stat: "atk", n: -1, who: "target" }, { kind: "stage", stat: "acc", n: -1, who: "target", chance: 50 }], fx: "malus" },
+  "heure-pile": { id: "heure-pile", name: "Heure pile", desc: "", power: 50, acc: 90, target: "foe", effects: [{ kind: "status", status: "brule", chance: 30 }], fx: "feu" },
+  "sable-temps": { id: "sable-temps", name: "Sable du temps", desc: "", power: 50, acc: 95, target: "foe", effects: [{ kind: "stage", stat: "acc", n: -1, who: "target", chance: 50 }], fx: "terre" },
+  ensablement: { id: "ensablement", name: "Ensablement", desc: "", power: 0, acc: 100, target: "foe", effects: [{ kind: "stage", stat: "spd", n: -2, who: "target" }], fx: "malus" },
+  retournement: { id: "retournement", name: "Retournement", desc: "", power: 0, acc: 100, target: "self", effects: [{ kind: "heal", pct: 22 }], fx: "soin" },
+  "tempete-sable": { id: "tempete-sable", name: "Tempête de sable", desc: "", power: 115, acc: 90, target: "foe", charge: 1, fx: "terre" },
+  "canne-onyx": { id: "canne-onyx", name: "Canne d'onyx", desc: "", power: 55, acc: 95, target: "foe", fx: "lame" },
+  "minute-volee": { id: "minute-volee", name: "Minute volée", desc: "", power: 45, acc: 95, target: "foe", effects: [{ kind: "stage", stat: "spd", n: -1, who: "target" }], fx: "temps" },
+  "costume-impeccable": { id: "costume-impeccable", name: "Costume impeccable", desc: "", power: 0, acc: 100, target: "self", effects: [{ kind: "stage", stat: "def", n: 1, who: "self" }, { kind: "stage", stat: "atk", n: 1, who: "self" }], fx: "bouclier" },
+  "seconde-figee": { id: "seconde-figee", name: "Seconde figée", desc: "", power: 0, acc: 85, target: "foe", effects: [{ kind: "status", status: "etourdi", chance: 30 }], fx: "temps" },
+  "aiguilles-jumelles": { id: "aiguilles-jumelles", name: "Aiguilles jumelles", desc: "", power: 28, acc: 95, target: "foe", hits: [2, 3], fx: "lame" },
+  "sablier-noir": { id: "sablier-noir", name: "Sablier noir", desc: "", power: 0, acc: 100, target: "self", effects: [{ kind: "heal", pct: 10 }], fx: "temps" },
+  "protocole-minuit": { id: "protocole-minuit", name: "PROTOCOLE MINUIT", desc: "", power: 130, acc: 90, target: "foe", charge: 1, fx: "temps" },
+  eternite: { id: "eternite", name: "Éternité", desc: "", power: 70, acc: 95, target: "foe", fx: "ombre" },
   // Ennemis du chapitre 3
   "roule-boule": { id: "roule-boule", name: "Roulé-boulé", desc: "", power: 45, acc: 95, target: "foe", fx: "terre" },
   "poids-mort": { id: "poids-mort", name: "Poids mort", desc: "", power: 0, acc: 100, target: "self", effects: [{ kind: "stage", stat: "def", n: 2, who: "self" }], fx: "bouclier" },
@@ -307,6 +326,60 @@ export const FOES: Record<string, Foe> = {
       },
     ],
   },
+  trotteuse: { id: "trotteuse", name: "Trotteuse", sprite: "trotteuse", lv: [14, 22], hp: 125, atk: 28, def: 22, spd: 22, moves: ["pique-aiguille", "tic-rapide", "remontage"] },
+  coucou: { id: "coucou", name: "Coucou mécanique", sprite: "coucou", lv: [14, 22], hp: 115, atk: 29, def: 20, spd: 18, moves: ["bec-ressort", "coucou-strident", "heure-pile"] },
+  "grand-sablier": {
+    id: "grand-sablier",
+    name: "Le Grand Sablier",
+    sprite: "sablier",
+    lv: [15, 23],
+    hp: 330,
+    atk: 30,
+    def: 26,
+    spd: 14,
+    boss: true,
+    moves: ["sable-temps", "ensablement", "tempete-sable", "retournement"],
+    phases: [
+      {
+        below: 0.4,
+        moves: ["tempete-sable", "sable-temps", "ensablement", "sable-temps"],
+        line: "Le Grand Sablier se retourne d'un coup ! Le sable remonte… et il repart pour un tour.",
+        heal: 15,
+        stages: { atk: 1 },
+        sprite: "sablier-retourne",
+      },
+    ],
+  },
+  minuit: {
+    id: "minuit",
+    name: "Monsieur Minuit",
+    sprite: "minuit",
+    lv: [17, 25],
+    hp: 420,
+    atk: 30,
+    def: 25,
+    spd: 22,
+    boss: true,
+    moves: ["canne-onyx", "minute-volee", "costume-impeccable", "seconde-figee"],
+    phases: [
+      {
+        below: 0.66,
+        moves: ["aiguilles-jumelles", "minute-volee", "seconde-figee", "sablier-noir"],
+        line: "Monsieur Minuit ouvre sa veste. À la place du cœur, un cadran géant tourne à l'envers. « Vous m'avez fait perdre une seconde. Je vais vous prendre toutes les vôtres. »",
+        heal: 6,
+        stages: { spd: 1 },
+        sprite: "minuit-cadran",
+      },
+      {
+        below: 0.33,
+        moves: ["protocole-minuit", "eternite", "aiguilles-jumelles", "sablier-noir"],
+        line: "« 23:59. POUR TOUJOURS. » Les murs de la Tour se fissurent. Monsieur Minuit grandit, fait de milliers d'aiguilles qui tournent dans tous les sens.",
+        heal: 6,
+        stages: { atk: 1 },
+        sprite: "minuit-eternel",
+      },
+    ],
+  },
   "haltere-sauvage": { id: "haltere-sauvage", name: "Haltère Sauvage", sprite: "haltere", lv: [6, 14], hp: 60, atk: 17, def: 18, spd: 8, moves: ["roule-boule", "poids-mort", "chute-libre"] },
   proteinator: { id: "proteinator", name: "Protéinator", sprite: "proteinator", lv: [6, 14], hp: 96, atk: 17, def: 15, spd: 12, boss: true, moves: ["shake-explosif", "gorgee-whey", "mousse-aveuglante"] },
   "moine-gain": { id: "moine-gain", name: "Moine du Gain", sprite: "moine", lv: [7, 15], hp: 80, atk: 19, def: 16, spd: 14, moves: ["coup-serviette", "pompes-infinies", "planche"] },
@@ -370,7 +443,7 @@ export interface BattleDef {
   /** Consommables gagnés à la victoire. */
   drops?: Record<string, number>;
   /** Fond de l'écran de combat. */
-  bg: "rue" | "cite" | "egout" | "palais" | "trone" | "montagne" | "temple" | "sanctuaire" | "cerisiers" | "festival" | "dojo";
+  bg: "rue" | "cite" | "egout" | "palais" | "trone" | "montagne" | "temple" | "sanctuaire" | "cerisiers" | "festival" | "dojo" | "tour" | "sommet";
   /** Conseils affichés au premier combat (tutoriel). */
   tutorial?: boolean;
   music?: "combat" | "boss";
@@ -397,6 +470,13 @@ export const BATTLES: Record<string, BattleDef> = {
   "patate-2": { id: "patate-2", foes: ["patate-renegate", "patate-renegate"], intro: "Une bande de Patates Renégates !", canFlee: true, xp: 90, fp: 45, drops: { "part-pizza": 1 }, bg: "egout" },
   "laitue-1": { id: "laitue-1", foes: ["garde-laitue"], intro: "Un Garde Laitue donne l'alerte !", canFlee: true, xp: 65, fp: 35, drops: { "mega-cornet": 1 }, bg: "palais" },
   "laitue-2": { id: "laitue-2", foes: ["garde-laitue", "soldat-brocoli"], intro: "La garde royale bloque le couloir !", canFlee: false, xp: 95, fp: 50, drops: { ketchup: 1 }, bg: "palais" },
+  trotteuse: { id: "trotteuse", foes: ["trotteuse"], intro: "Une Trotteuse fait le tour du cadran… et fonce sur toi !", canFlee: true, xp: 140, fp: 75, drops: { onigiri: 1 }, bg: "tour" },
+  trotteuses: { id: "trotteuses", foes: ["trotteuse", "trotteuse"], intro: "Deux Trotteuses montent la garde. Elles tournent dans le même sens. Toujours.", canFlee: true, xp: 220, fp: 120, drops: { "mega-cornet": 1 }, bg: "tour" },
+  coucou: { id: "coucou", foes: ["coucou"], intro: "COUCOU ! Un Coucou mécanique jaillit de sa petite maison !", canFlee: true, xp: 140, fp: 75, drops: { "the-vert": 1 }, bg: "tour" },
+  "coucous": { id: "coucous", foes: ["coucou", "trotteuse"], intro: "Un Coucou et une Trotteuse gardent l'escalier. Il est l'heure. De se battre.", canFlee: true, xp: 230, fp: 125, drops: { "cafe-minuit": 1 }, bg: "tour" },
+  sablier: { id: "sablier", foes: ["grand-sablier"], intro: "LE GRAND SABLIER se dresse. Chaque grain qui tombe est une seconde volée à quelqu'un.", canFlee: false, xp: 420, fp: 260, drops: { "cafe-minuit": 2 }, bg: "tour", music: "boss" },
+  minuit: { id: "minuit", foes: ["minuit"], intro: "Monsieur Minuit ajuste son nœud papillon. « Vous êtes en retard, Sparrow. Comme toujours. »", canFlee: false, xp: 800, fp: 600, bg: "sommet", music: "boss" },
+  "minuit-revanche": { id: "minuit-revanche", foes: ["minuit"], intro: "L'Écho de Monsieur Minuit ressurgit du cadran : « Une revanche ? J'ai tout le temps du monde. »", canFlee: true, xp: 300, fp: 250, drops: { "cafe-minuit": 1 }, bg: "sommet", music: "boss" },
   "roi-salade": { id: "roi-salade", foes: ["roi-salade"], intro: "Le Roi de la Salade se lève de son trône !", canFlee: false, xp: 220, fp: 150, bg: "trone", music: "boss" },
 };
 
@@ -422,6 +502,7 @@ export const CONSUMABLES: Record<string, Consumable> = {
   "the-vert": { id: "the-vert", name: "Thé vert", desc: "Rend 45 PV et soigne les états. Il fume encore.", price: 30, use: { heal: 45, cleanse: true } },
   onigiri: { id: "onigiri", name: "Boulette de riz", desc: "Rend 80 PV. Avec une frite cachée au milieu : la recette de Pokeyz.", price: 55, use: { heal: 80 } },
   "barre-proteinee": { id: "barre-proteinee", name: "Barre protéinée", desc: "Rend 25 PV et Attaque +1. Goût : carton sucré.", price: 30, use: { heal: 25, stage: { stat: "atk", n: 1 } } },
+  "cafe-minuit": { id: "cafe-minuit", name: "Café de minuit", desc: "Rend tous les PV et soigne les états. Serré. Très serré.", price: 120, use: { healPct: 100, cleanse: true } },
   soupe: { id: "soupe", name: "Soupe du jour", desc: "Rend 60 PV. Le jour en question n'est pas précisé.", price: 35, use: { heal: 60 } },
 };
 
@@ -445,6 +526,9 @@ export const EQUIPMENT: Record<string, Equipment> = {
   hakama: { id: "hakama", name: "Hakama renforcé", slot: "armure", desc: "Ample et résistant. Défense +8, PV +26, Vitesse +1.", price: 360, bonus: { def: 8, hp: 26, spd: 1 } },
   "casque-audio": { id: "casque-audio", name: "Casque de Pokeyz", slot: "accessoire", desc: "Le casque de secours de Pokeyz. Vitesse +3, Attaque +3.", price: 0, bonus: { spd: 3, atk: 3 } },
   "ruban-katsu": { id: "ruban-katsu", name: "Ruban de Katsu", slot: "accessoire", desc: "Le ruban de l'ancien maître. Vitesse +5, Attaque +5, Défense +2.", price: 0, bonus: { spd: 5, atk: 5, def: 2 } },
+  "aiguille-or": { id: "aiguille-or", name: "Aiguille d'or", slot: "arme", desc: "Une aiguille d'horloge affûtée. Attaque +14, Vitesse +1.", price: 560, bonus: { atk: 14, spd: 1 } },
+  "armure-rouages": { id: "armure-rouages", name: "Armure de rouages", slot: "armure", desc: "Des engrenages qui tournent tout seuls. Défense +10, PV +32.", price: 540, bonus: { def: 10, hp: 32 } },
+  "montre-seconde": { id: "montre-seconde", name: "Montre de Seconde", slot: "accessoire", desc: "La montre de l'apprenti horloger. Elle avance d'une minute, exprès. Vitesse +6, Attaque +4, PV +10.", price: 0, bonus: { spd: 6, atk: 4, hp: 10 } },
   "gants-fonte": { id: "gants-fonte", name: "Gants de fonte", slot: "arme", desc: "Lourds, mais efficaces. Attaque +8.", price: 240, bonus: { atk: 8 } },
   "survet-pro": { id: "survet-pro", name: "Survêt' pro", slot: "armure", desc: "Le survêtement des champions. Défense +6, PV +20.", price: 260, bonus: { def: 6, hp: 20 } },
   "ceinture-titan": { id: "ceinture-titan", name: "Ceinture du Titan", slot: "accessoire", desc: "La ceinture du Premier Titan. Attaque +4, Défense +4.", price: 0, bonus: { atk: 4, def: 4 } },
@@ -467,6 +551,13 @@ export const SHOPS: Record<string, { name: string; keeper: string; items: string
     items: ["manette-pro", "sweat-epais", "spatule", "tablier"],
     hello: "Des armes ? Des armures ? Tout est garanti sans friture.",
     bye: "Bonne chance. Évite de te battre contre le Roi. Ou alors gagne.",
+  },
+  tour: {
+    name: "Distributeur de la Tour",
+    keeper: "Distributeur automatique",
+    items: ["cafe-minuit", "onigiri", "mega-cornet", "ketchup", "the-vert", "aiguille-or", "armure-rouages"],
+    hello: "BIP. BONSOIR. IL EST 23:59. IL EST TOUJOURS 23:59. QUE DÉSIREZ-VOUS ?",
+    bye: "BIP. MERCI. BONNE FIN DE MINUTE.",
   },
   auberge: {
     name: "Auberge du Thé Tiède",
