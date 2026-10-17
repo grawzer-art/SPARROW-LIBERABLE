@@ -11,12 +11,12 @@ import type { Rpg } from "./state";
 
 export const TILE = 16;
 
-export type MapId = "quartier" | "cite" | "maison-chou" | "herboristerie" | "armurerie" | "restaurant" | "egouts" | "palais";
+export type MapId = "quartier" | "cite" | "maison-chou" | "herboristerie" | "armurerie" | "restaurant" | "egouts" | "palais" | "sentier" | "refuge" | "temple-cour" | "temple";
 
-export const MAP_IDS: MapId[] = ["quartier", "cite", "maison-chou", "herboristerie", "armurerie", "restaurant", "egouts", "palais"];
+export const MAP_IDS: MapId[] = ["quartier", "cite", "maison-chou", "herboristerie", "armurerie", "restaurant", "egouts", "palais", "sentier", "refuge", "temple-cour", "temple"];
 
 /** Ambiance : règle l'éclairage (nuit, crépuscule, intérieur, souterrain, palais). */
-export type Region = "nuit" | "crepuscule" | "interieur" | "egout" | "palais";
+export type Region = "nuit" | "crepuscule" | "interieur" | "egout" | "palais" | "aube";
 
 export type Ground =
   // Extérieurs
@@ -41,7 +41,10 @@ export type Ground =
   // Souterrains
   | "egout"
   | "eaux-usees"
-  | "marbre";
+  | "marbre"
+  // Chapitre 3
+  | "tatami"
+  | "roche";
 
 export type Facing = "down" | "up" | "left" | "right";
 
@@ -249,6 +252,11 @@ const EXAMINABLE = new Set([
   "cuve",
   "grille",
   "table",
+  "banc-muscu",
+  "sac-frappe",
+  "gong",
+  "haltere-geant",
+  "statue-titan",
 ]);
 
 export interface Thing {

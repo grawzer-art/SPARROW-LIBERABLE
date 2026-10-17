@@ -25,6 +25,8 @@ interface Props {
   reduced: boolean;
   onFinish: (r: MuscuResult) => MuscuSummary;
   onClose: () => void;
+  /** Texte du bouton de sortie (le mini-jeu sert aussi d'épreuve dans le RPG). */
+  exitLabel?: string;
 }
 
 const W = 160;
@@ -32,7 +34,7 @@ const H = 144;
 const BAR = { x: 16, y: 122, w: 128, h: 10 };
 
 /** Séance de muscu : appuyer quand le curseur est dans la zone (combo → zone plus étroite). */
-export function MuscuGame({ audio, best, look, tier, reduced, onFinish, onClose }: Props) {
+export function MuscuGame({ audio, best, look, tier, reduced, onFinish, onClose, exitLabel = "Retour à l'appart" }: Props) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const game = useRef<Muscu>(newMuscu());
   const [phase, setPhase] = useState<"intro" | "play" | "end">("intro");
@@ -82,6 +84,9 @@ export function MuscuGame({ audio, best, look, tier, reduced, onFinish, onClose 
 
   function draw(ctx: CanvasRenderingContext2D, g: Muscu, t: number) {
     ctx.imageSmoothingEnabled = false;
+    // Position du curseur exposée pour les tests automatisés
+    ctx.canvas.dataset.cur = g.cur.toFixed(3);
+    ctx.canvas.dataset.zone = `${g.zone.toFixed(3)}:${g.half.toFixed(3)}`;
     drawRoom(ctx, "muscu", { t, hour: 12, deco: new Set(), tiers: { pc: 1, lit: 1, sport: tier, canape: 1 }, pcBroken: false, using: "banc" });
     // Sparrow de face, barre au-dessus de la tête
     const strain = g.lift > 0.5 ? "ouverte" : "neutre";
@@ -188,7 +193,7 @@ export function MuscuGame({ audio, best, look, tier, reduced, onFinish, onClose 
             C&apos;est parti
           </button>
           <button type="button" className="gt-farm__quit mono" onClick={onClose}>
-            Retour à l&apos;appart
+            {exitLabel}
           </button>
         </div>
       )}
@@ -209,7 +214,7 @@ export function MuscuGame({ audio, best, look, tier, reduced, onFinish, onClose 
             </p>
           ))}
           <button type="button" className="btn btn--sm" onClick={onClose}>
-            Retour à l&apos;appart
+            {exitLabel}
           </button>
         </div>
       )}

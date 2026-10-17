@@ -78,6 +78,7 @@ const AMBIANCE: Record<MapDef["region"], { veil: string; me: number } | null> = 
   egout: { veil: "rgba(4,8,10,0.70)", me: 34 },
   palais: { veil: "rgba(24,12,40,0.22)", me: 30 },
   interieur: null,
+  aube: { veil: "rgba(70,40,90,0.22)", me: 30 },
 };
 
 export class Overworld {

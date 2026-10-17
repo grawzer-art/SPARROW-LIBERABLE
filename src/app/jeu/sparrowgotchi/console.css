@@ -1536,3 +1536,33 @@
 .cook__panel b.is-parfait { color: #1f8a4a; }
 .cook__panel b.is-brule,
 .cook__panel b.is-pale { color: #8a5a22; }
+
+.gb-game-title {
+  margin: 0 0 8px;
+  text-align: center;
+  font-family: var(--display);
+  font-size: 22px;
+  letter-spacing: 0.04em;
+  color: var(--red-deep);
+}
+
+.gb-game-title span {
+  display: block;
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #6a6a74;
+}
+
+.bt-grid .bt-titan {
+  grid-column: 1 / -1;
+  justify-content: center;
+  color: #8a5a00;
+  background: linear-gradient(90deg, rgba(242, 193, 78, 0.25), rgba(242, 193, 78, 0.5), rgba(242, 193, 78, 0.25));
+  letter-spacing: 0.08em;
+}
+
+.bt-grid .bt-titan.is-on {
+  background: linear-gradient(90deg, rgba(242, 193, 78, 0.45), rgba(242, 193, 78, 0.8), rgba(242, 193, 78, 0.45));
+}

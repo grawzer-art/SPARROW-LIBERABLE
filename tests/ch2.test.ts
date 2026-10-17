@@ -3,6 +3,7 @@ import { newState, type State } from "@/lib/gotchi/engine";
 import { BATTLES } from "@/lib/rpg/bestiary";
 import { vannesOk } from "@/lib/rpg/cite";
 import { npcsOf, reachable, solidAt, step, thingAt, type Facing, type MapDef, type Tile } from "@/lib/rpg/mapdef";
+import { CH2_MAPS } from "@/lib/rpg/cite";
 import { MAPS, mapOf, restoreWhere } from "@/lib/rpg/maps";
 import { applyEffects, emptyRpg, status, type Rpg } from "@/lib/rpg/quest";
 import { afterBattle, afterMinigame, arrival, chapterCard, evenement, examine, scene, talkTo, zoneEffects, type Conversation, NPC_TALK } from "@/lib/rpg/script";
@@ -21,7 +22,7 @@ const open: Rpg = {
   party: ["chevalier", "gerard"],
 };
 
-const ch2 = Object.values(MAPS).filter((m): m is MapDef => !!m && m.id !== "quartier");
+const ch2: MapDef[] = CH2_MAPS;
 
 describe("Chapitre 2 — cartes", () => {
   it("7 cartes, chaque porte mène à une case libre d'une carte existante", () => {

@@ -39,7 +39,7 @@ import { mapOf, restoreWhere } from "@/lib/rpg/maps";
 import { SPAWN } from "@/lib/rpg/quartier";
 import { applyEffects, status, type Effect } from "@/lib/rpg/quest";
 import { buyRpg, equipRpg } from "@/lib/rpg/shop";
-import { afterBattle, afterDefeat, afterMinigame, arrival, chapterCard, evenement, examine, scene, talkTo, zoneEffects, type Action as TalkAction, type Choice, type Conversation, type Line } from "@/lib/rpg/script";
+import { afterBattle, afterDefeat, afterMinigame, arrival, chapterCard, openingCard, evenement, examine, scene, talkTo, zoneEffects, type Action as TalkAction, type Choice, type Conversation, type Line } from "@/lib/rpg/script";
 import { load, save } from "@/lib/storage";
 import { Chiptune } from "../game/audio";
 import { Toast } from "../Overlays";
@@ -166,6 +166,8 @@ export function Gotchi() {
     overlay.current = { ...overlay.current, cook: id, npc: npc ?? overlay.current.npc };
     setCookState(id);
   }, []);
+  /** Dernière séance de muscu jouée dans le RPG (Épreuve de la Force). */
+  const muscuRun = useRef<MuscuResult | null>(null);
   const busy = () => !!(fightRef.current || overlay.current.shop || overlay.current.cook);
   const fightRef = useRef<Fight | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
@@ -176,6 +178,8 @@ export function Gotchi() {
   const [conv, setConv] = useState<Conv | null>(null);
   const [fade, setFade] = useState(false);
   const [chapter, setChapter] = useState<string[] | null>(null);
+  /** Dialogue à ouvrir quand l'écran titre du chapitre est refermé. */
+  const afterCard = useRef<Conversation | null>(null);
   const [vh, setVh] = useState(OW_H);
 
   // L'écran de jeu prend toute la hauteur libre : on montre plus de carte au lieu d'agrandir les pixels.
@@ -407,7 +411,7 @@ export function Gotchi() {
 
   /** Entre sur une carte de l'aventure (avec fondu). */
   const enterMap = useCallback(
-    (dest: Dest, onArrive?: () => void) => {
+    (dest: Dest, intro?: Conversation) => {
       const m = mapOf(dest.map);
       const s = stateRef.current;
       if (!m || !s) return;
@@ -418,12 +422,19 @@ export function Gotchi() {
         whereRef.current = m.id;
         setWhere(m.id);
         save(WHERE_KEY, { map: m.id, x: dest.x, y: dest.y, dir: dest.dir });
-        notify([m.name]);
+        const card = openingCard(m.id, s.rpg);
         const first = !s.rpg.seen.includes(`carte:${m.id}`);
         if (first) rpgApply([{ kind: "seen", id: `carte:${m.id}` }]);
-        const c = arrival(m.id, stateRef.current!.rpg, first);
-        if (c) setTimeout(() => openConvRef.current(c), 500);
-        onArrive?.();
+        const c = intro ?? arrival(m.id, stateRef.current!.rpg, first);
+        if (card) {
+          // Nouveau chapitre : écran titre, puis le dialogue d'arrivée
+          ow.current.frozen = true;
+          afterCard.current = c;
+          setTimeout(() => setChapter(card), reduced.current ? 0 : 450);
+        } else {
+          notify([m.name]);
+          if (c) setTimeout(() => openConvRef.current(c), 500);
+        }
       });
     },
     [notify, rpgApply, transition],
@@ -435,21 +446,30 @@ export function Gotchi() {
   }, [enterMap]);
 
   const goOutside = useCallback(() => {
-    enterMap({ map: "quartier", ...SPAWN }, () => {
-      const s = stateRef.current;
-      if (s && !s.rpg.done.includes("ville-figee:sortir")) {
-        setTimeout(() => {
-          openConv({
+    const s = stateRef.current;
+    const first = s && !s.rpg.done.includes("ville-figee:sortir");
+    enterMap(
+      { map: "quartier", ...SPAWN },
+      first
+        ? {
             lines: [
               { who: "Sparrow", text: "Il fait nuit noire. Les lampadaires grésillent. Et cette horloge, là-bas… 23:59, encore." },
               { who: "Sparrow", text: "Bon. Si tout le quartier est en panne, quelqu'un doit bien savoir quelque chose. Allons poser des questions." },
             ],
             effects: [{ kind: "step", quest: "ville-figee", step: "sortir" }],
-          });
-        }, 500);
-      }
-    });
-  }, [enterMap, openConv]);
+          }
+        : undefined,
+    );
+  }, [enterMap]);
+
+  /** Referme l'écran titre / la carte de chapitre (et lance le dialogue qui suivait). */
+  const closeChapter = useCallback(() => {
+    setChapter(null);
+    const c = afterCard.current;
+    afterCard.current = null;
+    if (c) setTimeout(() => openConvRef.current(c), 150);
+    else if (ow.current && !convRef.current) ow.current.frozen = false;
+  }, []);
 
   const goHome = useCallback(() => {
     transition(() => {
@@ -920,7 +940,7 @@ export function Gotchi() {
 
   const pressA = () => {
     if (busy()) return pad.current?.a();
-    if (page || chapter) return chapter ? setChapter(null) : undefined;
+    if (page || chapter) return chapter ? closeChapter() : undefined;
     if (convRef.current) return advanceConv();
     if (menu !== null) return openPage(MENU[menu].id);
     if (line && typed < line.length) return setTyped(line.length);
@@ -934,7 +954,7 @@ export function Gotchi() {
 
   const pressB = () => {
     if (busy()) return pad.current?.b();
-    if (chapter) return setChapter(null);
+    if (chapter) return closeChapter();
     if (convRef.current) return advanceConv();
     if (page) return setPage(null);
     if (menu !== null) return setMenu(null);
@@ -1348,7 +1368,7 @@ export function Gotchi() {
             <BattleScreen
               key={fight.id}
               id={fight.id}
-              team={{ level: state.level, party: state.rpg.party, gear: state.rpg.gear, skills: state.rpg.skills, bag: state.rpg.bag }}
+              team={{ level: state.level, party: state.rpg.party, gear: state.rpg.gear, skills: state.rpg.skills, bag: state.rpg.bag, titanTurns: muscleStage(state.muscle) >= 4 ? 4 : 3 }}
               tenue={state.equip.tenue}
               audio={audio.current}
               reduced={reduced.current}
@@ -1360,7 +1380,7 @@ export function Gotchi() {
           {shop && state && (
             <ShopScreen id={shop} coins={state.coins} bag={state.rpg.bag} owned={state.rpg.owned} pad={pad} onBuy={shopBuy} onClose={closeShop} />
           )}
-          {cook && <CookGame height={vh} audio={audio.current} reduced={reduced.current} pad={pad} onEnd={endCook} />}
+          {cook && cook !== "muscu" && <CookGame height={vh} audio={audio.current} reduced={reduced.current} pad={pad} onEnd={endCook} />}
           {!cur && line && menu === null && (
             <button type="button" className="gb-dialog mono" onClick={() => (typed < line.length ? setTyped(line.length) : setLine(null))} aria-live="polite">
               <span>{line.slice(0, typed)}</span>
@@ -1373,7 +1393,7 @@ export function Gotchi() {
             </button>
           )}
           {chapter && (
-            <button type="button" className="gb-chapter mono" onClick={() => setChapter(null)}>
+            <button type="button" className="gb-chapter mono" onClick={closeChapter}>
               {chapter.map((l, i) => (
                 <span key={l} className={i === 0 ? "gb-chapter__kicker" : i === 1 ? "gb-chapter__title" : ""}>
                   {l}
@@ -1446,6 +1466,25 @@ export function Gotchi() {
       <input ref={fileInput} type="file" accept="application/json,.json" hidden onChange={(e) => importSave(e.target.files?.[0])} />
 
       {game === "farm" && state && <FarmGame audio={audio.current} best={state.bestFarm} reduced={reduced.current} onFinish={onFarmFinish} onClose={closeGame} />}
+      {cook === "muscu" && state && (
+        <MuscuGame
+          audio={audio.current}
+          best={state.bestMuscu}
+          look={lookOf(state)}
+          tier={tierOf(state.owned, "sport")}
+          reduced={reduced.current}
+          exitLabel="Retour au temple"
+          onFinish={(r) => {
+            muscuRun.current = r;
+            return onMuscuFinish(r);
+          }}
+          onClose={() => {
+            const r = muscuRun.current;
+            muscuRun.current = null;
+            endCook(!!r && r.reps >= 12 && !r.crampe);
+          }}
+        />
+      )}
       {game === "muscu" && state && (
         <MuscuGame
           audio={audio.current}

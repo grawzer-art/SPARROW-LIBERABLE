@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BATTLES, CONSUMABLES, EQUIPMENT, FOES, MEMBERS, MOVES, SHOPS } from "@/lib/rpg/bestiary";
-import { bagAfter, foe, forced, makeAlly, mustSwap, playTurn, spoils, startBattle, type Team } from "@/lib/rpg/combat";
+import { ally, bagAfter, canTransform, foe, forced, makeAlly, mustSwap, playTurn, spoils, startBattle, type Team } from "@/lib/rpg/combat";
 import { policy } from "./combat-policy";
 
 function fight(id: string, team: Team, seed: number) {
@@ -174,5 +174,57 @@ describe("Équilibrage : un joueur qui spamme la première technique", () => {
       total += t;
     }
     expect(total / 100).toBeGreaterThanOrEqual(10);
+  });
+});
+
+describe("Chapitre 3 : transformation, vol, coup de grâce", () => {
+  it("SPARROW TITAN : une fois par combat, plus fort, puis retour à la normale", () => {
+    let b = startBattle("gonflax", { level: 9, party: ["chevalier"], gear: {}, skills: ["titan"], bag: {}, titanTurns: 3 }, 11);
+    const atk0 = ally(b).atk;
+    expect(canTransform(b)).toBe(true);
+    const r = playTurn(b, { kind: "transform" });
+    b = r.battle;
+    expect(r.events.some((e) => e.kind === "transform" && e.on)).toBe(true);
+    expect(ally(b).atk).toBeGreaterThan(atk0);
+    expect(ally(b).moves).toContain("developpe-cosmique");
+    expect(canTransform(b)).toBe(false);
+    for (let i = 0; i < 3 && ally(b).form; i++) b = playTurn(b, { kind: "move", move: ally(b).moves[0] }).battle;
+    if (!b.over && ally(b).hp > 0) {
+      expect(ally(b).form).toBeFalsy();
+      expect(ally(b).atk).toBe(atk0);
+      expect(ally(b).moves).toContain("micro-sieste");
+      expect(canTransform(b)).toBe(false);
+    }
+  });
+  it("sans la technique apprise, pas de transformation", () => {
+    expect(canTransform(startBattle("gonflax", T(9, ["chevalier"]), 3))).toBe(false);
+  });
+  it("Lili chipe un objet une seule fois par combat, gardé à la victoire", () => {
+    let b = startBattle("proteinator", T(9, ["lili"]), 21);
+    b = playTurn(b, { kind: "swap", to: 1 }).battle;
+    let got = 0;
+    for (let i = 0; i < 6 && !b.over; i++) {
+      const r = playTurn(mustSwap(b) ? b : b, mustSwap(b) ? { kind: "swap", to: 0 } : { kind: "move", move: "vol-tire" });
+      got += r.events.filter((e) => e.kind === "text" && /chipe/.test(e.text)).length;
+      b = r.battle;
+    }
+    expect(got).toBe(1);
+    expect(Object.values(b.stolen).reduce((a, n) => a + n, 0)).toBe(1);
+  });
+  it("coup de grâce : bien plus fort sur un ennemi affaibli", () => {
+    const base = startBattle("moine-1", T(9, ["lili"]), 5);
+    base.a = 1;
+    const full = playTurn(base, { kind: "move", move: "coup-grace" });
+    const low = { ...base, foes: base.foes.map((f) => ({ ...f, hp: Math.floor(f.maxHp * 0.39) })) };
+    const weak = playTurn(low, { kind: "move", move: "coup-grace" });
+    const dmg = (r: typeof full) => r.events.filter((e) => e.kind === "damage" && e.side === "foe").reduce((a, e) => a + (e.kind === "damage" ? e.amount : 0), 0);
+    if (dmg(full) && dmg(weak)) expect(dmg(weak)).toBeGreaterThan(dmg(full) * 1.8);
+  });
+  it("équilibrage : le chapitre 3 se gagne, Gonflax reste un défi", () => {
+    const g: Team["gear"] = { arme: "fourchette-sacree", armure: "tablier", accessoire: "bracelet-sel" };
+    for (const id of ["haltere-1", "halteres-2", "proteinator", "moine-1", "moine-reserve", "arene"]) expect(stats(id, T(7, ["chevalier", "gerard"], { frites: 2 }, g, ["pluie-frites"]), 150).rate, id).toBeGreaterThan(0.9);
+    const boss = stats("gonflax", T(8, ["chevalier", "gerard"], { frites: 2, soupe: 1 }, g, ["pluie-frites", "titan"]), 200);
+    expect(boss.rate).toBeGreaterThan(0.85);
+    expect(boss.turns).toBeGreaterThanOrEqual(8);
   });
 });
