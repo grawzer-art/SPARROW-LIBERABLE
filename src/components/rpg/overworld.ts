@@ -18,6 +18,7 @@ import {
   thingAt,
   warpAt,
   zoneAt,
+  wildAt,
   type Facing,
   type MapDef,
   type NpcDef,
@@ -93,6 +94,10 @@ export class Overworld {
   /** Événements lus par l'interface. */
   onDoor: ((d: Warp) => void) | null = null;
   onZone: ((z: Zone) => void) | null = null;
+  /** Rencontre sauvage dans les hautes herbes. */
+  onWild: ((battle: string) => void) | null = null;
+  /** Pas faits depuis la dernière rencontre (pas de combat dès la sortie d'un autre). */
+  private wildSteps = 0;
   /** Un ennemi a repéré Sparrow (il s'approche, puis l'interface lance le combat). */
   onSpot: ((id: string) => void) | null = null;
   bumps = 0;
@@ -315,6 +320,11 @@ export class Overworld {
   private arrive() {
     const door = warpAt(this.map, this.tile);
     if (door) this.onDoor?.(door);
+    const w = wildAt(this.map, this.tile);
+    if (w && ++this.wildSteps >= 3 && Math.random() < w.rate) {
+      this.wildSteps = 0;
+      this.onWild?.(w.battle);
+    }
     const z = zoneAt(this.map, this.tile);
     if ((z?.id ?? null) !== this.zone) {
       this.zone = z?.id ?? null;

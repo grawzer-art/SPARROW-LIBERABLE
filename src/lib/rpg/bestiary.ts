@@ -6,7 +6,7 @@
 export type Stat = "atk" | "def" | "spd" | "acc";
 export type StatusId = "etourdi" | "brule";
 /** Effet visuel joué par l'écran de combat. */
-export type Fx = "temps" | "sabre" | "son" | "titan" | "dague" | "coup" | "feu" | "soin" | "bonus" | "malus" | "ombre" | "lame" | "sel" | "huile" | "frites" | "feuille" | "sieste" | "charge" | "vinaigre" | "bouclier" | "terre";
+export type Fx = "capsule" | "temps" | "sabre" | "son" | "titan" | "dague" | "coup" | "feu" | "soin" | "bonus" | "malus" | "ombre" | "lame" | "sel" | "huile" | "frites" | "feuille" | "sieste" | "charge" | "vinaigre" | "bouclier" | "terre";
 
 export type MoveEffect =
   | { kind: "stage"; stat: Stat; n: number; who: "self" | "target"; chance?: number }
@@ -94,6 +94,11 @@ export const MOVES: Record<string, Move> = {
   "coupe-seconde": { id: "coupe-seconde", name: "Coupe-seconde", desc: "", power: 130, acc: 90, target: "foe", charge: 1, effects: [{ kind: "status", status: "etourdi", chance: 25 }], fx: "sabre" },
   "minute-ultime": { id: "minute-ultime", name: "Minute ultime", desc: "", power: 75, acc: 95, target: "foe", priority: 1, fx: "sabre" },
   "regard-futur": { id: "regard-futur", name: "Regard du futur", desc: "", power: 0, acc: 100, target: "foe", effects: [{ kind: "stage", stat: "def", n: -2, who: "target" }], fx: "malus" },
+  // Brokito (créature sauvage, capturable)
+  "fouet-tige": { id: "fouet-tige", name: "Fouet-tige", desc: "Un coup de tige souple et vif.", power: 45, acc: 100, target: "foe", fx: "feuille" },
+  "pluie-florets": { id: "pluie-florets", name: "Pluie de florets", desc: "Brokito secoue sa tête : 2 à 3 florets bien durs.", power: 20, acc: 95, target: "foe", hits: [2, 3], fx: "feuille" },
+  racines: { id: "racines", name: "Racines", desc: "Brokito plonge ses racines dans le sol : rend 20 % des PV.", power: 0, acc: 100, target: "self", effects: [{ kind: "heal", pct: 20 }], fx: "soin" },
+  "graine-surprise": { id: "graine-surprise", name: "Graine surprise", desc: "Une graine qui éclate au nez de l'ennemi. Peut étourdir.", power: 35, acc: 95, target: "foe", effects: [{ kind: "status", status: "etourdi", chance: 30 }], fx: "terre" },
   // Ennemis du chapitre 5
   "pique-aiguille": { id: "pique-aiguille", name: "Pique-aiguille", desc: "", power: 55, acc: 95, target: "foe", fx: "lame" },
   "tic-rapide": { id: "tic-rapide", name: "Tic rapide", desc: "", power: 22, acc: 95, target: "foe", hits: [2, 3], priority: 1, fx: "dague" },
@@ -172,6 +177,14 @@ export interface Member {
 }
 
 export const MEMBERS: Record<string, Member> = {
+  brokito: {
+    id: "brokito",
+    name: "Brokito",
+    sprite: "brokito-dos",
+    grow: { hp: [40, 5.4], atk: [11, 1.5], def: [11, 1.4], spd: [12, 1.5] },
+    moves: ["fouet-tige", "pluie-florets", "racines", "graine-surprise"],
+    desc: "Créature végétale des potagers. Têtu, joueur, il pousse plus vite quand on le complimente.",
+  },
   sparrow: {
     id: "sparrow",
     name: "Sparrow",
@@ -326,6 +339,7 @@ export const FOES: Record<string, Foe> = {
       },
     ],
   },
+  brokito: { id: "brokito", name: "Brokito sauvage", sprite: "brokito", lv: [3, 16], hp: 62, atk: 13, def: 12, spd: 13, moves: ["fouet-tige", "pluie-florets", "racines", "graine-surprise"] },
   trotteuse: { id: "trotteuse", name: "Trotteuse", sprite: "trotteuse", lv: [14, 22], hp: 125, atk: 28, def: 22, spd: 22, moves: ["pique-aiguille", "tic-rapide", "remontage"] },
   coucou: { id: "coucou", name: "Coucou mécanique", sprite: "coucou", lv: [14, 22], hp: 115, atk: 29, def: 20, spd: 18, moves: ["bec-ressort", "coucou-strident", "heure-pile"] },
   "grand-sablier": {
@@ -447,6 +461,8 @@ export interface BattleDef {
   /** Conseils affichés au premier combat (tutoriel). */
   tutorial?: boolean;
   music?: "combat" | "boss";
+  /** Rencontre sauvage : l'espèce peut être capturée avec une capsule. */
+  wild?: string;
 }
 
 export const BATTLES: Record<string, BattleDef> = {
@@ -470,6 +486,7 @@ export const BATTLES: Record<string, BattleDef> = {
   "patate-2": { id: "patate-2", foes: ["patate-renegate", "patate-renegate"], intro: "Une bande de Patates Renégates !", canFlee: true, xp: 90, fp: 45, drops: { "part-pizza": 1 }, bg: "egout" },
   "laitue-1": { id: "laitue-1", foes: ["garde-laitue"], intro: "Un Garde Laitue donne l'alerte !", canFlee: true, xp: 65, fp: 35, drops: { "mega-cornet": 1 }, bg: "palais" },
   "laitue-2": { id: "laitue-2", foes: ["garde-laitue", "soldat-brocoli"], intro: "La garde royale bloque le couloir !", canFlee: false, xp: 95, fp: 50, drops: { ketchup: 1 }, bg: "palais" },
+  "brokito-sauvage": { id: "brokito-sauvage", foes: ["brokito"], intro: "Un Brokito sauvage jaillit du potager !", canFlee: true, xp: 45, fp: 15, bg: "cite", wild: "brokito" },
   trotteuse: { id: "trotteuse", foes: ["trotteuse"], intro: "Une Trotteuse fait le tour du cadran… et fonce sur toi !", canFlee: true, xp: 140, fp: 75, drops: { onigiri: 1 }, bg: "tour" },
   trotteuses: { id: "trotteuses", foes: ["trotteuse", "trotteuse"], intro: "Deux Trotteuses montent la garde. Elles tournent dans le même sens. Toujours.", canFlee: true, xp: 220, fp: 120, drops: { "mega-cornet": 1 }, bg: "tour" },
   coucou: { id: "coucou", foes: ["coucou"], intro: "COUCOU ! Un Coucou mécanique jaillit de sa petite maison !", canFlee: true, xp: 140, fp: 75, drops: { "the-vert": 1 }, bg: "tour" },
@@ -488,6 +505,8 @@ export interface Consumable {
   desc: string;
   price: number;
   use: { heal?: number; healPct?: number; cleanse?: boolean; stage?: { stat: Stat; n: number }; revive?: number };
+  /** Capsule de capture : chance de base (créatures sauvages seulement). */
+  capture?: number;
   /** Utilisable sur un équipier K.O. uniquement. */
   ko?: boolean;
 }
@@ -502,6 +521,7 @@ export const CONSUMABLES: Record<string, Consumable> = {
   "the-vert": { id: "the-vert", name: "Thé vert", desc: "Rend 45 PV et soigne les états. Il fume encore.", price: 30, use: { heal: 45, cleanse: true } },
   onigiri: { id: "onigiri", name: "Boulette de riz", desc: "Rend 80 PV. Avec une frite cachée au milieu : la recette de Pokeyz.", price: 55, use: { heal: 80 } },
   "barre-proteinee": { id: "barre-proteinee", name: "Barre protéinée", desc: "Rend 25 PV et Attaque +1. Goût : carton sucré.", price: 30, use: { heal: 25, stage: { stat: "atk", n: 1 } } },
+  "capsule-echo": { id: "capsule-echo", name: "Capsule d'Écho", desc: "Capture une créature sauvage affaiblie. Plus elle a peu de PV, plus ça marche.", price: 40, use: {}, capture: 0.5 },
   "cafe-minuit": { id: "cafe-minuit", name: "Café de minuit", desc: "Rend tous les PV et soigne les états. Serré. Très serré.", price: 120, use: { healPct: 100, cleanse: true } },
   soupe: { id: "soupe", name: "Soupe du jour", desc: "Rend 60 PV. Le jour en question n'est pas précisé.", price: 35, use: { heal: 60 } },
 };
@@ -541,7 +561,7 @@ export const SHOPS: Record<string, { name: string; keeper: string; items: string
   herboristerie: {
     name: "Herboristerie Persil",
     keeper: "Madame Persil",
-    items: ["tisane", "soupe", "sauce-piquante", "ketchup", "bracelet-sel"],
+    items: ["tisane", "soupe", "capsule-echo", "sauce-piquante", "ketchup", "bracelet-sel"],
     hello: "Bienvenue ! Tout est vert, bio et légal. Surtout légal.",
     bye: "Revenez quand vous voulez. Et mangez vos légumes. On ne sait jamais qui écoute.",
   },

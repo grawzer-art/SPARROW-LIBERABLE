@@ -12,7 +12,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
-import { CONSUMABLES, FORMS, MOVES, nameOf, type Fx } from "@/lib/rpg/bestiary";
+import { CONSUMABLES, FORMS, MEMBERS, MOVES, nameOf, type Fx } from "@/lib/rpg/bestiary";
 import { ally, bagAfter, foe, forced, forms, mustSwap, playTurn, spoils, startBattle, type Action, type Battle, type BattleEvent, type Side, type Team } from "@/lib/rpg/combat";
 import type { Chiptune } from "../game/audio";
 import { battler } from "./battlers";
@@ -27,6 +27,8 @@ export interface PadHandler {
 
 export interface BattleEnd {
   outcome: "win" | "lose" | "flee";
+  /** Créature capturée (rencontre sauvage). */
+  captured?: { species: string; level: number };
   xp: number;
   fp: number;
   bag: Record<string, number>;
@@ -81,6 +83,29 @@ interface Anim {
   pops: { side: Side; text: string; c: string; t: number }[];
   /** Transition d'entrée (0 → 1). */
   intro: number;
+  /** Capsule d'Écho : lancer (0 → 0,5 s), absorption, secousses, puis résultat. */
+  capsule: { t: number; shakes: number; ok: boolean } | null;
+}
+
+/** Durée de l'animation de capsule (s). */
+const capsuleTime = (shakes: number) => 0.9 + shakes * 0.55 + 0.7;
+
+/** Capsule d'Écho en pixel art (10 × 10) : violet en haut, crème en bas, bouton doré. */
+function drawCapsule(ctx: CanvasRenderingContext2D, cx: number, cy: number, k: number, open = 0) {
+  const f = (c: string, x: number, y: number, w: number, h: number) => {
+    ctx.fillStyle = c;
+    ctx.fillRect(Math.round(cx + x * k), Math.round(cy + y * k), Math.ceil(w * k), Math.ceil(h * k));
+  };
+  const lift = -open * 4;
+  f("#1b1626", -5, -5 + lift, 10, 5);
+  f("#a66cff", -4, -4 + lift, 8, 4);
+  f("#c8a0ff", -3, -4 + lift, 2, 1);
+  f("#1b1626", -5, 0, 10, 5);
+  f("#f1efe8", -4, 0, 8, 4);
+  f("#c8c2b4", 1, 2, 3, 2);
+  f("#1b1626", -5, -1, 10, 2);
+  f("#1b1626", -2, -2, 4, 4);
+  f("#e8b830", -1, -1, 2, 2);
 }
 
 const freshDisp = (b: Battle): Disp => ({
@@ -370,6 +395,7 @@ const FX_COLORS: Record<Fx, string[]> = {
   malus: ["#6aa8ff", "#a6c8ff"],
   ombre: ["#5a3a8a", "#2a1a40", "#a66cff"],
   lame: ["#ffffff", "#c8d0ff"],
+  capsule: ["#a66cff", "#ffd04a", "#f8f4e8"],
   temps: ["#a66cff", "#e8b830", "#f8f4e8"],
   sel: ["#ffffff", "#e8e8f0"],
   huile: ["#f2c14e", "#ffe88a"],
@@ -437,6 +463,7 @@ export function BattleScreen({
     parts: [],
     pops: [],
     intro: 0,
+    capsule: null,
   });
   const speed = reduced ? 0.6 : 1;
 
@@ -679,6 +706,19 @@ export function BattleScreen({
         later(e.on ? 900 : 400);
         break;
       }
+      case "capture": {
+        a.capsule = { t: 0, shakes: e.shakes, ok: e.ok };
+        audio.jump(true);
+        const shakeAt = (i: number) => setTimeout(() => audio.select(), (0.9 + i * 0.55) * 1000 * speed);
+        for (let i = 0; i < e.shakes; i++) shakeAt(i);
+        setTimeout(() => {
+          if (e.ok) audio.milestone();
+          else audio.miss();
+          navigator.vibrate?.(e.ok ? [40, 30, 90] : 30);
+        }, (0.9 + e.shakes * 0.55) * 1000 * speed);
+        later(capsuleTime(e.shakes) * 1000);
+        break;
+      }
       case "end":
         break;
     }
@@ -697,13 +737,15 @@ export function BattleScreen({
   const finish = useCallback((bt: Battle) => {
     const sp = spoils(bt);
     if (bt.over === "win") {
-      const lines: BattleEvent[] = [{ kind: "text", text: `Victoire ! L'équipe gagne ${sp.xp} XP et ${sp.fp} FP.` }];
+      const lines: BattleEvent[] = [
+        { kind: "text", text: bt.captured ? `${MEMBERS[bt.captured.species]?.name ?? "La créature"} rejoint le BESTIAIRE ! L'équipe gagne ${sp.xp} XP.` : `Victoire ! L'équipe gagne ${sp.xp} XP et ${sp.fp} FP.` },
+      ];
       for (const [k, n] of Object.entries(sp.drops)) lines.push({ kind: "text", text: `Butin : ${nameOf(k)}${n > 1 ? ` ×${n}` : ""}.` });
       audio.music(null);
       audio.win();
       play(lines, () => {
         setModeBoth("done");
-        onEnd({ outcome: "win", xp: sp.xp, fp: sp.fp, bag: bagAfter(bt.bag, { ...sp, drops: { ...(bt.def.drops ?? {}) }, used: {} }), notes: [] });
+        onEnd({ outcome: "win", captured: bt.captured, xp: sp.xp, fp: bt.captured ? 0 : sp.fp, bag: bagAfter(bt.bag, { ...sp, drops: { ...(bt.def.drops ?? {}) }, used: {} }), notes: [] });
       });
     } else if (bt.over === "lose") {
       audio.music(null);
@@ -822,6 +864,33 @@ export function BattleScreen({
       }
       a.parts = a.parts.filter((p) => p.life > 0);
       for (const p of a.pops) p.t += dt;
+      if (a.capsule && (a.capsule.t < capsuleTime(a.capsule.shakes) || !a.capsule.ok)) {
+        const before = a.capsule.t;
+        a.capsule.t += dt / speed;
+        const end = 0.9 + a.capsule.shakes * 0.55;
+        const sc = scene();
+        const at = { x: sc.foe.x, y: sc.foe.y - 10 * sc.k };
+        const burst = (c: string[], n: number) => {
+          for (let i = 0; i < n; i++) {
+            const ang = (i / n) * Math.PI * 2;
+            a.parts.push({ x: at.x, y: at.y, vx: Math.cos(ang) * 80, vy: Math.sin(ang) * 70, life: 0.6, max: 0.6, c: c[i % c.length], s: 2 });
+          }
+        };
+        if (before < 0.5 && a.capsule.t >= 0.5) {
+          a.flash = 0.5;
+          a.flashColor = "166,108,255";
+          burst(["#a66cff", "#f8f4e8"], 14);
+        }
+        if (before < end && a.capsule.t >= end) {
+          if (a.capsule.ok) burst(["#ffd04a", "#f8f4e8", "#a66cff"], 22);
+          else {
+            a.flash = 0.4;
+            a.flashColor = "255,255,255";
+            burst(["#f8f4e8", "#c8d0ff"], 16);
+          }
+        }
+        if (!a.capsule.ok && a.capsule.t > capsuleTime(a.capsule.shakes)) a.capsule = null;
+      }
       a.pops = a.pops.filter((p) => p.t < 0.9);
 
       const s = scene();
@@ -848,8 +917,38 @@ export function BattleScreen({
           x -= k * 10;
           y += k * 6;
         }
-        const hidden = a.blink?.side === "foe" && Math.floor(a.blink.t * 8) % 2 === 0;
+        const cap = a.capsule;
+        const inside = !!cap && cap.t >= 0.5 && (cap.ok || cap.t < 0.9 + cap.shakes * 0.55);
+        const hidden = inside || (a.blink?.side === "foe" && Math.floor(a.blink.t * 8) % 2 === 0);
         drawFighter(ctx, spr, x, y, s.k, a.faint.foe, hidden, a.charge.foe, a.t);
+      }
+      // Capsule d'Écho
+      if (a.capsule) {
+        const cap = a.capsule;
+        const k = s.k;
+        const end = 0.9 + cap.shakes * 0.55;
+        const ground = { x: s.foe.x, y: s.foe.y - 4 * k };
+        if (cap.t < 0.5) {
+          // Lancer en cloche depuis Sparrow
+          const u = cap.t / 0.5;
+          const from = { x: s.ally.x + 10 * k, y: s.ally.y - 40 * k };
+          drawCapsule(ctx, from.x + (ground.x - from.x) * u, from.y + (ground.y - 30 * k - from.y) * u - Math.sin(u * Math.PI) * 30 * k, k);
+        } else if (cap.t < 0.9) {
+          const u = (cap.t - 0.5) / 0.4;
+          drawCapsule(ctx, ground.x, ground.y - 30 * k * (1 - u) - Math.abs(Math.sin(u * Math.PI * 2)) * 6 * k * (1 - u), k);
+        } else if (cap.t < end) {
+          // Secousses : la capsule bascule de gauche à droite
+          const u = ((cap.t - 0.9) % 0.55) / 0.55;
+          const dx = u < 0.5 ? Math.sin(u * Math.PI * 2) * 3 * k : 0;
+          drawCapsule(ctx, ground.x + dx, ground.y, k);
+        } else if (cap.ok) {
+          drawCapsule(ctx, ground.x, ground.y, k);
+          if (Math.floor(a.t * 4) % 2 === 0) {
+            ctx.fillStyle = "#ffd04a";
+            ctx.fillRect(Math.round(ground.x + 7 * k), Math.round(ground.y - 8 * k), 2 * k, 2 * k);
+            ctx.fillRect(Math.round(ground.x - 9 * k), Math.round(ground.y - 5 * k), k, k);
+          }
+        } else drawCapsule(ctx, ground.x, ground.y, k, Math.min(1, (cap.t - end) / 0.2));
       }
       // Équipier actif (de dos)
       const al = bt.allies[d.a];
@@ -997,6 +1096,7 @@ export function BattleScreen({
         a.faint = { ally: 0, foe: 0 };
         a.slide = { ally: 0, foe: 0 };
         a.charge = { ally: false, foe: false };
+        a.capsule = null;
         audio.music(nb.def.music ?? "combat");
         play([{ kind: "text", text: "On recommence. Cette fois, c'est la bonne." }], settle);
       } else {

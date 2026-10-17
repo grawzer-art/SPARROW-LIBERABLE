@@ -957,6 +957,20 @@
   animation: gbIn 0.3s var(--ease) both;
 }
 
+.gb-mon {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.gb-mon__img {
+  flex: none;
+  image-rendering: pixelated;
+  background: #2a2238;
+  border: 2px solid #1b1626;
+  border-radius: 4px;
+}
+
 .gb-credits {
   position: absolute;
   inset: 0;

@@ -61,6 +61,8 @@ export interface Team {
   bag: Record<string, number>;
   /** Durée de SPARROW TITAN (3 tours, 4 si le Sparrowgotchi est déjà au stade Titan). */
   titanTurns?: number;
+  /** Créatures capturées : elles combattent à leur propre niveau. */
+  mons?: Record<string, { level: number }>;
 }
 
 const stat = (g: [number, number], lv: number) => Math.round(g[0] + g[1] * (lv - 1));
@@ -89,9 +91,9 @@ export function gearBonus(gear: Team["gear"]) {
   return b;
 }
 
-export function makeAlly(id: string, t: Pick<Team, "level" | "gear" | "skills">): Fighter {
+export function makeAlly(id: string, t: Pick<Team, "level" | "gear" | "skills" | "mons">): Fighter {
   const m = MEMBERS[id];
-  const lv = Math.max(1, Math.min(99, Math.floor(t.level)));
+  const lv = Math.max(1, Math.min(99, Math.floor(t.mons?.[id]?.level ?? t.level)));
   const b = id === "sparrow" ? gearBonus(t.gear) : { hp: 0, atk: 0, def: 0, spd: 0 };
   const maxHp = stat(m.grow.hp, lv) + b.hp;
   return {
@@ -166,6 +168,8 @@ export interface Battle {
   titan: { can: boolean; used: boolean; turns: number; samourai: boolean };
   /** Objets volés par Lili (une fois par combat). */
   stolen: Record<string, number>;
+  /** Créature capturée pendant ce combat (espèce et niveau). */
+  captured?: { species: string; level: number };
 }
 
 export type Action = { kind: "transform"; form?: FormId } | { kind: "move"; move: string } | { kind: "item"; item: string; target?: number } | { kind: "swap"; to: number } | { kind: "flee" };
@@ -183,6 +187,8 @@ export type BattleEvent =
   | { kind: "enter"; side: Side; index: number }
   | { kind: "phase"; text: string; sprite?: string }
   | { kind: "transform"; side: Side; on: boolean; sprite: string }
+  /** Lancer de capsule : nombre de secousses (0 à 3), puis réussite ou échec. */
+  | { kind: "capture"; shakes: number; ok: boolean }
   | { kind: "end"; outcome: Exclude<Outcome, null> };
 
 export function startBattle(id: string, team: Team, seed = Date.now()): Battle {
@@ -390,7 +396,7 @@ function doAlly(b: Battle, a: Action, ev: BattleEvent[], r: () => number) {
     return;
   }
   if (a.kind === "item") {
-    useItem(b, a.item, a.target ?? b.a, ev);
+    useItem(b, a.item, a.target ?? b.a, ev, r);
     return;
   }
   act(b, me, foe(b), a.move, ev, r);
@@ -401,8 +407,38 @@ function doFoe(b: Battle, a: Action, ev: BattleEvent[], r: () => number) {
   act(b, foe(b), ally(b), a.move, ev, r);
 }
 
-export function useItem(b: Battle, id: string, target: number, ev: BattleEvent[]) {
+/** Chance de capture : meilleure quand la créature est affaiblie ou sous un état. */
+export function catchChance(base: number, x: Fighter): number {
+  const hp = x.hp / x.maxHp;
+  const k = base * (1.35 - hp) * (x.status ? 1.35 : 1);
+  return Math.max(0.05, Math.min(0.95, k));
+}
+
+function capture(b: Battle, id: string, ev: BattleEvent[], r: () => number) {
   const c = CONSUMABLES[id];
+  const x = foe(b);
+  if (!b.def.wild) {
+    ev.push({ kind: "text", text: "On ne capture pas une créature qui a déjà un maître !" });
+    return;
+  }
+  b.bag[id]--;
+  b.used[id] = (b.used[id] ?? 0) + 1;
+  const p = catchChance(c.capture ?? 0.5, x);
+  const roll = r();
+  const ok = roll < p;
+  // Plus on était proche de réussir, plus la capsule tremble longtemps
+  const shakes = ok ? 3 : Math.min(2, Math.floor((p / Math.max(roll, 0.01)) * 2.4));
+  ev.push({ kind: "text", text: `Sparrow lance une ${c.name} !` }, { kind: "capture", shakes, ok });
+  if (ok) {
+    b.over = "win";
+    b.captured = { species: b.def.wild, level: x.lv };
+    ev.push({ kind: "text", text: `Clic ! ${MEMBERS[b.def.wild]?.name ?? x.name} est capturé !` }, { kind: "end", outcome: "win" });
+  } else ev.push({ kind: "text", text: shakes >= 2 ? `Oh non ! ${x.name} fait sauter la capsule de justesse !` : `${x.name} s'échappe de la capsule !` });
+}
+
+export function useItem(b: Battle, id: string, target: number, ev: BattleEvent[], r: () => number = Math.random) {
+  const c = CONSUMABLES[id];
+  if (c?.capture && (b.bag[id] ?? 0) > 0) return capture(b, id, ev, r);
   const t = b.allies[target];
   if (!c || !t || (b.bag[id] ?? 0) <= 0) return;
   if (c.ko ? t.hp > 0 : t.hp <= 0) return;
