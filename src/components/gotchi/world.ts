@@ -16,7 +16,9 @@ import {
   START,
   doorAt,
   doorCrossed,
+  HOME_ENTRY,
   doorExit,
+  exitCrossed,
   move,
   nearbySpot,
   nearestStandable,
@@ -165,6 +167,10 @@ export class World {
   bumps = 0;
   walked = 0;
   roomChanges = 0;
+  /** Il vient de passer la porte d'entrée (l'interface bascule vers la rue). */
+  exited = false;
+  /** Après être rentré, il faut relâcher la croix avant de pouvoir ressortir. */
+  private exitArmed = true;
   private seq: Seq | null = null;
   private idleUntil = 2;
   private manualUntil = 0;
@@ -246,8 +252,23 @@ export class World {
     }
   }
 
+  /** Rentre de la rue : il apparaît derrière la porte d'entrée. */
+  comeHome() {
+    this.cancel();
+    this.teleport(HOME_ENTRY);
+    this.facing = "down";
+    this.manualUntil = this.t + 6;
+    this.exitArmed = false;
+  }
+
   /** Passe une porte (toucher une porte à l'écran). */
   goDoor(d: Door, reduced = false) {
+    if (ROOMS[this.room].exit === d) {
+      this.goTo({ room: this.room, x: 80, y: 33 }, undefined, reduced);
+      const s = this.seq as Seq | null;
+      if (s) s.pts = [{ x: 80, y: 42 }, { x: 80, y: 28 }];
+      return;
+    }
     const next = ROOMS[this.room].doors[d];
     if (next) this.goTo({ room: next, ...doorEntry(d) }, undefined, reduced);
   }
@@ -364,6 +385,7 @@ export class World {
       return;
     }
     this.wasBlocked = false;
+    this.exitArmed = true;
     const s = this.seq;
     if (!s) {
       if (this.t > this.idleUntil && !this.manual) this.brain(f.mood);
@@ -407,6 +429,19 @@ export class World {
   }
 
   private checkDoor(): boolean {
+    if (exitCrossed(this.room, { x: this.x, y: this.y })) {
+      if (!this.exitArmed) {
+        this.y = HOME_ENTRY.y - 6;
+        return false;
+      }
+      this.exited = true;
+      this.seq = null;
+      this.input = { x: 0, y: 0 };
+      this.x = HOME_ENTRY.x;
+      this.y = HOME_ENTRY.y;
+      this.facing = "down";
+      return true;
+    }
     const to = doorCrossed(this.room, { x: this.x, y: this.y });
     if (!to) return false;
     this.enterRoom(to.room);

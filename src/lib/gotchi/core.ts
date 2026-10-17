@@ -8,6 +8,7 @@
 
 import { TIMEZONE } from "@/config";
 import { DEFAULT_EQUIP, DEFAULT_OWNED, levelReward, xpToNext } from "./items";
+import { emptyRpg, restoreRpg, type Rpg } from "../rpg/state";
 
 export type Stat = "satiete" | "humeur" | "energie" | "forme" | "fun";
 export type Action = "frites" | "salade" | "dofus" | "sieste" | "douche" | "parler";
@@ -115,6 +116,8 @@ export interface State {
   /** Objet caché du jour déjà trouvé ? */
   cacheDay: string;
   seenEvents: string[];
+  /** Aventure RPG (quêtes, objets, drapeaux), séparée des missions du jour. */
+  rpg: Rpg;
 }
 
 export const emptyCounters = (): Counters => ({
@@ -180,6 +183,7 @@ export function newState(now: number): State {
     said: [],
     cacheDay: "",
     seenEvents: [],
+    rpg: emptyRpg(),
   };
 }
 
@@ -250,6 +254,7 @@ export function restore(raw: unknown, now: number): State {
     said: strs(o.said, 12),
     cacheDay: typeof o.cacheDay === "string" ? o.cacheDay : "",
     seenEvents: strs(o.seenEvents, 200),
+    rpg: restoreRpg(o.rpg),
   };
 }
 

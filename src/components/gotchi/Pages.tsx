@@ -2,45 +2,38 @@
 
 import { useState } from "react";
 import { TROPHIES } from "@/lib/gotchi/achievements";
-import { STATS, ageJours, isEquipped, type Action, type State } from "@/lib/gotchi/engine";
+import { STATS, ageJours, isEquipped, type State } from "@/lib/gotchi/engine";
 import { ITEMS, MUSCLE_STAGES, TITLES, muscleStage, tierOf, titleFor, xpToNext, type Group, type Slot } from "@/lib/gotchi/items";
 import { LAYOUT, ROOMS, type RoomId } from "@/lib/gotchi/map";
 import { MINIGAMES, type GameId } from "@/lib/gotchi/minigames";
 import { missionDef } from "@/lib/gotchi/missions";
+import { QUESTS, RPG_ITEMS, isDone, nextStep, status } from "@/lib/rpg/quest";
 
-export type PageId = "actions" | "jeux" | "missions" | "inventaire" | "appart" | "profil" | "journal" | "options";
+export type PageId = "quetes" | "jeux" | "missions" | "inventaire" | "appart" | "profil" | "equipe" | "options";
 
 export const MENU: { id: PageId; label: string; icon: string }[] = [
-  { id: "actions", label: "Actions", icon: "▶" },
-  { id: "jeux", label: "Mini-jeux", icon: "★" },
-  { id: "missions", label: "Missions", icon: "!" },
+  { id: "quetes", label: "Quêtes", icon: "!" },
   { id: "inventaire", label: "Inventaire", icon: "◆" },
+  { id: "missions", label: "Missions", icon: "✓" },
+  { id: "equipe", label: "Équipe", icon: "♥" },
   { id: "appart", label: "Appartement", icon: "⌂" },
   { id: "profil", label: "Profil", icon: "☺" },
-  { id: "journal", label: "Journal", icon: "≡" },
+  { id: "jeux", label: "Mini-jeux", icon: "★" },
   { id: "options", label: "Options", icon: "⚙" },
 ];
 
 const TITLE: Record<PageId, string> = {
-  actions: "ACTIONS",
+  quetes: "QUÊTES",
   jeux: "MINI-JEUX",
   missions: "MISSIONS DU JOUR",
   inventaire: "INVENTAIRE",
   appart: "APPARTEMENT",
   profil: "PROFIL · ÉVOLUTION",
-  journal: "JOURNAL DE SPARROW",
+  equipe: "ÉQUIPE",
   options: "OPTIONS",
 };
 
-export const ACTIONS: { id: Action | "muscu"; label: string; where: string }[] = [
-  { id: "frites", label: "Frites", where: "Cuisine · friteuse" },
-  { id: "salade", label: "Salade", where: "Cuisine · frigo" },
-  { id: "dofus", label: "Dofus (il joue seul)", where: "Coin gaming · PC" },
-  { id: "sieste", label: "Micro-sieste", where: "Chambre · lit" },
-  { id: "douche", label: "Rafraîchir", where: "Chambre · douche" },
-  { id: "muscu", label: "S'entraîner", where: "Salle de sport · banc" },
-  { id: "parler", label: "Parler", where: "Là où il est" },
-];
+const STATUS_LABEL = { disponible: "DISPONIBLE", active: "EN COURS", terminee: "TERMINÉE" } as const;
 
 const WEAR: { id: Slot; label: string }[] = [
   { id: "lunettes", label: "Lunettes" },
@@ -59,7 +52,6 @@ const hhmm = (t: number) =>
   new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(t));
 
 export interface PageHandlers {
-  doAction: (a: Action | "muscu") => void;
   playGame: (g: GameId) => void;
   claim: (id: string) => void;
   buy: (id: string) => void;
@@ -77,13 +69,16 @@ interface Props {
   now: number;
   sound: boolean;
   room: RoomId;
+  /** Sparrow est dehors (Quartier 404). */
+  outside: boolean;
   h: PageHandlers;
   onClose: () => void;
 }
 
 /** Pages du MENU, affichées dans l'écran de la console. */
-export function Page({ page, state, now, sound, room, h, onClose }: Props) {
-  const [slot, setSlot] = useState<Slot>("lunettes");
+export function Page({ page, state, now, sound, room, outside, h, onClose }: Props) {
+  const [slot, setSlot] = useState<Slot | "objets">("objets");
+  const [qtab, setQtab] = useState<"quetes" | "journal">("quetes");
   const [tab, setTab] = useState<"meubles" | "deco" | "plan">("plan");
   const [ptab, setPtab] = useState<"profil" | "trophees">("profil");
   const s = state;
@@ -151,18 +146,97 @@ export function Page({ page, state, now, sound, room, h, onClose }: Props) {
         <span className="gb-page__coins">{s.coins} FP</span>
       </header>
       <div className="gb-page__body">
-        {page === "actions" && (
+        {page === "quetes" && (
           <>
-            <p className="gb-note">Sparrow va lui-même jusqu&apos;au bon meuble. Tu peux aussi l&apos;y conduire et appuyer sur A.</p>
-            {ACTIONS.map((a) => (
-              <button key={a.id} type="button" className="gb-row gb-row--btn" onClick={() => h.doAction(a.id)}>
-                <span className="gb-cursor">▶</span>
-                <span className="gb-row__main">
-                  <span className="gb-row__title">{a.label}</span>
-                  <span className="gb-row__meta">{a.where}</span>
-                </span>
+            <div className="gb-tabs" role="tablist">
+              <button type="button" role="tab" aria-selected={qtab === "quetes"} className={qtab === "quetes" ? "is-on" : ""} onClick={() => setQtab("quetes")}>
+                Quêtes
               </button>
-            ))}
+              <button type="button" role="tab" aria-selected={qtab === "journal"} className={qtab === "journal" ? "is-on" : ""} onClick={() => setQtab("journal")}>
+                Journal
+              </button>
+            </div>
+            {qtab === "quetes" ? (
+              <>
+                {QUESTS.map((q) => {
+                  const st = status(s.rpg, q.id);
+                  const nx = nextStep(s.rpg, q.id);
+                  return (
+                    <div key={q.id} className="gb-card">
+                      <p className="gb-group__title">
+                        CHAPITRE {q.chapter} · <span className={`gb-chip gb-chip--${st}`}>{STATUS_LABEL[st]}</span>
+                      </p>
+                      <p className="gb-card__rank">{q.name}</p>
+                      <p className="gb-row__meta">{q.desc}</p>
+                      {st !== "terminee" && nx && <p className="gb-next">▶ {nx.txt}</p>}
+                      <ul className="gb-steps">
+                        {q.steps.map((x) => (
+                          <li key={x.id} className={isDone(s.rpg, q.id, x.id) ? "is-done" : ""}>
+                            {isDone(s.rpg, q.id, x.id) ? "✓" : "□"} {x.txt}
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="gb-row__meta">
+                        Récompense : +{q.reward.xp} XP · +{q.reward.coins} FP · objet mystère
+                      </p>
+                    </div>
+                  );
+                })}
+                <div className="gb-card is-locked">
+                  <p className="gb-group__title">CHAPITRE 2 · VERROUILLÉ</p>
+                  <p className="gb-card__rank">Le Centre-ville</p>
+                  <p className="gb-row__meta">{status(s.rpg, "ville-figee") === "terminee" ? "La barrière s'est levée. La suite arrive bientôt." : "Termine « La Ville Figée » pour débloquer la suite."}</p>
+                </div>
+                <p className="gb-note">Les quêtes racontent l&apos;aventure. Les missions du jour, elles, restent dans « Missions ».</p>
+              </>
+            ) : s.journal.length ? (
+              [...s.journal].reverse().map((j, i) => (
+                <div key={`${j.t}-${i}`} className={`gb-log gb-log--${j.kind}`}>
+                  <span>{hhmm(j.t)}</span>
+                  <p>{j.txt}</p>
+                </div>
+              ))
+            ) : (
+              <p className="gb-note">Rien pour l&apos;instant. Sparrow vit sa vie, reviens plus tard.</p>
+            )}
+          </>
+        )}
+
+        {page === "equipe" && (
+          <>
+            <div className="gb-card">
+              <p className="gb-group__title">MEMBRE N°1</p>
+              <p className="gb-card__rank">Sparrow</p>
+              <p className="gb-row__meta">
+                Niv {s.level} · {titleFor(s.level)} · {MUSCLE_STAGES[muscleStage(s.muscle)][1]}
+              </p>
+              {(
+                [
+                  ["PV", 20 + s.level * 5, 120],
+                  ["ATTAQUE", 5 + muscleStage(s.muscle) * 6 + Math.floor(s.level / 2), 40],
+                  ["DÉFENSE", 4 + Math.round(s.stats.forme / 10), 20],
+                  ["VITESSE", 3 + Math.round(s.stats.energie / 10), 20],
+                  ["FRITE-NERGIE", Math.round(s.stats.satiete), 100],
+                ] as [string, number, number][]
+              ).map(([k, v, max]) => (
+                <div key={k} className="gb-gauge">
+                  <span>{k}</span>
+                  <div className="gb-bar gb-bar--red">
+                    <i style={{ transform: `scaleX(${Math.min(1, v / max)})` }} />
+                  </div>
+                  <b>{v}</b>
+                </div>
+              ))}
+            </div>
+            <div className="gb-card">
+              <p className="gb-group__title">TECHNIQUES (BIENTÔT)</p>
+              {["Frite enflammée", "Rage de lag", "Micro-sieste stratégique", "Regard du Chevalier Noir"].map((m) => (
+                <p key={m} className="gb-rank">
+                  ☆ {m}
+                </p>
+              ))}
+            </div>
+            <p className="gb-note">Les combats au tour par tour arrivent dans un prochain chapitre. D&apos;autres membres rejoindront peut-être l&apos;équipe…</p>
           </>
         )}
 
@@ -218,13 +292,28 @@ export function Page({ page, state, now, sound, room, h, onClose }: Props) {
         {page === "inventaire" && (
           <>
             <div className="gb-tabs" role="tablist">
+              <button type="button" role="tab" aria-selected={slot === "objets"} className={slot === "objets" ? "is-on" : ""} onClick={() => setSlot("objets")}>
+                Objets
+              </button>
               {WEAR.map((w) => (
                 <button key={w.id} type="button" role="tab" aria-selected={slot === w.id} className={slot === w.id ? "is-on" : ""} onClick={() => setSlot(w.id)}>
                   {w.label}
                 </button>
               ))}
             </div>
-            {ITEMS.filter((it) => it.slot === slot).map((it) => itemRow(it.id))}
+            {slot === "objets"
+              ? s.rpg.items.length
+                ? RPG_ITEMS.filter((it) => s.rpg.items.includes(it.id)).map((it) => (
+                    <div key={it.id} className="gb-row">
+                      <span className="gb-item">{it.icon}</span>
+                      <div className="gb-row__main">
+                        <p className="gb-row__title">{it.name}</p>
+                        <p className="gb-row__meta">{it.desc}</p>
+                      </div>
+                    </div>
+                  ))
+                : <p className="gb-note">Aucun objet d&apos;aventure pour l&apos;instant. Sors explorer le quartier !</p>
+              : ITEMS.filter((it) => it.slot === slot).map((it) => itemRow(it.id))}
           </>
         )}
 
@@ -243,7 +332,8 @@ export function Page({ page, state, now, sound, room, h, onClose }: Props) {
                 </button>
               ))}
             </div>
-            {tab === "plan" && (
+            {tab === "plan" && outside && <p className="gb-note">Tu es dehors, dans le Quartier 404. Rentre par la porte de la Résidence Les Lilas pour retrouver ton appart.</p>}
+            {tab === "plan" && !outside && (
               <>
                 <div className="gb-map">
                   {LAYOUT.flat().map((r, i) =>
@@ -376,18 +466,6 @@ export function Page({ page, state, now, sound, room, h, onClose }: Props) {
           </>
         )}
 
-        {page === "journal" &&
-          (s.journal.length ? (
-            [...s.journal].reverse().map((j, i) => (
-              <div key={`${j.t}-${i}`} className={`gb-log gb-log--${j.kind}`}>
-                <span>{hhmm(j.t)}</span>
-                <p>{j.txt}</p>
-              </div>
-            ))
-          ) : (
-            <p className="gb-note">Rien pour l&apos;instant. Sparrow vit sa vie, reviens plus tard.</p>
-          ))}
-
         {page === "options" && (
           <>
             <div className="gb-opts">
@@ -402,7 +480,7 @@ export function Page({ page, state, now, sound, room, h, onClose }: Props) {
               </button>
             </div>
             <p className="gb-note">
-              Commandes : croix = marcher (B maintenu = courir) · A = utiliser / parler · B = annuler · START = menu · toucher l&apos;écran = y aller.
+              Commandes : croix = marcher (B maintenu = courir) · A = parler / utiliser · B = annuler · START = menu. Dans l&apos;appart, toucher l&apos;écran = y aller.
             </p>
             <p className="gb-note">Sauvegarde locale, sur ce téléphone uniquement. Sparrow vit sa vie même appli fermée. Il ne meurt jamais : il boude, au pire.</p>
             <button type="button" className="gb-btn gb-btn--wide gb-btn--ghost" onClick={h.reset}>
