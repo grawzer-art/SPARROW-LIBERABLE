@@ -1,0 +1,23 @@
+/** RPG — registre des cartes de l'aventure et reprise de la position sauvegardée. */
+
+import { restoreOn, type Facing, type MapDef, type MapId, type Tile } from "./mapdef";
+import { QUARTIER } from "./quartier";
+import type { Rpg } from "./state";
+
+export const MAPS: Partial<Record<MapId, MapDef>> = {
+  quartier: QUARTIER,
+};
+
+export const mapOf = (id: string): MapDef | null => MAPS[id as MapId] ?? null;
+
+export type Where = { map: MapId } & Tile & { dir: Facing };
+
+/** Position sauvegardée dehors (`sp.gotchi.where`), validée contre la carte. */
+export function restoreWhere(raw: unknown, r: Rpg): Where | null {
+  const o = raw as { map?: unknown } | null;
+  if (!o || typeof o.map !== "string") return null;
+  const m = mapOf(o.map);
+  if (!m) return null;
+  const t = restoreOn(m, o, r);
+  return t ? { map: m.id, ...t } : null;
+}

@@ -11,7 +11,7 @@ import { bakeRows, type Palette } from "./pixel";
 
 export type Dir = "down" | "up" | "side";
 export type Frame = 0 | 1 | 2; // repos, pas A, pas B
-export type CharId = "sparrow" | "nico" | "bouchon" | "raymond" | "inconnu";
+export type CharId = "sparrow" | "nico" | "bouchon" | "raymond" | "inconnu" | "chevalier" | "brocoli";
 
 interface Def {
   pal: Palette;
@@ -307,6 +307,98 @@ const DEFS: Record<CharId, Def> = {
       ],
     },
   },
+  chevalier: {
+    pal: { K: "#0c0a12", X: "#55506e", x: "#38334a", L: "#8a84a4", R: "#d83a3a", r: "#9e1f1f", D: "#0a0810", C: "#55506e", c: "#38334a", A: "#2a2438", S: "#8a84a4", P: "#3a3550", p: "#28243a", F: "#0c0a12" },
+    head: {
+      down: [
+        "......RR........",
+        ".....RRr........",
+        "....KKKKKKKK....",
+        "...KLXXXXXXXK...",
+        "..KLXXXXXXXXxK..",
+        "..KXXXXXXXXXxK..",
+        "..KXDDDDDDDDxK..",
+        "..KXXXXXXXXXxK..",
+        "...KxXXXXXXxK...",
+        "....KKKKKKKK....",
+      ],
+      up: [
+        "......RR........",
+        ".....RRr........",
+        "....KKKKKKKK....",
+        "...KXXXXXXXXK...",
+        "..KXXXXRRXXXxK..",
+        "..KXXXXRrXXXxK..",
+        "..KXXXXXXXXXxK..",
+        "..KXXXXXXXXXxK..",
+        "...KxXXXXXXxK...",
+        "....KKKKKKKK....",
+      ],
+      side: [
+        ".....RR.........",
+        "....RRr.........",
+        ".....KKKKKKK....",
+        "....KLXXXXXXK...",
+        "...KLXXXXXXXXK..",
+        "...KXXXXXXXXXK..",
+        "...KXXXXXDDDDK..",
+        "...KXXXXXXXXXK..",
+        "....KxXXXXXXK...",
+        ".....KKKKKKK....",
+      ],
+    },
+    torso: {
+      down: ["..KACCCCCCCCAK..", "..KXCCCLLCCCXK..", "..KSCcCLLCcCSK..", "..KACCCCCCCCAK..", "..KAPPPPPPPPAK.."],
+      up: ["..KAAAAAAAAAAK..", "..KXAAAAAAAAXK..", "..KSAAAAAAAASK..", "..KAAAAAAAAAAK..", "..KAAAAAAAAAAK.."],
+      side: ["....KACCCCCK....", "...KAXCCCCCSK...", "...KACcCCCCSK...", "...KACCCCCCKK...", "...KAAPPPPPK...."],
+    },
+  },
+  brocoli: {
+    pal: { K: "#14220f", X: "#8a929c", x: "#5b626c", G: "#2f7d3a", g: "#1f5a2a", L: "#5fae5f", S: "#8cc265", s: "#6a9e4b", E: "#1b1626", W: "#f8f4e8", P: "#3f7a35", p: "#2c5a26", F: "#2c5a26", C: "#8cc265", c: "#6a9e4b", A: "#7a5230" },
+    head: {
+      down: [
+        "......KXXK......",
+        ".....KXXXXK.....",
+        "...KKGxxxxGKK...",
+        "..KGLGGLGGLGGK..",
+        ".KGGGgGGGgGGGGK.",
+        ".KGLGGGLGGGLGgK.",
+        "..KgGGgGGgGGgK..",
+        "...KKgKKKKgKK...",
+        "....KSSSSSSK....",
+        "....KWESSWEK....",
+      ],
+      up: [
+        "......KXXK......",
+        ".....KXXXXK.....",
+        "...KKGxxxxGKK...",
+        "..KGLGGLGGLGGK..",
+        ".KGGGgGGGgGGGGK.",
+        ".KGLGGGLGGGLGgK.",
+        "..KgGGgGGgGGgK..",
+        "...KKgKKKKgKK...",
+        "....KSSSSSSK....",
+        "....KSSssSSK....",
+      ],
+      side: [
+        ".......KXXK.....",
+        "......KXXXXK....",
+        "....KKGxxxxGK...",
+        "...KGLGGLGGLGK..",
+        "..KGGGgGGGgGGGK.",
+        "..KGLGGGLGGGLGK.",
+        "...KgGGgGGgGGK..",
+        "....KKgKKKKgK...",
+        ".....KSSSSSSK...",
+        ".....KSSSSWEK...",
+      ],
+    },
+    torso: {
+      down: ["...KSSSSSSSSK...", "..KSSsSSSSsSSK..", "..KSSSSSSSSSSK..", "...KSSSSSSSSK...", "...KPPPPPPPPK..."],
+      up: ["...KSSSSSSSSK...", "..KSSsSSSSsSSK..", "..KSSSSSSSSSSK..", "...KSSSSSSSSK...", "...KPPPPPPPPK..."],
+      side: [".....KSSSSSK....", "....KSSSSSSSK...", "....KSsSSSSSK...", "....KSSSSSSKK...", "....KPPPPPPK...."],
+    },
+  },
 };
 
 /** Recoloration de la tenue de Sparrow selon l'objet équipé (même logique que l'appartement). */
@@ -319,17 +411,18 @@ const OUTFIT: Record<string, [string, string]> = {
 };
 
 export function charRows(id: CharId, dir: Dir, frame: Frame): string[] {
-  const d = DEFS[id];
+  const d = DEFS[id] ?? DEFS.inconnu;
   const legs = (d.legs ?? LEGS)[dir][frame];
   return [...d.head[dir], ...d.torso[dir], ...legs];
 }
 
 /** Sprite prêt à dessiner (mis en cache). `side` regarde à droite ; flip = gauche. */
-export function charSprite(id: CharId, dir: Dir, frame: Frame, flip: boolean, tenue?: string): HTMLCanvasElement {
-  const base = DEFS[id].pal;
+export function charSprite(id: string, dir: Dir, frame: Frame, flip: boolean, tenue?: string): HTMLCanvasElement {
+  const known = (id in DEFS ? id : "inconnu") as CharId;
+  const base = DEFS[known].pal;
   const o = id === "sparrow" && tenue ? OUTFIT[tenue] : undefined;
   const pal = o ? { ...base, C: o[0], c: o[1] } : base;
-  return bakeRows(`ch:${id}:${dir}:${frame}:${tenue ?? ""}`, charRows(id, dir, frame), pal, flip);
+  return bakeRows(`ch:${known}:${dir}:${frame}:${tenue ?? ""}`, charRows(known, dir, frame), pal, flip);
 }
 
 export const CHAR_IDS = Object.keys(DEFS) as CharId[];

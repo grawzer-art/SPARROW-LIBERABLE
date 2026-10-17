@@ -1,27 +1,17 @@
 /**
- * RPG — scénario : dialogues des PNJ et textes des objets, selon l'avancement de la quête.
+ * RPG — scénario : dialogues des PNJ et textes des objets, selon l'avancement.
  *
  * Système réutilisable : chaque PNJ ou objet a une liste de répliques conditionnelles ;
- * la première dont la condition est vraie est jouée (avec ses effets). Ajouter un PNJ =
- * ajouter une entrée dans `NPC_TALK` ; aucune fenêtre n'est codée à part.
+ * la première dont la condition est vraie est jouée (avec ses effets, ses choix, son action).
+ * Le registre est rangé par carte (« carte:pnj ») ; chaque chapitre apporte le sien.
+ * Ce fichier contient le chapitre 1 (Quartier 404) et l'aiguillage vers les autres chapitres.
  */
 
-import type { NpcId, ObjectId } from "./quartier";
+import { CH2 } from "./ch2";
 import { flag, has, isDone, status, type Effect, type Rpg } from "./quest";
+import { pick, type Chapter, type Conversation, type Rule, type ThingTalk } from "./talk";
 
-export interface Line {
-  who: string;
-  text: string;
-}
-
-export interface Conversation {
-  lines: Line[];
-  effects?: Effect[];
-  /** Scène scénarisée à jouer après le dialogue. */
-  cutscene?: "evenement";
-}
-
-type Rule = { when?: (r: Rpg) => boolean; talk: (r: Rpg) => Conversation };
+export type { Action, Choice, Conversation, Line } from "./talk";
 
 const Q = "ville-figee";
 const d = (r: Rpg, step: string) => isDone(r, Q, step);
@@ -33,8 +23,10 @@ const NICO = "Nico le Livreur";
 const BOUCHON = "Madame Bouchon";
 const RAYMOND = "Raymond";
 const INCONNU = "???";
+const CHEVALIER = "Chevalier Noir";
+const BROCOLI = "Soldat Brocoli";
 
-export const NPC_TALK: Record<NpcId, Rule[]> = {
+export const NPC_TALK: Record<string, Rule[]> = {
   nico: [
     {
       when: fini,
@@ -170,15 +162,80 @@ export const NPC_TALK: Record<NpcId, Rule[]> = {
     },
     { talk: () => ({ lines: [{ who: INCONNU, text: "La station t'attend. Le transformateur aussi. Ne le fais pas attendre une minute de plus. Façon de parler." }] }) },
   ],
+  chevalier: [
+    {
+      when: (r) => !flag(r, "chevalier-1"),
+      talk: () => ({
+        lines: [
+          { who: CHEVALIER, text: "HALTE. Qui va là, dans la nuit qui ne finit pas ?" },
+          { who: S, text: "Sparrow. Je vais là. Enfin, je vais surtout chercher à manger." },
+          { who: CHEVALIER, text: "Le fragment d'horloge… Il brille dans ta poche. C'est donc toi, l'Élu de la Minute." },
+          { who: S, text: "L'Élu de la Minute ? C'est un titre officiel ? Il y a une carte de membre ?" },
+          { who: CHEVALIER, text: "Je suis le Chevalier Noir. Je garde cette route depuis 23:59. Ce qui fait, selon mes calculs… très longtemps, ou pas du tout." },
+          { who: CHEVALIER, text: "Au-delà, la Cité des Frites Perdues. Un roi y a interdit la friture. Et l'un des fragments du temps s'y cache." },
+          { who: S, text: "Interdit… la friture. Il y a des limites à ne pas franchir. Celle-là en est une." },
+          { who: CHEVALIER, text: "Alors laisse-moi t'accompagner, Élu. Mon épée est à toi. Mon armure aussi, mais elle est à ma taille." },
+        ],
+        effects: [{ kind: "flag", id: "chevalier-1" }],
+        choices: [
+          {
+            label: "En route, Chevalier !",
+            next: {
+              lines: [
+                { who: CHEVALIER, text: "Que l'ombre guide nos pas. Et que l'huile soit chaude." },
+                { who: "", text: "Le Chevalier Noir rejoint l'équipe !" },
+              ],
+              effects: [{ kind: "join", id: "chevalier" }],
+            },
+          },
+          {
+            label: "Je dois me préparer.",
+            next: { lines: [{ who: CHEVALIER, text: "Sage décision. Je reste ici. Immobile. Dans le noir. C'est ce que je fais de mieux." }] },
+          },
+        ],
+      }),
+    },
+    {
+      talk: () => ({
+        lines: [{ who: CHEVALIER, text: "Prêt, Élu ? La route du Centre-ville n'attend que nous." }],
+        choices: [
+          {
+            label: "Allons-y !",
+            next: {
+              lines: [
+                { who: CHEVALIER, text: "Parfait. J'ai répété ma pose héroïque toute la nuit." },
+                { who: "", text: "Le Chevalier Noir rejoint l'équipe !" },
+              ],
+              effects: [{ kind: "join", id: "chevalier" }],
+            },
+          },
+          { label: "Pas encore.", next: { lines: [{ who: CHEVALIER, text: "Je t'attends. Le temps aussi, de toute façon." }] } },
+        ],
+      }),
+    },
+    { talk: () => ({ lines: [{ who: CHEVALIER, text: "…" }] }) },
+  ],
+
+  eclaireur: [
+    {
+      when: (r) => !flag(r, "ko:eclaireur"),
+      talk: () => ({
+        lines: [
+          { who: BROCOLI, text: "HALTE ! Au nom du Roi de la Salade, je confisque tout aliment frit, pané ou simplement heureux !" },
+          { who: S, text: "Un brocoli. Avec un casque. Qui me parle. D'accord. La nuit est longue." },
+          { who: CHEVALIER, text: "Un éclaireur de la Cité. Il ne nous laissera pas passer. Élu, montre-lui ce que vaut une manette bien tenue !" },
+          { who: BROCOLI, text: "Pour la vitamine C ! À L'ATTAQUE !" },
+        ],
+        then: { kind: "battle", id: "eclaireur" },
+      }),
+    },
+    { talk: () => ({ lines: [{ who: BROCOLI, text: "Je… je vais faire un rapport. Un rapport très vert." }] }) },
+    { talk: () => ({ lines: [{ who: BROCOLI, text: "…" }] }) },
+  ],
 };
 
-export function talkTo(id: NpcId, r: Rpg): Conversation {
-  const rule = NPC_TALK[id].find((x) => !x.when || x.when(r))!;
-  return rule.talk(r);
-}
-
-/** Textes des objets du décor. `text` = inscription d'un panneau. */
-export function examine(id: ObjectId, r: Rpg, text?: string): Conversation {
+/** Textes des objets du Quartier 404. `text` = inscription d'un panneau. */
+function examineQuartier(id: string, r: Rpg, text?: string): Conversation | null {
   switch (id) {
     case "horloge":
       if (fini(r)) return { lines: [{ who: S, text: "00:00. Elle s'est remise à tourner. Doucement, comme si elle avait peur de réveiller quelqu'un." }] };
@@ -233,7 +290,7 @@ export function examine(id: ObjectId, r: Rpg, text?: string): Conversation {
         return {
           lines: [
             { who: "", text: "La barrière s'est levée. Au loin, les lumières du Centre-ville clignotent…" },
-            { who: "", text: "CHAPITRE 2 — LE CENTRE-VILLE : bientôt." },
+            { who: "", text: "Une odeur de friture flotte dans l'air. CHAPITRE 2 — LA CITÉ DES FRITES PERDUES." },
           ],
         };
       return { lines: [{ who: "", text: "Route barrée : « ANOMALIE EN COURS — CENTRE-VILLE INACCESSIBLE »." }] };
@@ -256,7 +313,13 @@ export function examine(id: ObjectId, r: Rpg, text?: string): Conversation {
       return { lines: [{ who: "", text: "« CHAT PERDU. S'appelle Minuit. Ne vient jamais quand on l'appelle. Évidemment. »" }] };
     case "velo":
       return { lines: [{ who: S, text: "Mon vélo. Pneu à plat depuis 2019. Une valeur sûre." }] };
+    case "route":
+      if (!fini(r)) return { lines: [{ who: "", text: "Route barrée : « ANOMALIE EN COURS — CENTRE-VILLE INACCESSIBLE »." }] };
+      if (!r.party.includes("chevalier"))
+        return { lines: [{ who: "", text: "Une silhouette en armure noire attend près de la barrière levée. Elle a l'air de vouloir te parler. Avec beaucoup de solennité." }] };
+      return { lines: [{ who: CHEVALIER, text: "Le soldat légume nous barre la route. Il faudra passer sur son… sur ses feuilles." }] };
   }
+  return null;
 }
 
 /** La scène finale de la quête, jouée au transformateur. */
@@ -274,5 +337,71 @@ export function evenement(): Conversation {
       { who: "", text: "Les horloges passent à 00:00… et s'y arrêtent. Une seule minute a passé. Mais au bout de la rue, la barrière du Centre-ville s'est levée." },
     ],
     effects: [step("sortir"), step("explorer"), step("station"), step("evenement"), { kind: "flag", id: "inconnu-parti" }],
+  };
+}
+
+// ─── Registre de tous les chapitres ───
+
+const CH1: Chapter = {
+  npcs: Object.fromEntries(Object.entries(NPC_TALK).map(([k, v]) => [`quartier:${k}`, v])),
+  things: {},
+};
+
+const ALL: Chapter = { npcs: { ...CH1.npcs, ...CH2.npcs }, things: { ...CH1.things, ...CH2.things } };
+
+/** Réplique d'un PNJ sur une carte. */
+export function talkTo(id: string, r: Rpg, map = "quartier"): Conversation {
+  const rules = ALL.npcs[`${map}:${id}`];
+  return rules ? pick(rules, r) : { lines: [{ who: "", text: "…" }] };
+}
+
+const generic: Record<string, ThingTalk> = {
+  panneau: (_r, text) => ({ lines: [{ who: "", text: `« ${text ?? "…"} »` }] }),
+  pancarte: (_r, text) => ({ lines: [{ who: "", text: `« ${text ?? "…"} »` }] }),
+  affiche: (_r, text) => ({ lines: [{ who: "", text: `« ${text ?? "…"} »` }] }),
+  banc: () => ({ lines: [{ who: S, text: "Un banc. Je m'assieds deux secondes. Ça compte comme du repos." }] }),
+  poubelle: () => ({ lines: [{ who: "", text: "Une poubelle. Rien d'utile. Rien de frit non plus." }] }),
+  etagere: () => ({ lines: [{ who: "", text: "Des étagères bien rangées. Trop bien rangées." }] }),
+  bibliotheque: () => ({ lines: [{ who: "", text: "Des livres de cuisine. Toutes les pages sur la friture ont été arrachées." }] }),
+  tonneau: () => ({ lines: [{ who: "", text: "Un tonneau. Il sent le vinaigre." }] }),
+  "lit-int": () => ({ lines: [{ who: S, text: "Un lit. Pas le mien. Je résiste à l'envie de faire une sieste." }] }),
+  fontaine: () => ({ lines: [{ who: "", text: "L'eau de la fontaine coule tranquillement." }] }),
+};
+
+/** Texte d'un objet du décor sur une carte. `text` = inscription d'un panneau. */
+export function examine(id: string, r: Rpg, text?: string, map = "quartier"): Conversation {
+  const own = map === "quartier" ? examineQuartier(id, r, text) : (ALL.things[`${map}:${id}`]?.(r, text) ?? null);
+  return own ?? ALL.things[`*:${id}`]?.(r, text) ?? generic[id]?.(r, text) ?? { lines: [{ who: "", text: "Rien de spécial." }] };
+}
+
+// ─── Moments scénarisés (arrivée sur une carte, après un combat) ───
+
+/** Réplique à l'arrivée sur une carte (`first` = première visite). */
+export function arrival(map: string, r: Rpg, first: boolean): Conversation | null {
+  return CH2.arrival?.(map, r, first) ?? null;
+}
+
+/** Après une victoire. */
+export function afterBattle(id: string, r: Rpg): Conversation | null {
+  if (id === "eclaireur")
+    return {
+      lines: [
+        { who: BROCOLI, text: "Impossible… vaincu par un humain en jogging… Le Roi… le Roi saura…" },
+        { who: "", text: "Le Soldat Brocoli s'enfuit en roulant vers le Centre-ville." },
+        { who: CHEVALIER, text: "Bien joué, Élu. Ta manette est aussi tranchante que ton sens de l'humour." },
+        { who: CHEVALIER, text: "Après chaque combat, l'équipe reprend son souffle. Mais les objets utilisés, eux, ne reviennent pas. Garde tes frites." },
+        { who: CHEVALIER, text: "La route est libre. La Cité des Frites Perdues nous attend, à l'est." },
+      ],
+      effects: [{ kind: "quest", id: "frites-perdues" }],
+    };
+  return CH2.afterBattle?.(id, r) ?? null;
+}
+
+/** Après une défaite (on s'est retiré pour se préparer). */
+export function afterDefeat(id: string): Conversation | null {
+  return {
+    lines: [
+      { who: S, text: id === "roi-salade" ? "Aïe. Ce roi a la feuille dure. Il me faut de meilleurs objets… ou de meilleures frites." : "Pfff. Je reviendrai. Avec un plan. Ou au moins avec des frites." },
+    ],
   };
 }

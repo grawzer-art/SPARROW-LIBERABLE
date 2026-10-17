@@ -9,7 +9,7 @@
  * sont dessinés à chaque image par overworld.ts. Palette de nuit unique pour toute la carte.
  */
 
-import { GROUND, MAP_H, MAP_W, PROPS, TILE, type Ground, type Prop } from "@/lib/rpg/quartier";
+import { TILE, type Ground, type MapDef, type Prop } from "@/lib/rpg/mapdef";
 import { hash, pixelText, textWidth } from "./pixel";
 
 type Ctx = CanvasRenderingContext2D;
@@ -95,7 +95,9 @@ const px = (ctx: Ctx, c: string, x: number, y: number, w = 1, h = 1) => {
 
 // ─── Sol ───
 
-const g = (x: number, y: number): Ground | null => (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H ? null : GROUND[y][x]);
+/** Carte en cours de peinture (buildLayers). */
+let CUR: MapDef;
+const g = (x: number, y: number): Ground | null => (x < 0 || y < 0 || x >= CUR.w || y >= CUR.h ? null : CUR.ground[y][x]);
 const isGrassy = (k: Ground | null) => k === "herbe" || k === "fleurs";
 
 function grass(ctx: Ctx, X: number, Y: number, tx: number, ty: number, flowers: boolean) {
@@ -140,7 +142,7 @@ function speckle(ctx: Ctx, X: number, Y: number, tx: number, ty: number, base: s
 function paintGround(ctx: Ctx, tx: number, ty: number) {
   const X = tx * TILE;
   const Y = ty * TILE;
-  const k = GROUND[ty][tx];
+  const k = CUR.ground[ty][tx];
   switch (k) {
     case "herbe":
     case "fleurs":
@@ -263,8 +265,8 @@ export interface Light {
   tint?: boolean;
 }
 
-/** Lumières fixes de la carte (lampadaires, fenêtres, néons). */
-export const LIGHTS: Light[] = [];
+/** Lumières fixes de la carte en cours de peinture (lampadaires, fenêtres, néons). */
+let LIGHTS: Light[] = [];
 
 function shadowEllipse(ctx: Ctx, cx: number, cy: number, rx: number, ry: number) {
   ctx.fillStyle = P.shadow;
@@ -708,21 +710,28 @@ function pylon(ctx: Ctx, p: Prop, top: boolean) {
 }
 
 /** Construit les deux calques fixes de la carte. */
-export function buildLayers(): { base: HTMLCanvasElement; top: HTMLCanvasElement } {
-  LIGHTS.length = 0;
+export interface Layers {
+  base: HTMLCanvasElement;
+  top: HTMLCanvasElement;
+  lights: Light[];
+}
+
+export function buildLayers(map: MapDef): Layers {
+  CUR = map;
+  LIGHTS = [];
   const mk = () => {
     const c = document.createElement("canvas");
-    c.width = MAP_W * TILE;
-    c.height = MAP_H * TILE;
+    c.width = map.w * TILE;
+    c.height = map.h * TILE;
     return c;
   };
   const base = mk();
   const top = mk();
   const b = base.getContext("2d")!;
   const t = top.getContext("2d")!;
-  for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) paintGround(b, x, y);
+  for (let y = 0; y < map.h; y++) for (let x = 0; x < map.w; x++) paintGround(b, x, y);
   // Ordre : du fond (haut de carte) vers l'avant
-  const props = [...PROPS].sort((a, c) => a.y + a.h - (c.y + c.h));
+  const props = [...map.props].sort((a, c) => a.y + a.h - (c.y + c.h));
   for (const p of props) {
     switch (p.kind) {
       case "batiment":
@@ -765,15 +774,15 @@ export function buildLayers(): { base: HTMLCanvasElement; top: HTMLCanvasElement
         smallProp(b, p);
     }
   }
-  return { base, top };
+  return { base, top, lights: LIGHTS };
 }
 
 // ─── Éléments animés ───
 
-export function drawWater(ctx: Ctx, t: number, ox: number, oy: number) {
-  for (let y = 0; y < MAP_H; y++)
-    for (let x = 0; x < MAP_W; x++) {
-      if (GROUND[y][x] !== "eau") continue;
+export function drawWater(ctx: Ctx, map: MapDef, t: number, ox: number, oy: number) {
+  for (let y = Math.max(0, Math.floor(oy / TILE)); y < Math.min(map.h, Math.ceil((oy + ctx.canvas.height) / TILE) + 1); y++)
+    for (let x = Math.max(0, Math.floor(ox / TILE)); x < Math.min(map.w, Math.ceil((ox + ctx.canvas.width) / TILE) + 1); x++) {
+      if (map.ground[y][x] !== "eau") continue;
       const X = x * TILE - ox;
       const Y = y * TILE - oy;
       for (let i = 0; i < 3; i++) {
@@ -873,4 +882,4 @@ export function drawCore(ctx: Ctx, p: Prop, t: number, ox: number, oy: number, c
   ctx.fillRect(X + 45 + Math.round(Math.sin(t * 9) * 3), Y + 25, 3, 3);
 }
 
-export const propOf = (kind: Prop["kind"]) => PROPS.filter((p) => p.kind === kind);
+export const propOf = (map: MapDef, kind: Prop["kind"]) => map.props.filter((p) => p.kind === kind);
