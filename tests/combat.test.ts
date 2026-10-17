@@ -227,4 +227,15 @@ describe("Chapitre 3 : transformation, vol, coup de grâce", () => {
     expect(boss.rate).toBeGreaterThan(0.85);
     expect(boss.turns).toBeGreaterThanOrEqual(8);
   });
+  it("équilibrage : le chapitre 5 se gagne, Monsieur Minuit est le combat le plus dur", () => {
+    const g: Team["gear"] = { arme: "katana-bois", armure: "hakama", accessoire: "ruban-katsu" };
+    const party = ["chevalier", "gerard", "lili", "pokeyz"];
+    const skills = ["pluie-frites", "titan", "samourai"];
+    const bag = { onigiri: 3, "the-vert": 2, "mega-cornet": 2 };
+    for (const id of ["trotteuse", "trotteuses", "coucou", "coucous", "sablier"]) expect(stats(id, T(17, party, bag, g, skills), 120).rate, id).toBeGreaterThan(0.9);
+    const boss = stats("minuit", T(18, party, bag, g, skills), 200);
+    expect(boss.rate).toBeGreaterThan(0.75);
+    expect(boss.rate).toBeLessThan(0.98);
+    expect(boss.turns).toBeGreaterThanOrEqual(15);
+  });
 });

@@ -672,7 +672,146 @@ function katsu(vrai: boolean): Raster {
   return r;
 }
 
+
+// ─── Chapitre 5 ───
+
+/** Cadran d'horloge : disque crème, graduations, deux aiguilles. */
+function face(r: Raster, cx: number, cy: number, R: number, h: number, m: number, rim = "#e8b830") {
+  r.ball(cx, cy, R + 1.5, R + 1.5, rim, "#f8dc70", "#a87a18");
+  r.ball(cx, cy, R, R, "#f1efe8", "#ffffff", "#d8d0c0");
+  for (let k = 0; k < 12; k++) {
+    const a = (k / 12) * Math.PI * 2;
+    r.set(cx + Math.cos(a) * (R - 1.5), cy + Math.sin(a) * (R - 1.5), INK);
+  }
+  const hand = (ang: number, len: number) => r.line(cx, cy, cx + Math.cos(ang) * len, cy + Math.sin(ang) * len, INK);
+  hand(((h % 12) / 12) * Math.PI * 2 - Math.PI / 2, R * 0.5);
+  hand((m / 60) * Math.PI * 2 - Math.PI / 2, R * 0.8);
+}
+
+function trotteuse(): Raster {
+  const r = new Raster(48, 48);
+  // Soldat-aiguille : corps en uniforme bleu nuit, tête-cadran, lance en forme d'aiguille
+  r.ball(24, 38, 11, 10, "#26305a", "#34407a", "#182040", (_x, y) => y > 47);
+  for (let y = 31; y < 46; y += 4) r.rect(23, y, 2, 2, "#e8b830");
+  face(r, 24, 18, 10, 11, 59);
+  eyes(r, 18, 15, 9, "fache", 2);
+  r.line(41, 4, 41, 44, "#c8c2b4");
+  r.line(42, 4, 42, 44, "#8a8478");
+  for (let i = 0; i < 4; i++) r.line(39 + i * 0.5, 7 - i, 44 - i * 0.5, 7 - i, "#e8b830");
+  r.ball(37, 32, 3, 3, "#26305a", "#34407a", "#182040");
+  r.outline(INK);
+  return r;
+}
+
+function coucou(): Raster {
+  const r = new Raster(48, 48);
+  // Petite maison d'horloge à coucou, l'oiseau jaillit de la porte
+  r.rect(10, 18, 28, 26, "#8a5a3a");
+  r.rect(10, 18, 3, 26, "#a8714a");
+  r.rect(35, 18, 3, 26, "#6a4228");
+  for (let y = 0; y < 10; y++) {
+    r.rect(24 - 16 + y * 1.6, 9 + y, 32 - y * 3.2, 1, y < 2 ? "#a84a3a" : "#8e3a2a");
+  }
+  r.line(7, 19, 24, 8, "#6a2a1e");
+  r.line(41, 19, 24, 8, "#6a2a1e");
+  face(r, 24, 34, 5, 11, 59);
+  r.rect(19, 21, 10, 7, "#1b1626");
+  // L'oiseau
+  r.ball(24, 20, 6, 5, "#4a7a3a", "#6a9a4a", "#2e5a26");
+  r.rect(29, 19, 6, 2, "#e8b830");
+  r.rect(29, 21, 4, 1, "#c9952e");
+  eyes(r, 20, 17, 4, "rage", 1);
+  r.line(17, 26, 13, 31, "#c8c2b4");
+  r.line(31, 26, 35, 31, "#c8c2b4");
+  r.rect(22, 44, 4, 3, "#e8b830");
+  r.outline(INK);
+  return r;
+}
+
+function sablier(retourne: boolean): Raster {
+  const r = new Raster(56, 56);
+  // Grand sablier vivant : socles en bois, verre bleuté, sable doré (en haut ou en bas)
+  r.rect(10, 4, 36, 5, "#5a3a22");
+  r.rect(10, 4, 36, 1, "#7a5232");
+  r.rect(10, 47, 36, 5, "#5a3a22");
+  r.rect(10, 47, 36, 1, "#7a5232");
+  for (const xx of [12, 42]) r.rect(xx, 9, 2, 38, "#3a2414");
+  for (let y = 9; y < 47; y++) {
+    const t = Math.abs(y - 28) / 19;
+    const half = Math.max(1.5, 13 * t);
+    for (let x = Math.round(28 - half); x <= Math.round(28 + half); x++) {
+      const top = y < 28;
+      const sand = retourne ? top && y > 28 - 12 * 1 && t > 0.25 : !top && t > 0.3;
+      r.set(x, y, sand ? (x < 28 ? "#f0d890" : "#e8c878") : x < 28 - half + 2 ? "#e0f4fa" : "#a8d0e0");
+    }
+  }
+  // Filet de sable qui tombe
+  if (!retourne) for (let y = 26; y < 40; y++) r.set(28, y, "#e8c878");
+  eyes(r, 23, 38, 7, retourne ? "rage" : "fache", 2);
+  r.rect(26, 43, 5, 1, INK);
+  r.outline(INK);
+  return r;
+}
+
+function minuit(forme: 0 | 1 | 2): Raster {
+  const r = new Raster(56, 56);
+  if (forme === 2) {
+    // Minuit Éternel : un colosse d'aiguilles autour d'un cadran noir
+    for (let k = 0; k < 16; k++) {
+      const a = (k / 16) * Math.PI * 2;
+      r.line(28, 30, 28 + Math.cos(a) * 26, 30 + Math.sin(a) * 24, k % 2 ? "#a66cff" : "#e8b830");
+    }
+    r.ball(28, 30, 15, 15, "#1b1626", "#2a2238", "#0c0a12");
+    for (let k = 0; k < 12; k++) {
+      const a = (k / 12) * Math.PI * 2;
+      r.set(28 + Math.cos(a) * 12, 30 + Math.sin(a) * 12, "#e8b830");
+    }
+    r.line(28, 30, 27, 19, "#c62828");
+    r.line(28, 30, 26, 22, "#c62828");
+    eyes(r, 21, 27, 10, "rage", 2);
+    r.rect(18, 4, 20, 8, "#1b1626");
+    r.rect(14, 11, 28, 2, "#1b1626");
+    r.rect(18, 9, 20, 2, "#a66cff");
+    r.outline(INK);
+    return r;
+  }
+  // Gentleman en costume noir, haut-de-forme, monocle doré, canne
+  r.ball(28, 46, 18, 12, "#1b1626", "#2a2238", "#0c0a12", (_x, y) => y > 55);
+  r.rect(24, 36, 8, 14, "#f1efe8");
+  r.rect(26, 37, 4, 3, "#a66cff");
+  r.rect(27, 40, 2, 9, "#a66cff");
+  if (forme === 1) {
+    // La veste s'ouvre : un cadran à la place du cœur
+    r.ball(28, 44, 9, 8, "#2a2238", "#3a3046", "#120e1a");
+    face(r, 28, 44, 6, 11, 59, "#a66cff");
+  }
+  r.line(47, 26, 47, 54, "#2a2238");
+  r.ball(47, 25, 2.5, 2.5, "#e8b830", "#f8dc70", "#a87a18");
+  // Tête pâle, moustache fine
+  r.ball(28, 24, 9, 10, "#e8dcd0", "#f8f0e8", "#c8b8a8");
+  r.rect(22, 29, 12, 2, "#3a3046");
+  r.set(21, 30, "#3a3046");
+  r.set(34, 30, "#3a3046");
+  eyes(r, 22, 21, 9, forme === 1 ? "rage" : "fache", 2);
+  r.ball(33, 22.5, 3, 3, "#e8b830", undefined, "#a87a18", (x, y) => Math.hypot(x + 0.5 - 33, y + 0.5 - 22.5) < 1.8);
+  r.line(35, 25, 37, 34, "#e8b830");
+  // Haut-de-forme
+  r.rect(19, 2, 18, 12, "#1b1626");
+  r.rect(20, 3, 3, 10, "#2a2238");
+  r.rect(15, 13, 26, 2, "#1b1626");
+  r.rect(19, 10, 18, 2, "#a66cff");
+  r.outline(INK);
+  return r;
+}
+
 const PAINT: Record<string, (tenue?: string) => Raster> = {
+  trotteuse,
+  coucou,
+  sablier: () => sablier(false),
+  "sablier-retourne": () => sablier(true),
+  minuit: () => minuit(0),
+  "minuit-cadran": () => minuit(1),
+  "minuit-eternel": () => minuit(2),
   "sparrow-samourai": sparrowSamourai,
   pokeyz: pokeyzBack,
   sbire,

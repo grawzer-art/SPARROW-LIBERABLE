@@ -957,6 +957,80 @@
   animation: gbIn 0.3s var(--ease) both;
 }
 
+.gb-credits {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  color: var(--paper);
+  background: #090914;
+  border: 0;
+  padding: 0;
+  font-size: 11px;
+  text-align: center;
+  z-index: 6;
+}
+
+.gb-credits__roll {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  display: grid;
+  gap: 28px;
+  padding: 0 16px;
+  animation: gbCredits 34s linear forwards;
+}
+
+.gb-credits__roll p {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.gb-credits__head {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: #c9a0ff;
+  text-transform: uppercase;
+}
+
+.gb-credits__roll p:first-child span {
+  font-family: var(--display);
+  font-size: 24px;
+  color: #f2c14e;
+  text-transform: none;
+  letter-spacing: 0.04em;
+}
+
+.gb-credits__roll p:first-child span + span {
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--paper);
+}
+
+.gb-credits em {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 10px 0 8px;
+  background: linear-gradient(transparent, #090914 40%);
+  font-style: normal;
+  font-size: 9.5px;
+  color: #8a8a9a;
+}
+
+@keyframes gbCredits {
+  from {
+    top: 100%;
+    transform: translateY(0);
+  }
+  to {
+    top: 0;
+    transform: translateY(-100%);
+  }
+}
+
 .gb-chapter__kicker {
   font-size: 10px;
   letter-spacing: 0.2em;
@@ -1039,6 +1113,13 @@
   .gb-chapter,
   .gb-chapter em {
     animation: none;
+  }
+  .gb-credits__roll {
+    position: static;
+    animation: none;
+    padding: 24px 16px 40px;
+    height: 100%;
+    overflow-y: auto;
   }
   .gb-fade {
     transition: none;

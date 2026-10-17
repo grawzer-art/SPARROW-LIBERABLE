@@ -558,7 +558,7 @@ export class Overworld {
     // Calque haut (feuillages, lampadaires, horloge)
     ctx.drawImage(this.layers.top, -ox, -oy);
     for (const p of propOf(this.map, "horloge")) {
-      const frozen = this.map.id === "quartier" && !calm;
+      const frozen = (this.map.id === "quartier" && !calm) || (this.map.id === "tour-sommet" && f.rpg.quests.minuit !== "terminee");
       drawClockFace(ctx, p, p.text ?? (frozen ? "23:59" : "00:00"), this.t, ox, oy, frozen);
     }
 

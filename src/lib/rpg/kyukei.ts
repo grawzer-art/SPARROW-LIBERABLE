@@ -10,6 +10,7 @@ const flag = (r: Rpg, f: string) => r.flags.includes(f);
 const did = (r: Rpg, s: string) => r.done.includes(`samourai:${s}`);
 export const metronomeVaincu = (r: Rpg) => flag(r, "ko:metronome");
 export const LAMPIONS = [1, 2, 3, 4] as const;
+export const chapitre4Fini = (r: Rpg) => r.quests.samourai === "terminee";
 
 // ─── Chemin des Cerisiers ───
 
@@ -75,6 +76,7 @@ function village(): MapDef {
   fill("chemin", 0, 13, 9, 14);
   fill("chemin", 5, 8, 6, 12);
   fill("chemin", 24, 8, 28, 9);
+  fill("chemin", 15, 0, 17, 4);
   fill("chemin", 28, 8, 28, 8);
   fill("eau", 2, 17, 6, 20);
   fill("fleurs", 26, 17, 32, 18);
@@ -128,6 +130,9 @@ function village(): MapDef {
     { id: "ouest-2", at: { x: 0, y: 14 }, dir: "left", to: { map: "cerisiers", x: 34, y: 10, dir: "left" } },
     { id: "auberge", at: { x: 5, y: 7 }, to: { map: "auberge", x: 5, y: 6, dir: "up" } },
     { id: "dojo", at: { x: 28, y: 7 }, to: { map: "dojo", x: 9, y: 12, dir: "up" }, needs: metronomeVaincu, lockedKey: "porte-dojo" },
+    { id: "nord-1", at: { x: 15, y: 0 }, dir: "up", to: { map: "tour-parvis", x: 11, y: 18, dir: "up" }, needs: chapitre4Fini, lockedKey: "porte-tour" },
+    { id: "nord-2", at: { x: 16, y: 0 }, dir: "up", to: { map: "tour-parvis", x: 12, y: 18, dir: "up" }, needs: chapitre4Fini, lockedKey: "porte-tour" },
+    { id: "nord-3", at: { x: 17, y: 0 }, dir: "up", to: { map: "tour-parvis", x: 13, y: 18, dir: "up" }, needs: chapitre4Fini, lockedKey: "porte-tour" },
     { id: "maison-1", at: { x: 12, y: 3 }, to: null, text: "Personne. Sur la table, un bol de soupe refroidi… Ils sont tous partis danser." },
     { id: "maison-2", at: { x: 20, y: 3 }, to: null, text: "La porte est fermée. On entend quelqu'un taper du pied derrière, en rythme, sans pouvoir s'arrêter." },
   );

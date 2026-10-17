@@ -36,6 +36,7 @@ import { ROOMS, cachePlace, restorePlace, type Place, type RoomId, type Spot } f
 import { MINIGAMES, type GameId } from "@/lib/gotchi/minigames";
 import { solidAt, type Dest, type MapId, type Warp, type Zone } from "@/lib/rpg/mapdef";
 import { mapOf, restoreWhere } from "@/lib/rpg/maps";
+import { CREDITS, FINAL_QUEST } from "@/lib/rpg/ch5";
 import { SPAWN } from "@/lib/rpg/quartier";
 import { applyEffects, status, type Effect } from "@/lib/rpg/quest";
 import { buyRpg, equipRpg } from "@/lib/rpg/shop";
@@ -179,6 +180,9 @@ export function Gotchi() {
   const [conv, setConv] = useState<Conv | null>(null);
   const [fade, setFade] = useState(false);
   const [chapter, setChapter] = useState<string[] | null>(null);
+  /** Générique de fin (après la carte du dernier chapitre). */
+  const [credits, setCredits] = useState(false);
+  const cardQuest = useRef<string | null>(null);
   /** Dialogue à ouvrir quand l'écran titre du chapitre est refermé. */
   const afterCard = useRef<Conversation | null>(null);
   const [vh, setVh] = useState(OW_H);
@@ -350,6 +354,7 @@ export function Gotchi() {
     }
     const card = r?.completed ? chapterCard(r.completed.id) : null;
     if (card) {
+      cardQuest.current = r!.completed!.id;
       ow.current?.flashWhite();
       flashLegend();
       setChapter(card);
@@ -466,10 +471,23 @@ export function Gotchi() {
   /** Referme l'écran titre / la carte de chapitre (et lance le dialogue qui suivait). */
   const closeChapter = useCallback(() => {
     setChapter(null);
+    if (cardQuest.current === FINAL_QUEST) {
+      // Fin de l'aventure : le générique défile, puis retour au quartier pour l'épilogue
+      cardQuest.current = null;
+      if (ow.current) ow.current.frozen = true;
+      setTimeout(() => setCredits(true), 200);
+      return;
+    }
+    cardQuest.current = null;
     const c = afterCard.current;
     afterCard.current = null;
     if (c) setTimeout(() => openConvRef.current(c), 150);
     else if (ow.current && !convRef.current) ow.current.frozen = false;
+  }, []);
+
+  const closeCredits = useCallback(() => {
+    setCredits(false);
+    enterMapRef.current({ map: "quartier", ...SPAWN });
   }, []);
 
   const goHome = useCallback(() => {
@@ -941,6 +959,7 @@ export function Gotchi() {
 
   const pressA = () => {
     if (busy()) return pad.current?.a();
+    if (credits) return closeCredits();
     if (page || chapter) return chapter ? closeChapter() : undefined;
     if (convRef.current) return advanceConv();
     if (menu !== null) return openPage(MENU[menu].id);
@@ -955,6 +974,7 @@ export function Gotchi() {
 
   const pressB = () => {
     if (busy()) return pad.current?.b();
+    if (credits) return closeCredits();
     if (chapter) return closeChapter();
     if (convRef.current) return advanceConv();
     if (page) return setPage(null);
@@ -964,7 +984,7 @@ export function Gotchi() {
   };
 
   const toggleMenu = () => {
-    if (convRef.current || chapter || busy()) return;
+    if (convRef.current || chapter || credits || busy()) return;
     if (page) return setPage(null);
     setMenu((m) => (m === null ? 0 : null));
     audio.current.jump(false);
@@ -1312,7 +1332,7 @@ export function Gotchi() {
               {banner}
             </span>
           )}
-          {ready && !conv && !line && menu === null && !chapter && (
+          {ready && !conv && !line && menu === null && !chapter && !credits && (
             <span className="gb-pill mono" aria-live="polite">
               <b>A</b> {hint}
             </span>
@@ -1392,6 +1412,22 @@ export function Gotchi() {
                   ▼
                 </i>
               )}
+            </button>
+          )}
+          {credits && (
+            <button type="button" className="gb-credits mono" onClick={closeCredits} aria-label="Générique de fin">
+              <div className="gb-credits__roll">
+                {CREDITS.map((block) => (
+                  <p key={block[0]}>
+                    {block.map((l, i) => (
+                      <span key={l} className={i === 0 ? "gb-credits__head" : ""}>
+                        {l}
+                      </span>
+                    ))}
+                  </p>
+                ))}
+              </div>
+              <em>A : continuer</em>
             </button>
           )}
           {chapter && (
