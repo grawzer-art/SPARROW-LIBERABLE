@@ -33,6 +33,7 @@ import { lightSprite } from "./pixel";
 import { LIGHTS, buildLayers, drawBarrier, drawClockFace, drawCore, drawFountainWater, drawGate, drawWater, propOf } from "./tiles";
 
 export const OW_W = 240;
+/** Hauteur par défaut ; l'interface l'agrandit pour remplir l'écran du téléphone. */
 export const OW_H = 176;
 const WALK = 0.2; // s par case
 const RUN = 0.12;
@@ -76,6 +77,9 @@ export class Overworld {
   onDoor: ((d: Door) => void) | null = null;
   onZone: ((z: Zone) => void) | null = null;
   bumps = 0;
+  /** Taille de la vue (pixels de jeu). */
+  vw = OW_W;
+  vh = OW_H;
   private from: Tile | null = null;
   private mt = 0;
   private leg = 0;
@@ -114,8 +118,16 @@ export class Overworld {
   private centerCam() {
     const px = this.x * TILE + 8;
     const py = this.y * TILE + 8;
-    this.camX = Math.max(0, Math.min(MAP_W * TILE - OW_W, px - OW_W / 2));
-    this.camY = Math.max(0, Math.min(MAP_H * TILE - OW_H, py - OW_H / 2));
+    this.camX = Math.max(0, Math.min(MAP_W * TILE - this.vw, px - this.vw / 2));
+    this.camY = Math.max(0, Math.min(MAP_H * TILE - this.vh, py - this.vh / 2));
+  }
+
+  /** Adapte la vue à l'écran (la caméra reste centrée sur Sparrow). */
+  setView(w: number, h: number) {
+    if (w === this.vw && h === this.vh) return;
+    this.vw = w;
+    this.vh = Math.min(h, MAP_H * TILE);
+    this.centerCam();
   }
 
   /** Place Sparrow (sortie de l'immeuble, chargement). */
@@ -296,8 +308,8 @@ export class Overworld {
     }
     // Caméra
     const p = this.pixelPos();
-    const tx = Math.max(0, Math.min(MAP_W * TILE - OW_W, p.x + 8 - OW_W / 2));
-    const ty = Math.max(0, Math.min(MAP_H * TILE - OW_H, p.y + 8 - OW_H / 2));
+    const tx = Math.max(0, Math.min(MAP_W * TILE - this.vw, p.x + 8 - this.vw / 2));
+    const ty = Math.max(0, Math.min(MAP_H * TILE - this.vh, p.y + 8 - this.vh / 2));
     const k = f.reduced ? 1 : Math.min(1, dt * 10);
     this.camX += (tx - this.camX) * k;
     this.camY += (ty - this.camY) * k;
@@ -334,7 +346,7 @@ export class Overworld {
     const ox = Math.round(this.camX) - sx;
     const oy = Math.round(this.camY);
     ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, OW_W, OW_H);
+    ctx.fillRect(0, 0, this.vw, this.vh);
     ctx.drawImage(this.layers.base, -ox, -oy);
 
     // Éléments animés au sol
@@ -381,7 +393,7 @@ export class Overworld {
     }
     if (this.flash > 0) {
       ctx.fillStyle = `rgba(${this.flashColor},${Math.min(0.85, this.flash)})`;
-      ctx.fillRect(0, 0, OW_W, OW_H);
+      ctx.fillRect(0, 0, this.vw, this.vh);
     }
   }
 
@@ -416,12 +428,13 @@ export class Overworld {
   }
 
   private drawNight(ctx: CanvasRenderingContext2D, f: OwFrame, ox: number, oy: number, me: { x: number; y: number }) {
-    this.dark ??= Object.assign(document.createElement("canvas"), { width: OW_W, height: OW_H });
+    if (!this.dark || this.dark.width !== this.vw || this.dark.height !== this.vh)
+      this.dark = Object.assign(document.createElement("canvas"), { width: this.vw, height: this.vh });
     const dk = this.dark.getContext("2d")!;
     dk.globalCompositeOperation = "source-over";
-    dk.clearRect(0, 0, OW_W, OW_H);
+    dk.clearRect(0, 0, this.vw, this.vh);
     dk.fillStyle = "rgba(10,10,34,0.62)";
-    dk.fillRect(0, 0, OW_W, OW_H);
+    dk.fillRect(0, 0, this.vw, this.vh);
     dk.globalCompositeOperation = "destination-out";
     const all = [...LIGHTS];
     // Lueur de la station et petite lumière autour de Sparrow
@@ -430,7 +443,7 @@ export class Overworld {
     for (const L of all) {
       const lx = L.x - ox;
       const ly = L.y - oy;
-      if (lx < -L.r || ly < -L.r || lx > OW_W + L.r || ly > OW_H + L.r) continue;
+      if (lx < -L.r || ly < -L.r || lx > this.vw + L.r || ly > this.vh + L.r) continue;
       if (L.flicker && Math.floor(this.t * 7 + L.x) % 9 === 0) continue;
       dk.drawImage(lightSprite(L.r), Math.round(lx - L.r), Math.round(ly - L.r));
     }
@@ -441,7 +454,7 @@ export class Overworld {
       if (!L.tint) continue;
       const lx = L.x - ox;
       const ly = L.y - oy;
-      if (lx < -L.r || ly < -L.r || lx > OW_W + L.r || ly > OW_H + L.r) continue;
+      if (lx < -L.r || ly < -L.r || lx > this.vw + L.r || ly > this.vh + L.r) continue;
       ctx.globalAlpha = L.color === "#a66cff" ? 0.22 : 0.1;
       ctx.fillStyle = L.color;
       const r = Math.round(L.r * 0.55);
