@@ -7,7 +7,9 @@ import {
   cachePlace,
   canStand,
   doorCrossed,
+  HOME_ENTRY,
   doorExit,
+  exitCrossed,
   move,
   nearbySpot,
   pathInRoom,
@@ -72,13 +74,20 @@ describe("Carte de l'appartement", () => {
       }
     }
   });
+  it("porte d'entrée du salon : on sort en marchant vers le haut", () => {
+    expect(ROOMS.salon.exit).toBe("N");
+    walk("salon", { x: 80, y: 60 }, [{ x: 80, y: 28 }]);
+    expect(exitCrossed("salon", { x: 80, y: 30 })).toBe(true);
+    expect(exitCrossed("cuisine", { x: 80, y: 30 })).toBe(false);
+    expect(canStand(HOME_ENTRY.room, HOME_ENTRY.x, HOME_ENTRY.y)).toBe(true);
+  });
   it("toutes les pièces sont reliées", () => {
     for (const a of ROOM_IDS) for (const b of ROOM_IDS) if (a !== b) expect(roomRoute(a, b).length).toBeGreaterThan(0);
     expect(roomRoute("chambre", "muscu").map((h) => h.room)).toEqual(["chambre", "salon", "cuisine"]);
   });
   it("les meubles bloquent ; on ne traverse pas les murs", () => {
     expect(canStand("salon", 80, 96)).toBe(false); // canapé
-    expect(canStand("salon", 80, 20)).toBe(false); // mur du fond
+    expect(canStand("cuisine", 80, 20)).toBe(false); // mur du fond
     expect(canStand("chambre", 2, 40)).toBe(false); // mur sans porte
     expect(move("salon", { x: 80, y: 110 }, 0, -10).blocked).toBe(true);
   });

@@ -79,6 +79,7 @@ export function drawRoom(ctx: Ctx, id: RoomId, d: DecorState) {
   px(ctx, "#1d1d1d", T, SCREEN_H - T, SCREEN_W - 2 * T, 1);
   // Portes
   for (const door of Object.keys(ROOMS[id].doors) as Door[]) drawDoor(ctx, door, st.floor);
+  if (ROOMS[id].exit) drawFrontDoor(ctx, st.floor);
 
   WALL_DECOR[id]?.(ctx, d);
 }
@@ -98,6 +99,18 @@ function drawDoor(ctx: Ctx, door: Door, floor: string) {
     px(ctx, floor, 72, SCREEN_H - T, 16, T);
     px(ctx, C.redD, 74, SCREEN_H - 6, 12, 3);
   }
+}
+
+/** Porte d'entrée de l'appartement (vers la rue) : porte pleine avec paillasson. */
+function drawFrontDoor(ctx: Ctx, floor: string) {
+  px(ctx, C.woodD, 70, 4, 20, WALL_H - 3);
+  px(ctx, C.wood, 72, 6, 16, WALL_H - 6);
+  px(ctx, C.woodL, 74, 8, 12, 8);
+  px(ctx, C.woodL, 74, 18, 12, 8);
+  px(ctx, C.gold, 85, 18, 2, 2);
+  px(ctx, floor, 72, WALL_H - 2, 16, 2);
+  px(ctx, C.redD, 72, WALL_H, 16, 4);
+  px(ctx, C.gold, 76, WALL_H + 1, 8, 1);
 }
 
 const sky = (h: number) => (h >= 21 || h < 6 ? ["#141a33", "#f1efe8"] : h < 8 || h >= 19 ? ["#d9784a", "#f2c14e"] : ["#9fc3e0", "#ffffff"]);
@@ -126,9 +139,9 @@ const WALL_DECOR: Partial<Record<RoomId, (ctx: Ctx, d: DecorState) => void>> = {
   },
   salon(ctx) {
     // Cadre « bat-frite »
-    px(ctx, C.K, 24, 7, 20, 15);
-    px(ctx, "#1b1b29", 25, 8, 18, 13);
-    px(ctx, C.gold, 31, 12, 6, 4);
+    px(ctx, C.K, 108, 7, 20, 15);
+    px(ctx, "#1b1b29", 109, 8, 18, 13);
+    px(ctx, C.gold, 115, 12, 6, 4);
   },
   cuisine(ctx) {
     // Faïence + hotte + étagère à bocaux
@@ -270,13 +283,13 @@ export function floorItems(id: RoomId, d: DecorState): FloorItem[] {
         {
           base: 42,
           draw: (ctx) => {
-            px(ctx, C.woodD, 56, 30, 48, 12);
-            px(ctx, C.wood, 57, 31, 46, 3);
-            px(ctx, C.K, 62, 8, 36, 22);
-            px(ctx, d.using === "canape" && blink ? "#7a7a96" : C.screen, 64, 10, 32, 17);
-            px(ctx, "#ffffff", 66, 12, 4, 1);
-            if (Math.floor(t * 5) % 3 === 0) px(ctx, C.glass, 70, 20, 16, 1);
-            px(ctx, C.K, 78, 30, 4, 2);
+            px(ctx, C.woodD, 22, 30, 42, 12);
+            px(ctx, C.wood, 23, 31, 40, 3);
+            px(ctx, C.K, 26, 8, 34, 22);
+            px(ctx, d.using === "canape" && blink ? "#7a7a96" : C.screen, 28, 10, 30, 17);
+            px(ctx, "#ffffff", 30, 12, 4, 1);
+            if (Math.floor(t * 5) % 3 === 0) px(ctx, C.glass, 34, 20, 16, 1);
+            px(ctx, C.K, 41, 30, 4, 2);
           },
         },
         {

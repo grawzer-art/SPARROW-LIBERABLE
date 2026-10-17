@@ -50,6 +50,8 @@ export interface Room {
   id: RoomId;
   name: string;
   doors: Partial<Record<Door, RoomId>>;
+  /** Porte d'entrée de l'appartement (mène dehors, au Quartier 404). */
+  exit?: Door;
   furniture: Furniture[];
 }
 
@@ -69,8 +71,9 @@ export const ROOMS: Record<RoomId, Room> = {
     id: "salon",
     name: "Salon",
     doors: { W: "chambre", E: "cuisine", S: "gaming" },
+    exit: "N",
     furniture: [
-      { id: "tele", solid: { x1: 56, x2: 104, y1: 32, y2: 42 }, base: 42 },
+      { id: "tele", solid: { x1: 22, x2: 64, y1: 32, y2: 42 }, base: 42 },
       { id: "canape", solid: { x1: 50, x2: 110, y1: 88, y2: 102 }, base: 102 },
       { id: "lampadaire", solid: { x1: 12, x2: 22, y1: 32, y2: 46 }, base: 46 },
       { id: "plante", solid: { x1: 134, x2: 148, y1: 32, y2: 48 }, base: 48 },
@@ -158,7 +161,7 @@ function inDoorCorridor(room: Room, x: number, y: number): boolean {
   const topOk = x - HALF >= t1 && x + HALF <= t2;
   if (room.doors.W && sideOk && x - HALF < T && x - HALF >= -T) return true;
   if (room.doors.E && sideOk && x + HALF > SCREEN_W - T && x + HALF <= SCREEN_W + T) return true;
-  if (room.doors.N && topOk && y - DEPTH < WALL_H && y - DEPTH >= WALL_H - 2 * T) return true;
+  if ((room.doors.N || room.exit === "N") && topOk && y - DEPTH < WALL_H && y - DEPTH >= WALL_H - 2 * T) return true;
   if (room.doors.S && topOk && y > SCREEN_H - T && y <= SCREEN_H + T) return true;
   return false;
 }
@@ -212,6 +215,14 @@ export function doorCrossed(roomId: RoomId, p: Pos): Place | null {
   if (room.doors.S && p.y > SCREEN_H - 3) return { room: room.doors.S, x: clampX(p.x), y: WALL_H + 10 };
   return null;
 }
+
+/** A-t-il passé la porte d'entrée (vers la rue) ? */
+export function exitCrossed(roomId: RoomId, p: Pos): boolean {
+  return ROOMS[roomId].exit === "N" && p.y < WALL_H + 1;
+}
+
+/** Où il réapparaît en rentrant de la rue. */
+export const HOME_ENTRY: Place = { room: "salon", x: 80, y: WALL_H + 10 };
 
 /** Point juste au-delà d'une porte (pour la franchir en marchant). */
 export function doorExit(d: Door): { approach: Pos; exit: Pos } {
@@ -337,7 +348,9 @@ export function spotAt(room: RoomId, x: number, y: number): Spot | null {
 }
 
 export function doorAt(room: RoomId, x: number, y: number): Door | null {
-  for (const d of Object.keys(ROOMS[room].doors) as Door[]) {
+  const ds = Object.keys(ROOMS[room].doors) as Door[];
+  if (ROOMS[room].exit) ds.push(ROOMS[room].exit!);
+  for (const d of ds) {
     const b = doorBox(d);
     if (x >= b.x1 - 4 && x <= b.x2 + 4 && y >= b.y1 && y <= b.y2 + 4) return d;
   }

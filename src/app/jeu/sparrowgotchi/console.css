@@ -163,7 +163,7 @@
 .gb-screen__canvas {
   display: block;
   width: 100%;
-  aspect-ratio: 160 / 144;
+  aspect-ratio: 240 / 176;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   touch-action: manipulation;
@@ -922,4 +922,146 @@
 .gt-muscu .gt-farm__canvas {
   width: 100%;
   aspect-ratio: 160 / 144;
+}
+
+/* ─── RPG : dialogues avec nom, transitions, fin de chapitre ─── */
+
+.gb-dialog--rpg {
+  padding-top: 12px;
+}
+
+.gb-dialog__name {
+  position: absolute;
+  left: 8px;
+  top: -12px;
+  padding: 2px 8px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--paper);
+  background: #090909;
+  border: 2px solid var(--paper);
+  box-shadow: 2px 2px 0 var(--red);
+}
+
+.gb-dialog__narr {
+  font-style: italic;
+  color: #2e2a3a;
+}
+
+.gb-fade {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s steps(4, end);
+}
+
+.gb-fade.is-on {
+  opacity: 1;
+}
+
+.gb-chapter {
+  position: absolute;
+  inset: 10% 8%;
+  display: grid;
+  place-content: center;
+  gap: 6px;
+  text-align: center;
+  color: var(--paper);
+  background: rgba(9, 9, 20, 0.92);
+  border: 3px double #f2c14e;
+  box-shadow: 0 0 0 2px #090909, 0 0 30px rgba(166, 108, 255, 0.5);
+  font-size: 11px;
+  animation: gbIn 0.3s var(--ease) both;
+}
+
+.gb-chapter__kicker {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: #c9a0ff;
+}
+
+.gb-chapter__title {
+  font-family: var(--display);
+  font-size: 26px;
+  letter-spacing: 0.04em;
+  color: #f2c14e;
+}
+
+.gb-chapter em {
+  margin-top: 6px;
+  font-style: normal;
+  font-size: 9.5px;
+  color: #8a8a9a;
+  animation: blink 1s steps(2, jump-none) infinite;
+}
+
+.gb-screen--rue {
+  box-shadow: inset 0 0 0 1px #1d1a33;
+}
+
+.gb-chip {
+  padding: 0 4px;
+  font-size: 9px;
+  border: 1px solid currentColor;
+}
+
+.gb-chip--disponible { color: #6a6a6a; }
+.gb-chip--active { color: var(--red-deep); }
+.gb-chip--terminee { color: #2e6b1c; }
+
+.gb-next {
+  margin: 6px 0;
+  padding: 4px 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  background: rgba(229, 57, 53, 0.1);
+  border-left: 3px solid var(--red);
+}
+
+.gb-steps {
+  list-style: none;
+  margin: 6px 0;
+  padding: 0;
+  font-size: 11px;
+}
+
+.gb-steps li {
+  padding: 2px 0;
+  color: #4a4a4a;
+}
+
+.gb-steps li.is-done {
+  color: #2e6b1c;
+  text-decoration: line-through;
+}
+
+.gb-card.is-locked {
+  opacity: 0.6;
+  border-style: dashed;
+}
+
+.gb-item {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  font-size: 18px;
+  color: #f2c14e;
+  background: #090909;
+  border: 2px solid #090909;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gb-chapter,
+  .gb-chapter em {
+    animation: none;
+  }
+  .gb-fade {
+    transition: none;
+  }
 }

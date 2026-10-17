@@ -34,9 +34,13 @@ import {
 import { muscleStage, tierOf, titleFor, xpToNext } from "@/lib/gotchi/items";
 import { ROOMS, cachePlace, restorePlace, type Place, type RoomId, type Spot } from "@/lib/gotchi/map";
 import { MINIGAMES, type GameId } from "@/lib/gotchi/minigames";
+import { MAP_H, MAP_W, NPCS, SPAWN, isSolid, restoreTile, type Door, type Zone } from "@/lib/rpg/quartier";
+import { applyEffects, flag, status, type Effect } from "@/lib/rpg/quest";
+import { evenement, examine, talkTo, type Conversation, type Line } from "@/lib/rpg/script";
 import { load, save } from "@/lib/storage";
 import { Chiptune } from "../game/audio";
 import { Toast } from "../Overlays";
+import { OW_H, OW_W, Overworld, type OwFrame } from "../rpg/overworld";
 import { DPad, type Dir } from "./DPad";
 import { FarmGame, type FarmSummary } from "./FarmGame";
 import { MuscuGame, type MuscuSummary } from "./MuscuGame";
@@ -46,6 +50,10 @@ import { VIEW_H, VIEW_W, World, type Activity } from "./world";
 const KEY = "sp.gotchi.v1"; // même clé depuis la v1 : la progression existante est migrée, jamais effacée
 const SOUND_KEY = "sp.gotchi.sound";
 const POS_KEY = "sp.gotchi.place";
+const WHERE_KEY = "sp.gotchi.where";
+/** L'appartement (160 × 144) est centré dans l'écran du RPG (240 × 176), comme les intérieurs des RPG portables. */
+const APT_X = (OW_W - VIEW_W) / 2;
+const APT_Y = (OW_H - VIEW_H) / 2;
 
 const MOOD_LABEL: Record<Mood, string> = {
   content: "AU TOP",
@@ -72,12 +80,31 @@ interface Queued {
   notes: Note[];
 }
 
+interface Conv {
+  lines: Line[];
+  i: number;
+  effects: Effect[];
+  cutscene?: Conversation["cutscene"];
+  npc?: (typeof NPCS)[number]["id"];
+  final?: boolean;
+}
+
 const lookOf = (s: State) => ({ lunettes: s.equip.lunettes, tenue: s.equip.tenue, tete: s.equip.tete, barbe: s.level >= 6, muscle: muscleStage(s.muscle) });
+const owFrameOf = (s: State, reduced: boolean): OwFrame => ({
+  gateOpen: flag(s.rpg, "portail"),
+  questDone: status(s.rpg, "ville-figee") === "terminee",
+  inconnuGone: flag(s.rpg, "inconnu-parti"),
+  tenue: s.equip.tenue,
+  reduced,
+});
 
 export function Gotchi() {
   const canvas = useRef<HTMLCanvasElement>(null);
+  const aptCanvas = useRef<HTMLCanvasElement | null>(null);
   const stateRef = useRef<State | null>(null);
   const world = useRef<World | null>(null);
+  const ow = useRef<Overworld | null>(null);
+  const whereRef = useRef<"appart" | "quartier">("appart");
   const audio = useRef(new Chiptune());
   const queue = useRef<Queued[]>([]);
   const lastSay = useRef(0);
@@ -85,9 +112,12 @@ export function Gotchi() {
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const lineTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const bannerTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const banners = useRef<string[]>([]);
   const fileInput = useRef<HTMLInputElement>(null);
   const cacheMemo = useRef<{ seed: number | null; place: Place | null }>({ seed: -1, place: null });
   const playStats = useRef({ bumps: 0, walked: 0, rooms: new Set<string>(), manual: false, lastLine: 0, roomChanges: 0 });
+  const convRef = useRef<Conv | null>(null);
+  const doorCooldown = useRef(0);
 
   const [state, setState] = useState<State | null>(null);
   const [now, setNow] = useState(0);
@@ -99,19 +129,39 @@ export function Gotchi() {
   const [page, setPage] = useState<PageId | null>(null);
   const [game, setGame] = useState<GameId | null>(null);
   const [room, setRoom] = useState<RoomId>("salon");
+  const [where, setWhere] = useState<"appart" | "quartier">("appart");
   const [banner, setBanner] = useState<string | null>(null);
   const [legend, setLegend] = useState(false);
   const [near, setNear] = useState<Spot | "cache" | null>(null);
+  const [owHint, setOwHint] = useState<string | null>(null);
   const [run, setRun] = useState(false);
-  const uiRef = useRef({ menu, page, game });
+  const [conv, setConv] = useState<Conv | null>(null);
+  const [fade, setFade] = useState(false);
+  const [chapter, setChapter] = useState<string[] | null>(null);
+  const uiRef = useRef({ menu, page, game, conv: false });
   useEffect(() => {
-    uiRef.current = { menu, page, game };
-  }, [menu, page, game]);
+    uiRef.current = { menu, page, game, conv: !!conv };
+  }, [menu, page, game, conv]);
 
   const toast = useCallback((m: string) => {
     setToastText(m);
     clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToastText(null), 3200);
+  }, []);
+
+  /** Petites notifications dans l'écran (découvertes, objets, quêtes), l'une après l'autre. */
+  const notify = useCallback((texts: string[]) => {
+    if (!texts.length) return;
+    const showNext = () => {
+      const n = banners.current.shift();
+      if (!n) return setBanner(null);
+      setBanner(n);
+      clearTimeout(bannerTimer.current);
+      bannerTimer.current = setTimeout(showNext, 1900);
+    };
+    const idle = banners.current.length === 0;
+    banners.current.push(...texts);
+    if (idle) showNext();
   }, []);
 
   const commit = useCallback((s: State) => {
@@ -149,7 +199,7 @@ export function Gotchi() {
     navigator.vibrate?.([60, 40, 60, 40, 120]);
   }, []);
 
-  /** Joue une séquence ; la réplique arrive quand il est au bon meuble. */
+  /** Joue une séquence dans l'appart ; la réplique arrive quand il est au bon meuble. */
   const perform = useCallback(
     (q: Queued, of?: string) => {
       const show = () => {
@@ -170,6 +220,151 @@ export function Gotchi() {
     return cacheMemo.current.place;
   }, []);
 
+  /** Applique des effets de quête et annonce ce qui a changé. */
+  const rpgApply = useCallback(
+    (effects: Effect[]) => {
+      const s = stateRef.current;
+      if (!s || !effects.length) return null;
+      const r = applyEffects(s, effects, Date.now());
+      commit(r.state);
+      notify(r.notes);
+      if (r.notes.length) audio.current.coin();
+      return r;
+    },
+    [commit, notify],
+  );
+
+  // ─── Dialogues RPG (nom du personnage, texte progressif, A pour continuer) ───
+
+  const openConv = useCallback((c: Conversation, extra?: Partial<Conv>) => {
+    setLine(null);
+    const cv: Conv = { lines: c.lines, i: 0, effects: c.effects ?? [], cutscene: c.cutscene, ...extra };
+    convRef.current = cv;
+    setConv(cv);
+    setTyped(0);
+    if (ow.current) ow.current.frozen = true;
+    audio.current.jump(false);
+  }, []);
+
+  const endConv = useCallback(() => {
+    const cv = convRef.current;
+    convRef.current = null;
+    setConv(null);
+    doorCooldown.current = Date.now();
+    if (!cv) return;
+    if (cv.npc) ow.current?.talkTo(cv.npc, false);
+    const r = rpgApply(cv.effects);
+    if (cv.cutscene === "evenement") {
+      // Scène finale : la station s'emballe, l'inconnu apparaît, puis le dialogue.
+      const o = ow.current;
+      if (o) {
+        o.frozen = true;
+        o.quake(reduced.current);
+      }
+      audio.current.hit();
+      navigator.vibrate?.([80, 60, 80, 60, 160]);
+      setTimeout(() => openConv(evenement(), { final: true }), reduced.current ? 200 : 1400);
+      return;
+    }
+    if (cv.final && r?.completed) {
+      ow.current?.flashWhite();
+      flashLegend();
+      setChapter([`CHAPITRE ${r.completed.chapter} TERMINÉ`, r.completed.name.toUpperCase(), `+${r.completed.reward.xp} XP · +${r.completed.reward.coins} FP`, "Objet : Fragment d'horloge n°1", "La barrière du Centre-ville s'est levée…"]);
+    }
+    if (ow.current) ow.current.frozen = false;
+  }, [flashLegend, openConv, rpgApply]);
+
+  const advanceConv = useCallback(() => {
+    const cv = convRef.current;
+    if (!cv) return;
+    const cur = cv.lines[cv.i];
+    if (typedRef.current < cur.text.length) {
+      setTyped(cur.text.length);
+      return;
+    }
+    if (cv.i + 1 < cv.lines.length) {
+      const next = { ...cv, i: cv.i + 1 };
+      convRef.current = next;
+      setConv(next);
+      setTyped(0);
+      audio.current.jump(false);
+    } else endConv();
+  }, [endConv]);
+  const typedRef = useRef(0);
+  useEffect(() => {
+    typedRef.current = typed;
+  }, [typed]);
+
+  // ─── Passer de l'appart à la rue et inversement ───
+
+  const transition = useCallback((fn: () => void) => {
+    if (reduced.current) return fn();
+    setFade(true);
+    setTimeout(() => {
+      fn();
+      setTimeout(() => setFade(false), 60);
+    }, 260);
+  }, []);
+
+  const goOutside = useCallback(() => {
+    transition(() => {
+      whereRef.current = "quartier";
+      setWhere("quartier");
+      ow.current ??= new Overworld();
+      ow.current.place(SPAWN);
+      ow.current.frozen = false;
+      save(WHERE_KEY, { map: "quartier", ...SPAWN });
+      const s = stateRef.current;
+      notify(["Quartier 404"]);
+      if (s && !s.rpg.done.includes("ville-figee:sortir")) {
+        setTimeout(() => {
+          openConv({
+            lines: [
+              { who: "Sparrow", text: "Il fait nuit noire. Les lampadaires grésillent. Et cette horloge, là-bas… 23:59, encore." },
+              { who: "Sparrow", text: "Bon. Si tout le quartier est en panne, quelqu'un doit bien savoir quelque chose. Allons poser des questions." },
+            ],
+            effects: [{ kind: "step", quest: "ville-figee", step: "sortir" }],
+          });
+        }, 500);
+      }
+    });
+  }, [notify, openConv, transition]);
+
+  const goHome = useCallback(() => {
+    transition(() => {
+      whereRef.current = "appart";
+      setWhere("appart");
+      world.current?.comeHome();
+      save(WHERE_KEY, { map: "appart" });
+      notify(["Appartement de Sparrow"]);
+    });
+  }, [notify, transition]);
+
+  const onDoor = useCallback(
+    (d: Door) => {
+      if (convRef.current || Date.now() - doorCooldown.current < 1200) return;
+      if (d.to === "appart") goHome();
+      else if (d.text) openConv({ lines: [{ who: "", text: d.text }] });
+    },
+    [goHome, openConv],
+  );
+
+  const onZone = useCallback(
+    (z: Zone) => {
+      const s = stateRef.current;
+      if (!s) return;
+      const eff: Effect[] = [];
+      if (!s.rpg.seen.includes(z.id)) {
+        eff.push({ kind: "seen", id: z.id });
+        notify([`Lieu découvert : ${z.name}`]);
+      }
+      if (z.id === "place") eff.push({ kind: "step", quest: "ville-figee", step: "explorer" });
+      if (z.id === "station") eff.push({ kind: "step", quest: "ville-figee", step: "station" });
+      if (eff.length) rpgApply(eff);
+    },
+    [notify, rpgApply],
+  );
+
   // Chargement + rattrapage du temps passé
   useEffect(() => {
     reduced.current = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
@@ -177,18 +372,31 @@ export function Gotchi() {
     world.current = new World(place);
     setRoom(place.room);
     playStats.current.rooms.add(place.room);
+    aptCanvas.current = Object.assign(document.createElement("canvas"), { width: VIEW_W, height: VIEW_H });
     const t = Date.now();
     const raw = load<unknown>(KEY, null);
     const before = raw ? restore(raw, t) : newState(t);
     const back = raw ? catchUp(before, t) : null;
     let after = back ? back.state : ensureMissions(tick(before, t), t);
-    if (!raw) say("Salut. Je suis Sparrow. Bienvenue dans mon appart. Croix pour marcher, A pour agir, START pour le menu. Et tu me dois des frites.");
+    // Reprise : dehors ou dans l'appart
+    const wh = load<{ map?: string } | null>(WHERE_KEY, null);
+    const outside = wh?.map === "quartier" ? restoreTile(wh) : null;
+    if (outside) {
+      ow.current = new Overworld(outside);
+      whereRef.current = "quartier";
+      setWhere("quartier");
+    }
+    const questFresh = status(after.rpg, "ville-figee") === "disponible";
+    if (!raw)
+      say("Salut. Je suis Sparrow. Bienvenue dans mon appart. Croix pour marcher, A pour agir, START pour le menu. Et… attends, pourquoi toutes les horloges affichent 23:59 ?");
     else if (back) {
       say(back.welcome);
       for (const e of back.events) queue.current.push({ line: e.line, anim: e.anim, scene: e.scene, rarity: e.rarity, notes: e.notes });
+    } else if (questFresh && !outside) {
+      say("Panne de courant… Toutes les horloges de l'appart affichent 23:59. Bizarre. Je devrais aller voir dehors : la porte d'entrée est en haut du salon.");
     } else {
       const ev = randomEvent(after, t);
-      if (ev && ev.anim !== "parler") {
+      if (ev && ev.anim !== "parler" && !outside) {
         after = ev.state;
         queue.current.push({ line: ev.line, anim: ev.anim, scene: ev.scene, rarity: ev.rarity, notes: ev.notes });
       }
@@ -199,6 +407,19 @@ export function Gotchi() {
     const snd = load<boolean>(SOUND_KEY, false);
     setSound(snd);
     audio.current.enabled = snd;
+    // Petit accès de test (?debug) pour les essais automatisés : lecture seule.
+    if (new URLSearchParams(location.search).has("debug"))
+      Object.assign(window, {
+        __rpg: {
+          where: () => whereRef.current,
+          tile: () => (ow.current ? { x: ow.current.x, y: ow.current.y, dir: ow.current.dir, moving: ow.current.moving, frozen: ow.current.frozen } : null),
+          solid: (x: number, y: number) => isSolid({ x, y }, { gateOpen: flag(stateRef.current!.rpg, "portail") }),
+          npcs: () => ow.current?.npcTiles() ?? [],
+          conv: () => (convRef.current ? convRef.current.lines[convRef.current.i] : null),
+          size: [MAP_W, MAP_H],
+          overview: () => (ow.current ??= new Overworld()).overview(),
+        },
+      });
   }, [commit, say]);
 
   // Le temps passe ; événements aléatoires ; répliques selon ce que fait le joueur
@@ -215,9 +436,14 @@ export function Gotchi() {
         say(back.welcome);
         for (const e of back.events) queue.current.push({ line: e.line, anim: e.anim, scene: e.scene, rarity: e.rarity, notes: e.notes });
       } else commit(ensureMissions(tick(s, t), t));
+      const o = ow.current;
+      if (whereRef.current === "quartier" && o) {
+        if (!o.moving) save(WHERE_KEY, { map: "quartier", x: o.x, y: o.y, dir: o.dir });
+        return; // dehors : pas de vie autonome dans l'appart
+      }
       save(POS_KEY, w.place);
       const ui = uiRef.current;
-      const free = ui.menu === null && !ui.page && !ui.game;
+      const free = ui.menu === null && !ui.page && !ui.game && !ui.conv;
       if (free && queue.current.length && !w.busy && !w.manual && t - lastSay.current > 4500) perform(queue.current.shift()!);
       const ps = playStats.current;
       let kind: PlayLine | "room" | null = null;
@@ -237,7 +463,7 @@ export function Gotchi() {
     const ev = setInterval(() => {
       const s = stateRef.current;
       const w = world.current;
-      if (!s || !w || document.visibilityState !== "visible" || w.busy || w.manual || queue.current.length || uiRef.current.game) return;
+      if (!s || !w || whereRef.current !== "appart" || document.visibilityState !== "visible" || w.busy || w.manual || queue.current.length || uiRef.current.game) return;
       const r = randomEvent(s, Date.now());
       if (r) {
         commit(r.state);
@@ -250,6 +476,8 @@ export function Gotchi() {
       if (s && document.visibilityState === "hidden") {
         save(KEY, tick(s, Date.now()));
         if (world.current) save(POS_KEY, world.current.place);
+        const o = ow.current;
+        if (whereRef.current === "quartier" && o) save(WHERE_KEY, { map: "quartier", x: o.x, y: o.y, dir: o.dir });
       }
     };
     document.addEventListener("visibilitychange", onVis);
@@ -260,32 +488,54 @@ export function Gotchi() {
     };
   }, [commit, perform, say]);
 
-  // Objet à portée + changement de pièce (bandeau)
+  // Objet à portée, sortie de l'appart, bandeau de pièce
   useEffect(() => {
     const id = setInterval(() => {
       const w = world.current;
       const s = stateRef.current;
       if (!w || !s) return;
+      const o = ow.current;
+      if (whereRef.current === "quartier" && o) {
+        o.onDoor = onDoor;
+        o.onZone = onZone;
+        const f = o.facing(owFrameOf(s, reduced.current));
+        const hint =
+          f?.kind === "npc"
+            ? `Parler à ${NPCS.find((n) => n.id === f.id)!.id === "inconnu" ? "l'inconnu" : NPCS.find((n) => n.id === f.id)!.name}`
+            : f?.kind === "door"
+              ? f.door.to
+                ? "Rentrer chez soi"
+                : "Frapper à la porte"
+              : f?.kind === "thing"
+                ? "Examiner"
+                : null;
+        setOwHint((p) => (p === hint ? p : hint));
+        return;
+      }
+      if (w.exited) {
+        w.exited = false;
+        goOutside();
+        return;
+      }
       const n: Spot | "cache" | null = w.nearCache(cacheOf(s, Date.now())) ? "cache" : w.near();
       setNear((p) => (p === n ? p : n));
       const ps = playStats.current;
       if (w.roomChanges !== ps.roomChanges) {
         ps.roomChanges = w.roomChanges;
         setRoom(w.room);
-        setBanner(ROOMS[w.room].name);
-        clearTimeout(bannerTimer.current);
-        bannerTimer.current = setTimeout(() => setBanner(null), 1500);
+        notify([ROOMS[w.room].name]);
       }
     }, 120);
     return () => clearInterval(id);
-  }, [cacheOf]);
+  }, [cacheOf, goOutside, notify, onDoor, onZone]);
 
-  // Effet machine à écrire
+  // Effet machine à écrire (répliques et dialogues)
+  const shownText = conv ? conv.lines[conv.i].text : line;
   useEffect(() => {
-    if (!line || typed >= line.length) return;
+    if (!shownText || typed >= shownText.length) return;
     const id = setTimeout(() => setTyped((n) => n + 2), 22);
     return () => clearTimeout(id);
-  }, [line, typed]);
+  }, [shownText, typed]);
 
   // Rendu du monde
   useEffect(() => {
@@ -296,31 +546,46 @@ export function Gotchi() {
     const frame = (n: number) => {
       const s = stateRef.current;
       const w = world.current;
+      const dt = (n - last) / 1000;
+      last = n;
       if (s && w) {
         const t = Date.now();
-        w.draw(
-          ctx,
-          {
-            mood: moodOf(s, t),
-            look: lookOf(s),
-            deco: s.equip.deco,
-            tiers: { pc: tierOf(s.owned, "pc"), lit: tierOf(s.owned, "lit"), sport: tierOf(s.owned, "sport"), canape: tierOf(s.owned, "canape") },
-            pcBroken: s.pcBrokenUntil > t,
-            hour: parisHour(t),
-            cache: cacheOf(s, t),
-            reduced: reduced.current,
-          },
-          (n - last) / 1000,
-        );
+        if (whereRef.current === "quartier") {
+          ow.current ??= new Overworld();
+          ow.current.draw(ctx, owFrameOf(s, reduced.current), dt);
+        } else {
+          const actx = aptCanvas.current?.getContext("2d");
+          if (actx) {
+            w.draw(
+              actx,
+              {
+                mood: moodOf(s, t),
+                look: lookOf(s),
+                deco: s.equip.deco,
+                tiers: { pc: tierOf(s.owned, "pc"), lit: tierOf(s.owned, "lit"), sport: tierOf(s.owned, "sport"), canape: tierOf(s.owned, "canape") },
+                pcBroken: s.pcBrokenUntil > t,
+                hour: parisHour(t),
+                cache: cacheOf(s, t),
+                reduced: reduced.current,
+              },
+              dt,
+            );
+            ctx.imageSmoothingEnabled = false;
+            ctx.fillStyle = "#06060a";
+            ctx.fillRect(0, 0, OW_W, OW_H);
+            ctx.fillStyle = "#14121c";
+            ctx.fillRect(APT_X - 3, APT_Y - 3, VIEW_W + 6, VIEW_H + 6);
+            ctx.drawImage(aptCanvas.current!, APT_X, APT_Y);
+          }
+        }
       }
-      last = n;
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
   }, [cacheOf]);
 
-  // ─── Actions ───
+  // ─── Actions de l'appartement ───
 
   const openGame = useCallback(
     (g: GameId) => {
@@ -330,6 +595,10 @@ export function Gotchi() {
       if (!s || !w || !def?.ready) return;
       setMenu(null);
       setPage(null);
+      if (whereRef.current === "quartier") {
+        toast(g === "farm" ? "Le PC est à l'appart. Rentre par la porte de la Résidence Les Lilas !" : "Le banc de muscu est à l'appart. Rentre chez toi pour t'entraîner.");
+        return;
+      }
       if (g === "farm" && !canFarm(s, Date.now())) {
         w.goTo("pc", () => say("Le PC est en panne. Je le fixe du regard, ça va le réparer."), reduced.current);
         toast(`PC en panne. Réparation dans ${Math.ceil((s.pcBrokenUntil - Date.now()) / 60_000)} min.`);
@@ -406,6 +675,20 @@ export function Gotchi() {
     }
   };
 
+  /** A dehors : parler, examiner, entrer. */
+  const interactOutside = () => {
+    const o = ow.current;
+    const s = stateRef.current;
+    if (!o || !s || o.moving) return;
+    const f = o.facing(owFrameOf(s, reduced.current));
+    if (!f) return;
+    if (f.kind === "npc") {
+      o.talkTo(f.id, true);
+      openConv(talkTo(f.id, s.rpg), { npc: f.id });
+    } else if (f.kind === "door") onDoor(f.door);
+    else openConv(examine(f.thing.id, s.rpg, f.thing.text));
+  };
+
   const openPage = (p: PageId) => {
     setMenu(null);
     setPage(p);
@@ -413,10 +696,12 @@ export function Gotchi() {
   };
 
   const pressA = () => {
-    if (page) return;
+    if (page || chapter) return chapter ? setChapter(null) : undefined;
+    if (convRef.current) return advanceConv();
     if (menu !== null) return openPage(MENU[menu].id);
     if (line && typed < line.length) return setTyped(line.length);
     if (line) setLine(null);
+    if (whereRef.current === "quartier") return interactOutside();
     if (near === "cache") {
       world.current?.goTo(cacheOf(stateRef.current!, Date.now())!, collect, true);
     } else if (near) interact(near);
@@ -424,6 +709,8 @@ export function Gotchi() {
   };
 
   const pressB = () => {
+    if (chapter) return setChapter(null);
+    if (convRef.current) return advanceConv();
     if (page) return setPage(null);
     if (menu !== null) return setMenu(null);
     if (line) setLine(null);
@@ -431,6 +718,7 @@ export function Gotchi() {
   };
 
   const toggleMenu = () => {
+    if (convRef.current || chapter) return;
     if (page) return setPage(null);
     setMenu((m) => (m === null ? 0 : null));
     audio.current.jump(false);
@@ -447,15 +735,26 @@ export function Gotchi() {
     });
   };
 
+  const setInput = (x: number, y: number) => {
+    const blocked = menu !== null || !!page || !!convRef.current;
+    const v = blocked ? { x: 0, y: 0 } : { x, y };
+    if (whereRef.current === "quartier") {
+      if (ow.current) ow.current.input = v;
+    } else if (world.current) world.current.input = v;
+  };
+
   const onCanvas = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const s = stateRef.current;
     const w = world.current;
     if (!s || !w) return;
+    if (convRef.current) return advanceConv();
     if (menu !== null) return setMenu(null);
     if (line) setLine(null);
+    if (whereRef.current === "quartier") return; // dehors : on explore à la croix
     const rect = e.currentTarget.getBoundingClientRect();
-    const px = ((e.clientX - rect.left) / rect.width) * VIEW_W;
-    const py = ((e.clientY - rect.top) / rect.height) * VIEW_H;
+    const px = ((e.clientX - rect.left) / rect.width) * OW_W - APT_X;
+    const py = ((e.clientY - rect.top) / rect.height) * OW_H - APT_Y;
+    if (px < 0 || py < 0 || px > VIEW_W || py > VIEW_H) return;
     const cache = cacheOf(s, Date.now());
     const h = w.hit(px, py, cache);
     if (h.kind === "cache" && cache) w.goTo(cache, collect, reduced.current);
@@ -508,24 +807,21 @@ export function Gotchi() {
   };
 
   // Clavier (ordinateur) : flèches / ZQSD, Entrée = A, Échap = B, M = START, Maj = courir
-  const keyRef = useRef({ pressA, pressB, toggleMenu, step });
+  const keyRef = useRef({ pressA, pressB, toggleMenu, step, setInput });
   useEffect(() => {
-    keyRef.current = { pressA, pressB, toggleMenu, step };
+    keyRef.current = { pressA, pressB, toggleMenu, step, setInput };
   });
   useEffect(() => {
     const keys = new Set<string>();
     const sync = () => {
-      const w = world.current;
-      if (!w) return;
       const has = (...k: string[]) => k.some((x) => keys.has(x));
-      const blocked = uiRef.current.menu !== null || !!uiRef.current.page;
-      w.input = blocked
-        ? { x: 0, y: 0 }
-        : {
-            x: (has("arrowright", "d") ? 1 : 0) - (has("arrowleft", "q", "a") ? 1 : 0),
-            y: (has("arrowdown", "s") ? 1 : 0) - (has("arrowup", "z", "w") ? 1 : 0),
-          };
-      w.run = keys.has("shift");
+      keyRef.current.setInput(
+        (has("arrowright", "d") ? 1 : 0) - (has("arrowleft", "q", "a") ? 1 : 0),
+        (has("arrowdown", "s") ? 1 : 0) - (has("arrowup", "z", "w") ? 1 : 0),
+      );
+      const r = keys.has("shift");
+      if (world.current) world.current.run = r;
+      if (ow.current) ow.current.run = r;
     };
     const dirOf: Record<string, Dir> = { arrowup: "up", z: "up", w: "up", arrowdown: "down", s: "down", arrowleft: "left", q: "left", a: "left", arrowright: "right", d: "right" };
     const down = (e: KeyboardEvent) => {
@@ -540,7 +836,7 @@ export function Gotchi() {
         keys.add(k);
         sync();
       } else if (k === "enter" || k === " ") {
-        keyRef.current.pressA();
+        if (!e.repeat) keyRef.current.pressA();
         e.preventDefault();
       } else if (k === "escape" || k === "backspace") {
         keyRef.current.pressB();
@@ -634,9 +930,10 @@ export function Gotchi() {
   };
 
   const reset = () => {
-    if (!window.confirm("Adopter un nouveau Sparrow ? Niveau, objets, muscles et trophées seront perdus. (Exporte d'abord ta sauvegarde !)")) return;
+    if (!window.confirm("Adopter un nouveau Sparrow ? Niveau, objets, muscles, quêtes et trophées seront perdus. (Exporte d'abord ta sauvegarde !)")) return;
     commit(ensureMissions(newState(Date.now()), Date.now()));
     setPage(null);
+    if (whereRef.current === "quartier") goHome();
     say("Nouveau Sparrow, mêmes exigences. Frites, s'il te plaît.");
   };
 
@@ -651,13 +948,29 @@ export function Gotchi() {
   const setRunning = (v: boolean) => {
     setRun(v);
     if (world.current) world.current.run = v;
+    if (ow.current) ow.current.run = v;
   };
 
   const t = now || Date.now();
   const m = state ? moodOf(state, t) : "neutre";
   const toClaim = state ? claimable(state) : 0;
   const need = state ? xpToNext(state.level) : 1;
-  const hint = menu !== null ? "Ouvrir" : near === "cache" ? "Ramasser l'objet caché" : near ? near.label : line ? "Suite" : "Parler";
+  const outside = where === "quartier";
+  const hint = conv
+    ? "Suite"
+    : menu !== null
+      ? "Ouvrir"
+      : outside
+        ? (owHint ?? "—")
+        : near === "cache"
+          ? "Ramasser l'objet caché"
+          : near
+            ? near.label
+            : line
+              ? "Suite"
+              : "Parler";
+  const ready = conv ? true : outside ? !!owHint : !!near;
+  const cur = conv ? conv.lines[conv.i] : null;
 
   return (
     <div className={`gb-wrap${legend ? " is-legend" : ""}`}>
@@ -674,7 +987,7 @@ export function Gotchi() {
           <div className="gb-bezel__top mono">
             <span className="gb-led" aria-hidden="true" />
             <span>SPARROW·BOY</span>
-            <span className="gb-bezel__mood">{MOOD_LABEL[m]}</span>
+            <span className="gb-bezel__mood">{outside ? "QUARTIER 404" : MOOD_LABEL[m]}</span>
           </div>
 
           {state && (
@@ -699,17 +1012,22 @@ export function Gotchi() {
             </div>
           )}
 
-          <div className={`gb-screen gb-screen--${m}`}>
+          <div className={`gb-screen gb-screen--${outside ? "rue" : m}`}>
             <canvas
               ref={canvas}
-              width={VIEW_W}
-              height={VIEW_H}
+              width={OW_W}
+              height={OW_H}
               className="gb-screen__canvas"
               onPointerDown={onCanvas}
               role="img"
-              aria-label="L'appartement de Sparrow. Touche un objet ou un endroit pour qu'il y aille."
+              aria-label={outside ? "Le Quartier 404, de nuit. Croix pour marcher, A pour parler ou examiner." : "L'appartement de Sparrow. Touche un objet ou un endroit pour qu'il y aille."}
             />
-            {banner && <span className="gb-banner mono">{banner}</span>}
+            <div className={`gb-fade${fade ? " is-on" : ""}`} aria-hidden="true" />
+            {banner && (
+              <span key={banner} className="gb-banner mono">
+                {banner}
+              </span>
+            )}
             {menu !== null && (
               <nav className="gb-menu mono" aria-label="Menu">
                 <p className="gb-menu__title">MENU</p>
@@ -724,7 +1042,19 @@ export function Gotchi() {
                 </div>
               </nav>
             )}
-            {line && menu === null && (
+            {cur && (
+              <button type="button" className="gb-dialog gb-dialog--rpg mono" onClick={advanceConv} aria-live="polite">
+                {cur.who && <span className="gb-dialog__name">{cur.who}</span>}
+                <span className={cur.who ? "" : "gb-dialog__narr"}>{cur.text.slice(0, typed)}</span>
+                <span className="sr-only">{cur.text}</span>
+                {typed >= cur.text.length && (
+                  <i className="gb-dialog__next" aria-hidden="true">
+                    ▼
+                  </i>
+                )}
+              </button>
+            )}
+            {!cur && line && menu === null && (
               <button type="button" className="gb-dialog mono" onClick={() => (typed < line.length ? setTyped(line.length) : setLine(null))} aria-live="polite">
                 <span>{line.slice(0, typed)}</span>
                 <span className="sr-only">{line}</span>
@@ -735,20 +1065,25 @@ export function Gotchi() {
                 )}
               </button>
             )}
+            {chapter && (
+              <button type="button" className="gb-chapter mono" onClick={() => setChapter(null)}>
+                {chapter.map((l, i) => (
+                  <span key={l} className={i === 0 ? "gb-chapter__kicker" : i === 1 ? "gb-chapter__title" : ""}>
+                    {l}
+                  </span>
+                ))}
+                <em>A : continuer</em>
+              </button>
+            )}
           </div>
 
-          <p className={`gb-hint mono${near ? " is-ready" : ""}`} aria-live="polite">
+          <p className={`gb-hint mono${ready ? " is-ready" : ""}`} aria-live="polite">
             <b>A</b> {hint}
           </p>
         </div>
 
         <div className="gb-controls">
-          <DPad
-            onMove={(x, y) => {
-              if (world.current) world.current.input = menu === null && !page ? { x, y } : { x: 0, y: 0 };
-            }}
-            onStep={step}
-          />
+          <DPad onMove={setInput} onStep={step} />
           <div className="gb-ab">
             <button
               type="button"
@@ -762,12 +1097,12 @@ export function Gotchi() {
             >
               B
             </button>
-            <button type="button" className={`gb-key gb-key--a${near ? " is-ready" : ""}`} onClick={pressA} aria-label={`A : ${hint}`}>
+            <button type="button" className={`gb-key gb-key--a${ready ? " is-ready" : ""}`} onClick={pressA} aria-label={`A : ${hint}`}>
               A
             </button>
           </div>
           <div className="gb-startsel mono">
-            <button type="button" onClick={() => openPage("jeux")} aria-label="SELECT : mini-jeux">
+            <button type="button" onClick={() => !conv && openPage("jeux")} aria-label="SELECT : mini-jeux">
               <i />
               SELECT
             </button>
@@ -789,9 +1124,9 @@ export function Gotchi() {
             now={t}
             sound={sound}
             room={room}
+            outside={outside}
             onClose={() => setPage(null)}
             h={{
-              doAction: (a) => doAction(a),
               playGame: openGame,
               claim: doClaim,
               buy: doBuy,
