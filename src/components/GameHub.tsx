@@ -45,20 +45,6 @@ export function GameHub() {
           <p className="mono hub__lead">Deux façons de tuer le temps jusqu&apos;en 2031. Aucune ne le fera passer plus vite.</p>
         </header>
 
-        <a href="/jeu/evasion" className="hub-card hub-card--evasion">
-          <div className="hub-card__art" aria-hidden="true">
-            <SpritePreview skin="lunettes" scale={4} />
-            <SpritePreview skin="lili" scale={4} />
-          </div>
-          <div className="hub-card__txt">
-            <span className="mono hub-card__tag">JEU 01 · COURSE RÉTRO</span>
-            <h2 className="hub-card__title">L&apos;Évasion de Sparrow</h2>
-            <p className="mono hub-card__desc">Saute les calendriers, esquive les lundis, Lili à tes trousses. Classement des potes.</p>
-            <span className="mono hub-card__meta">{best > 0 ? `TON RECORD : ${best.toLocaleString("fr-FR")} JOURS` : "AUCUN RECORD POUR L'INSTANT"}</span>
-          </div>
-          <span className="btn btn--primary hub-card__cta">▶ Jouer</span>
-        </a>
-
         <a href="/jeu/sparrowgotchi" className="hub-card hub-card--gotchi hub-card--cover" aria-labelledby="hub-rpg-title">
           <span className="hub-card__new mono">NOUVEAU</span>
           {/* Jaquette officielle : le titre est déjà dessiné dessus (titre HTML accessible juste en dessous) */}
@@ -67,12 +53,26 @@ export function GameHub() {
             <img src="/jeu/sparrow-2359.jpg" width={1086} height={1448} alt="Jaquette de SPARROW : 23:59 — Sparrow, barbe rousse, devant la grande horloge figée à minuit, sous un ciel rouge." decoding="async" />
           </picture>
           <div className="hub-card__txt">
-            <span className="mono hub-card__tag">JEU 02 · RPG RÉTRO</span>
+            <span className="mono hub-card__tag">JEU 01 · RPG RÉTRO</span>
             <h2 id="hub-rpg-title" className="sr-only">
               SPARROW : 23:59
             </h2>
             <p className="hub-card__hook">Tout est figé à 23:59. Sauf l&apos;aventure.</p>
             <p className="mono hub-card__desc">Explore la ville, recrute des compagnons, affronte des monstres et perce le mystère de minuit.</p>
+          </div>
+          <span className="btn btn--primary hub-card__cta">▶ Jouer</span>
+        </a>
+
+        <a href="/jeu/evasion" className="hub-card hub-card--evasion">
+          <div className="hub-card__art" aria-hidden="true">
+            <SpritePreview skin="lunettes" scale={4} />
+            <SpritePreview skin="lili" scale={4} />
+          </div>
+          <div className="hub-card__txt">
+            <span className="mono hub-card__tag">JEU 02 · COURSE RÉTRO</span>
+            <h2 className="hub-card__title">L&apos;Évasion de Sparrow</h2>
+            <p className="mono hub-card__desc">Saute les calendriers, esquive les lundis, Lili à tes trousses. Classement des potes.</p>
+            <span className="mono hub-card__meta">{best > 0 ? `TON RECORD : ${best.toLocaleString("fr-FR")} JOURS` : "AUCUN RECORD POUR L'INSTANT"}</span>
           </div>
           <span className="btn btn--primary hub-card__cta">▶ Jouer</span>
         </a>
