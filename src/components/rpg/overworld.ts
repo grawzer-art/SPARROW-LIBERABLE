@@ -31,6 +31,7 @@ import type { Rpg } from "@/lib/rpg/state";
 import { charSprite, type Dir, type Frame } from "./actors";
 import { lightSprite, pixelText, textWidth } from "./pixel";
 import { LIVE_KINDS, drawLive, drawMuck } from "./tiles2";
+import { remasterLive, remasterTop } from "./remaster404";
 import { buildLayers, drawBarrier, drawClockFace, drawCore, drawFountainWater, drawGate, drawWater, propOf, type Layers, type Light } from "./tiles";
 
 export const OW_W = 240;
@@ -83,6 +84,35 @@ const facingTo = (from: Tile, to: Tile): Facing => {
   const dy = to.y - from.y;
   return Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "down" : "up";
 };
+
+/** Halo de lumière chaude, en anneaux tramés en damier (pixel art, sans flou). Calculé une fois par taille. */
+const POOLS = new Map<string, HTMLCanvasElement>();
+function warmPool(ctx: CanvasRenderingContext2D, lx: number, ly: number, R: number, color: string) {
+  const key = `${R}:${color}`;
+  let c = POOLS.get(key);
+  if (!c) {
+    c = document.createElement("canvas");
+    c.width = c.height = R * 2;
+    const g = c.getContext("2d")!;
+    const img = g.createImageData(R * 2, R * 2);
+    const [r0, g0, b0] = [1, 3, 5].map((i) => parseInt(color.slice(i, i + 2), 16));
+    for (let y = 0; y < R * 2; y++)
+      for (let x = 0; x < R * 2; x++) {
+        const d = Math.hypot(x - R + 0.5, y - R + 0.5) / R;
+        const chk = (x + y) % 2 === 0;
+        const a = d < 0.38 ? 0.13 : d < 0.6 ? (chk ? 0.12 : 0.06) : d < 0.82 ? (chk ? 0.07 : 0) : 0;
+        const i = (y * R * 2 + x) * 4;
+        img.data[i] = r0;
+        img.data[i + 1] = g0;
+        img.data[i + 2] = b0;
+        img.data[i + 3] = Math.round(a * 255);
+      }
+    g.putImageData(img, 0, 0);
+    POOLS.set(key, c);
+  }
+  ctx.globalAlpha = 1;
+  ctx.drawImage(c, Math.round(lx - R), Math.round(ly - R));
+}
 
 /** Voile d'ambiance selon la région (la nuit est la plus sombre). */
 const AMBIANCE: Record<MapDef["region"], { veil: string; me: number } | null> = {
@@ -578,6 +608,7 @@ export class Overworld {
     for (const p of propOf(this.map, "transfo")) drawCore(ctx, p, this.t, ox, oy, calm);
     if (this.map.region === "egout") drawMuck(ctx, this.map, this.t, ox, oy);
     for (const p of this.live) if (shown(p, r)) drawLive(ctx, p, isOpen(p, r) || !!p.on?.(r), this.t, ox, oy);
+    remasterLive(ctx, this.map, this.t, ox, oy, this.vw, this.vh, f.reduced);
 
     // Personnages triés par profondeur
     const actors: { y: number; draw: () => void }[] = [];
@@ -626,6 +657,7 @@ export class Overworld {
       const frozen = (this.map.id === "quartier" && !calm) || (this.map.id === "tour-sommet" && f.rpg.quests.minuit !== "terminee");
       drawClockFace(ctx, p, p.text ?? (frozen ? "23:59" : "00:00"), this.t, ox, oy, frozen);
     }
+    remasterTop(ctx, this.map, this.t, ox, oy, f.reduced);
 
     // Ambiance + lumières
     this.drawLight(ctx, f, ox, oy, me);
@@ -729,6 +761,12 @@ export class Overworld {
       const lx = L.x - ox;
       const ly = L.y - oy;
       if (lx < -L.r || ly < -L.r || lx > this.vw + L.r || ly > this.vh + L.r) continue;
+      // Quartier 404 (remaster) : halos des lampadaires un peu plus chauds
+      if (this.map.id === "quartier" && L.color !== "#a66cff") {
+        // Remaster : halo chaud en anneaux tramés (pixel art, sans flou)
+        warmPool(ctx, lx, ly, L.r, L.color === "#ffd98a" ? "#ffc46a" : L.color);
+        continue;
+      }
       ctx.globalAlpha = L.color === "#a66cff" ? 0.22 : 0.1;
       ctx.fillStyle = L.color;
       const r = Math.round(L.r * 0.55);
