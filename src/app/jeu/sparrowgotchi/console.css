@@ -1735,3 +1735,344 @@
 .bt-type--feu { background: #c8462a; }
 .bt-type--force { background: #a8742a; }
 .bt-type--temps { background: #2a8a8a; }
+
+/* ════════════ Aventure en paysage immersif (iPhone) ════════════
+   Le monde occupe tout l'écran ; la croix, A/B et START/SELECT flottent par-dessus,
+   discrets (opacité réglable, 30 % par défaut) mais avec des zones tactiles larges. */
+
+.gb-wrap--immersive {
+  --side: clamp(118px, 21vw, 200px);
+  position: fixed;
+  inset: 0;
+  z-index: 60; /* au-dessus de la barre de navigation de l'application */
+  height: 100dvh;
+  background: #000;
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+.gb-wrap--immersive .gb {
+  max-width: none;
+  height: 100%;
+  padding: 0;
+}
+
+.gb-wrap--immersive .gb-top,
+.gb-wrap--immersive .gb-pill {
+  display: none;
+}
+
+.gb-wrap--immersive .gb-screen {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* Bandeaux et textes : dans la zone sûre (encoche, coins arrondis) */
+.gb-wrap--immersive .gb-banner {
+  top: calc(env(safe-area-inset-top) + 8px);
+  left: calc(env(safe-area-inset-left) + 10px);
+}
+
+/* Dialogues, choix et menus : entre la croix et les boutons, jamais dessous */
+.gb-wrap--immersive .gb-dialog {
+  left: var(--side);
+  right: var(--side);
+  /* au-dessus de START / SELECT */
+  bottom: calc(env(safe-area-inset-bottom) + 34px);
+}
+
+.gb-wrap--immersive .gb-choices {
+  right: var(--side);
+  bottom: calc(env(safe-area-inset-bottom) + 3.6em + 58px);
+  max-width: calc(100% - 2 * var(--side));
+}
+
+.gb-wrap--immersive .gb-menu {
+  inset: calc(env(safe-area-inset-top) + 8px) var(--side) auto var(--side);
+}
+
+/* Commandes : calque transparent par-dessus le monde */
+.gb-wrap--immersive .gb-controls {
+  --dp: clamp(120px, 34vh, 168px);
+  --key: clamp(56px, 17vh, 78px);
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  height: auto;
+  padding: 0;
+  pointer-events: none;
+}
+
+.gb-wrap--immersive .gb-dpad,
+.gb-wrap--immersive .gb-ab,
+.gb-wrap--immersive .gb-startsel {
+  position: absolute;
+  pointer-events: auto;
+}
+
+.gb-wrap--immersive .gb-dpad {
+  left: calc(max(env(safe-area-inset-left), 10px) + 6px);
+  bottom: calc(env(safe-area-inset-bottom) + 14px);
+}
+
+/* A et B : en diagonale, comme sur une console portable */
+.gb-wrap--immersive .gb-ab {
+  right: calc(max(env(safe-area-inset-right), 10px) + 6px);
+  bottom: calc(env(safe-area-inset-bottom) + 14px);
+  width: calc(var(--key) * 2 + 14px);
+  height: calc(var(--key) * 1.8);
+}
+
+.gb-wrap--immersive .gb-startsel {
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 4px);
+  gap: 14px;
+}
+
+/* L'opacité ne touche que l'apparence : les zones tactiles restent entières */
+.gb-wrap--immersive .gb-dpad__v,
+.gb-wrap--immersive .gb-dpad__h,
+.gb-wrap--immersive .gb-dpad__arm,
+.gb-wrap--immersive .gb-dpad__hub,
+.gb-wrap--immersive .gb-key,
+.gb-wrap--immersive .gb-startsel button {
+  opacity: var(--pad-op, 0.3);
+  transition: opacity 0.12s;
+}
+
+/* Contour discret : les commandes restent visibles sur les cartes sombres */
+.gb-wrap--immersive .gb-dpad__v,
+.gb-wrap--immersive .gb-dpad__h,
+.gb-wrap--immersive .gb-key {
+  border-color: rgba(241, 239, 232, 0.55);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+}
+
+.gb-wrap--immersive .gb-dpad.is-active .gb-dpad__v,
+.gb-wrap--immersive .gb-dpad.is-active .gb-dpad__h,
+.gb-wrap--immersive .gb-dpad.is-active .gb-dpad__hub,
+.gb-wrap--immersive .gb-dpad__arm.on,
+.gb-wrap--immersive .gb-key:active,
+.gb-wrap--immersive .gb-key.is-down,
+.gb-wrap--immersive .gb-startsel button:active {
+  opacity: max(0.7, var(--pad-op, 0.3));
+}
+
+.gb-wrap--immersive .gb-key:active,
+.gb-wrap--immersive .gb-key.is-down {
+  transform: scale(0.94);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), 0 0 14px rgba(229, 57, 53, 0.55);
+}
+
+.gb-wrap--immersive .gb-startsel button {
+  min-width: 58px;
+  min-height: 24px;
+  font-size: 8.5px;
+}
+
+/* Zones tactiles élargies pour START/SELECT (petits à l'œil, faciles à toucher) */
+.gb-wrap--immersive .gb-startsel button::before {
+  content: "";
+  position: absolute;
+  inset: -8px -4px;
+}
+
+/* Pages du menu, cinématiques : les commandes s'effacent pour laisser toute la place */
+.gb-wrap--immersive.is-page .gb-controls,
+.gb-wrap--immersive.is-cine .gb-controls {
+  display: none;
+}
+
+.gb-wrap--immersive ~ .gb-page-wrap,
+.gb-wrap--immersive .gb-page-wrap {
+  inset: 0;
+  z-index: 70;
+  padding: calc(env(safe-area-inset-top) + 6px) max(env(safe-area-inset-right), 12px) 6px max(env(safe-area-inset-left), 12px);
+}
+
+.gb-wrap--immersive .gb-page {
+  max-width: min(640px, 100%);
+}
+
+/* Combat : la scène au centre, les commandes dans les marges de chaque côté */
+.gb-wrap--immersive .bt {
+  left: 50%;
+  right: auto;
+  width: clamp(300px, calc(100vw - 2 * var(--side)), calc(100dvh * 1.31));
+  transform: translateX(-50%);
+}
+
+.gb-wrap--immersive.is-overlay .gb-startsel,
+.gb-wrap--immersive.is-fight .gb-startsel {
+  display: none;
+}
+
+/* ─── Intro GRAW STUDIO ─── */
+
+.gw-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  width: 100%;
+  border: 0;
+  background: #060508;
+  cursor: pointer;
+  animation: gwOut 0.25s ease-in 1.5s both;
+}
+
+.gw-intro__hand {
+  image-rendering: pixelated;
+  animation: gwHand 0.3s steps(4, end) 0.2s both;
+  filter: drop-shadow(0 0 0 #f1efe8) drop-shadow(0 0 1px rgba(241, 239, 232, 0.9));
+}
+
+.gw-intro__name {
+  font-family: var(--display);
+  font-size: clamp(22px, 7vmin, 40px);
+  letter-spacing: 0.18em;
+  color: #f1efe8;
+  animation: gwName 0.25s steps(3, end) 0.5s both, gwGlow 0.5s ease-out 0.7s both;
+}
+
+.gw-intro__name b {
+  color: var(--red);
+  font-weight: inherit;
+}
+
+@keyframes gwHand {
+  from { transform: translateY(14px) scale(0.6); opacity: 0; }
+}
+
+@keyframes gwName {
+  from { opacity: 0; transform: translateY(6px); }
+}
+
+@keyframes gwGlow {
+  0% { text-shadow: 0 0 0 transparent; }
+  30% { text-shadow: 0 0 14px rgba(229, 57, 53, 0.95), 0 0 2px #e53935; }
+  100% { text-shadow: 0 0 0 transparent; }
+}
+
+@keyframes gwOut {
+  to { opacity: 0; }
+}
+
+/* ─── « Tourne ton iPhone » ─── */
+
+.gw-rotate {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 24px;
+  text-align: center;
+  color: #f1efe8;
+  background: #060508;
+}
+
+.gw-phone {
+  image-rendering: pixelated;
+  animation: gwTurn 2.2s steps(1, end) infinite;
+}
+
+@keyframes gwTurn {
+  0%, 35% { transform: rotate(0deg); }
+  40% { transform: rotate(-30deg); }
+  45% { transform: rotate(-60deg); }
+  50%, 85% { transform: rotate(-90deg); }
+}
+
+.gw-rotate__msg {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 18px;
+  line-height: 1.5;
+  letter-spacing: 0.08em;
+}
+
+.gw-rotate__help {
+  max-width: 300px;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #8a8a9a;
+}
+
+.gw-rotate__row {
+  display: flex;
+  gap: 10px;
+}
+
+.gw-rotate__btn {
+  min-height: 40px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #090909;
+  background: #f1efe8;
+  border: 2px solid #f1efe8;
+  border-radius: 3px;
+  text-decoration: none;
+  display: inline-grid;
+  place-items: center;
+}
+
+.gw-rotate__btn--ghost {
+  color: #f1efe8;
+  background: transparent;
+}
+
+.gb-range {
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.gb-range input {
+  width: 100%;
+  accent-color: var(--red);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gw-intro__hand,
+  .gw-intro__name,
+  .gw-phone {
+    animation: none;
+  }
+}
+
+html.sp-play .tabbar {
+  display: none;
+}
+
+html.sp-play,
+html.sp-play body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+/* Pendant l'aventure, plus de barre de navigation : les écrans plein cadre (mini-jeux, pages) prennent toute la hauteur */
+html.sp-play {
+  --nav-h: 0px;
+}
+
+/* Boutique : entre la croix et les boutons */
+.gb-wrap--immersive .shop {
+  left: var(--side);
+  right: var(--side);
+}
