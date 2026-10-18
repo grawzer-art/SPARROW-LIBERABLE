@@ -1905,6 +1905,7 @@
   transform: translateX(-50%);
 }
 
+.gb-wrap--immersive.is-overlay .gb-startsel,
 .gb-wrap--immersive.is-fight .gb-startsel {
   display: none;
 }
@@ -2063,4 +2064,15 @@ html.sp-play,
 html.sp-play body {
   overflow: hidden;
   overscroll-behavior: none;
+}
+
+/* Pendant l'aventure, plus de barre de navigation : les écrans plein cadre (mini-jeux, pages) prennent toute la hauteur */
+html.sp-play {
+  --nav-h: 0px;
+}
+
+/* Boutique : entre la croix et les boutons */
+.gb-wrap--immersive .shop {
+  left: var(--side);
+  right: var(--side);
 }

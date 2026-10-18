@@ -1460,7 +1460,7 @@ export function Gotchi() {
 
   return (
     <div
-      className={`gb-wrap${legend ? " is-legend" : ""}${immersive ? " gb-wrap--immersive" : ""}${page ? " is-page" : ""}${chapter || credits || intro ? " is-cine" : ""}${fight ? " is-fight" : ""}`}
+      className={`gb-wrap${legend ? " is-legend" : ""}${immersive ? " gb-wrap--immersive" : ""}${page ? " is-page" : ""}${chapter || credits || intro ? " is-cine" : ""}${fight ? " is-fight" : ""}${shop || cook ? " is-overlay" : ""}`}
       style={{ "--pad-op": prefs.padOpacity } as React.CSSProperties}
     >
       <main className="gb">
