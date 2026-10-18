@@ -1268,6 +1268,27 @@ Object.assign(DEFS, {
   kiki: variant("gonflax", { S: "#d8a684", s: "#b8866a", L: "#e86aa8", B: "#e86aa8", C: "#e86aa8", c: "#b84a80", W: "#e8b830", P: "#c62828", p: "#8e1b1b", Y: "#e8b830" }),
 });
 
+// AFTER DARK 2 — tripot, labo, snack, casino
+Object.assign(DEFS, {
+  lardon: variant("raymond", { H: "#e8e4d8", M: "#e8e4d8", S: "#e8b894", s: "#c8946a", C: "#f1efe8", c: "#cfc8bc", A: "#c9a06a", a: "#a87a3a", P: "#4a4036", p: "#36302a" }),
+  "gras-double": variant("gonflax", { S: "#e2a982", s: "#c48a62", L: "#2a1a14", B: "#2a1a14", C: "#f1efe8", c: "#cfc8bc", W: "#e8b830", P: "#4a3226", p: "#36241a", Y: "#e8b830" }),
+  jumeau: variant("nico", { X: "#e8c84a", x: "#b8981a", W: "#f1efe8", H: "#e8c84a", S: "#f0c9a8", s: "#d8a684", C: "#f1efe8", c: "#cfc8bc", A: "#f2e08a", P: "#3a3a46", p: "#2a2a34" }),
+  loulou: variant("lili", { X: "#1b1626", x: "#0f0c16", H: "#2a1a14", A: "#c62828", C: "#2e7a4a", c: "#1f5a36", P: "#1b1626", p: "#0f0c16", S: "#f0c9a8", r: "#c62828" }),
+  comptable: variant("raymond", { H: "#5a5a5a", M: "#5a5a5a", S: "#e8d0b0", s: "#c8b090", C: "#7a7a86", c: "#5a5a66", A: "#f1efe8", a: "#cfc8bc", P: "#3a3a46", p: "#2a2a34" }),
+  brindille: variant("moine", { R: "#c9a06a", C: "#c96f3a", c: "#a8542a", S: "#f0c9a8", s: "#d8a684", P: "#c96f3a", p: "#a8542a" }),
+  "dr-creatine": variant("nico", { X: "#f1efe8", x: "#cfc8bc", W: "#3a7ad9", H: "#d8d0c0", S: "#f0c9a8", s: "#d8a684", C: "#f1efe8", c: "#cfc8bc", A: "#6fdc6f", P: "#3a4a6a", p: "#2a364e" }),
+  biscoto: variant("gonflax", { S: "#d8a684", s: "#b8866a", L: "#d8a684", B: "#d8a684", C: "#8a5a2a", c: "#6a4220", W: "#e8b830", P: "#8a5a2a", p: "#6a4220", Y: "#e8b830" }),
+  rotule: variant("moine", { R: "#6a8ac8", C: "#c96f3a", c: "#a8542a", P: "#c96f3a", p: "#a8542a" }),
+  fumiko: variant("lili", { X: "#e86aa8", x: "#b84a80", H: "#1b1626", A: "#e8b830", C: "#e86aa8", c: "#b84a80", P: "#3a2a4a", p: "#2a1e36", S: "#f0d0b0", r: "#c62828" }),
+  oyabun: variant("raymond", { H: "#1b1626", M: "#1b1626", S: "#e2b894", s: "#c29874", C: "#e8e2c8", c: "#c8c2a4", A: "#c62828", a: "#8e1b1b", P: "#e8e2c8", p: "#c8c2a4" }),
+  sushi: variant("nico", { X: "#f8f4e8", x: "#d8d2c8", W: "#1f3a2a", H: "#1b1626", S: "#f0c9a8", s: "#d8a684", C: "#1b1626", c: "#0f0c16", A: "#f8f4e8", P: "#1b1626", p: "#0f0c16" }),
+  jiro: variant("moine", { R: "#3a3a46", C: "#4a5a7a", c: "#36425e", S: "#e8b894", s: "#c8946a", H: "#2a1a14", P: "#4a5a7a", p: "#36425e" }),
+  veuve: variant("lili", { X: "#1b1626", x: "#0f0c16", H: "#1b1626", A: "#e8b830", C: "#1b1626", c: "#0f0c16", P: "#1b1626", p: "#0f0c16", S: "#e9c4a4", r: "#8e1b3a" }),
+  pendule: variant("gonflax", { S: "#e8e2d4", s: "#c8c2b4", L: "#5a5a66", B: "#5a5a66", C: "#5a5a66", c: "#3a3a46", W: "#c62828", P: "#3a3a46", p: "#2a2a34", Y: "#c99a2e" }),
+  joueur: variant("bouchon", { H: "#8a8478", h: "#6a6458", S: "#e8c8a8", s: "#c8a888", G: "#e8c8a8", C: "#5a4a6a", c: "#3f3450", A: "#e8b830", P: "#2a2a34", p: "#1b1a24", r: "#c62828" }),
+  tic: variant("nico", { X: "#1b1626", x: "#0f0c16", W: "#f1efe8", H: "#c99a2e", S: "#e2c0a0", s: "#c2a080", C: "#f1efe8", c: "#cfc8bc", A: "#1b1626", P: "#1b1626", p: "#0f0c16" }),
+});
+
 /** Recoloration de la tenue de Sparrow selon l'objet équipé (même logique que l'appartement). */
 const OUTFIT: Record<string, [string, string]> = {
   "ten-survet": ["#e53935", "#9e1f1c"],

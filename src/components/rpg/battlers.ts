@@ -1002,6 +1002,184 @@ function kiki(chauve: boolean): Raster {
   return r;
 }
 
+// ─── AFTER DARK 2 ───
+
+const PEAU = ["#e2a982", "#f0c09a", "#c48a62"] as const;
+
+function jumeauMayo(): Raster {
+  const r = new Raster(48, 48);
+  // Jumeau Mayo : tablier taché de mayo, casquette à l'envers, pince à frites
+  r.ball(24, 40, 13, 10, "#f1efe8", "#ffffff", "#c8c2b4", (_x, y) => y > 47);
+  for (const [x, y] of [[18, 37], [29, 42], [24, 34]]) r.ball(x, y, 2, 1.5, "#f2e08a");
+  r.ball(24, 20, 9, 9, ...PEAU);
+  r.ball(24, 12, 10, 4, "#e8c84a", "#f8e07a", "#b8981a");
+  r.rect(14, 13, 6, 2, "#e8c84a");
+  eyes(r, 19, 19, 7, "fache");
+  r.rect(21, 26, 7, 1, INK);
+  r.ball(9, 32, 4, 4, ...PEAU);
+  r.ball(39, 32, 4, 4, ...PEAU);
+  r.line(41, 30, 45, 22, "#9a9aa8");
+  r.line(43, 30, 46, 23, "#9a9aa8");
+  r.outline(INK);
+  return r;
+}
+
+function grasDouble(): Raster {
+  const r = new Raster(60, 60);
+  // Gras-Double : usurier des frites, triple menton, tablier, chevalière, cure-dent
+  r.ball(30, 46, 25, 14, "#6a4a3a", "#8a6a5a", "#4a3226", (_x, y) => y > 59);
+  r.ball(30, 46, 15, 12, "#f1efe8", "#ffffff", "#c8c2b4", (_x, y) => y > 59);
+  r.ball(24, 48, 3, 2, "#c9a06a");
+  r.ball(30, 22, 14, 13, ...PEAU);
+  r.ball(30, 32, 11, 4, "#c48a62", "#d89a72", "#a46a42");
+  r.rect(18, 9, 24, 3, "#2a1a14");
+  eyes(r, 23, 19, 10, "fache");
+  r.rect(25, 27, 10, 2, "#8e3a2a");
+  r.line(35, 28, 41, 26, "#e8c35a");
+  r.ball(5, 38, 6, 9, ...PEAU);
+  r.ball(55, 38, 6, 9, ...PEAU);
+  r.rect(53, 43, 4, 2, "#e8b830");
+  r.outline(INK);
+  return r;
+}
+
+function biscoto(): Raster {
+  const r = new Raster(52, 52);
+  // Frère Biscoto : robe de moine trop petite, biceps énormes, crâne rasé luisant
+  r.ball(26, 42, 13, 10, "#8a5a2a", "#a87a3a", "#6a4220", (_x, y) => y > 51);
+  r.ball(26, 20, 8, 9, ...PEAU);
+  r.set(23, 13, "#ffffff");
+  r.set(24, 13, "#ffffff");
+  eyes(r, 21, 19, 7, "fache");
+  r.rect(23, 26, 7, 1, INK);
+  r.ball(8, 30, 8, 7, ...PEAU);
+  r.ball(44, 30, 8, 7, ...PEAU);
+  r.line(4, 28, 11, 26, "#c48a62");
+  r.line(41, 26, 48, 28, "#c48a62");
+  r.rect(18, 33, 16, 2, "#e8b830");
+  r.outline(INK);
+  return r;
+}
+
+function drCreatine(gonfle: boolean): Raster {
+  const r = new Raster(60, 60);
+  // Docteur Créatine : blouse blanche, lunettes rondes, seringue géante… puis blouse déchirée
+  const w = gonfle ? 26 : 18;
+  r.ball(30, 46, w, 14, "#f1efe8", "#ffffff", "#c8c2b4", (_x, y) => y > 59);
+  if (gonfle) for (const x of [12, 20, 40, 48]) r.line(x, 38, x + 2, 50, "#8a8578");
+  r.rect(28, 34, 4, 20, "#3a7ad9");
+  r.ball(30, 20, gonfle ? 12 : 10, 11, ...PEAU);
+  r.rect(20, 10, 20, 3, "#d8d0c0");
+  r.ball(25, 19, 3, 3, "#c8e8f8");
+  r.ball(35, 19, 3, 3, "#c8e8f8");
+  r.line(28, 19, 32, 19, INK);
+  r.set(25, 19, gonfle ? "#c62828" : INK);
+  r.set(35, 19, gonfle ? "#c62828" : INK);
+  r.rect(26, 27, 8, 1, INK);
+  const arm = gonfle ? 9 : 6;
+  r.ball(30 - w - 2 + arm, 34, arm, arm + 2, ...PEAU);
+  r.ball(30 + w + 2 - arm, 34, arm, arm + 2, ...PEAU);
+  // Seringue
+  r.rect(47, 14, 3, 14, "#c8e8f8");
+  r.rect(47, 20, 3, 8, "#6fdc6f");
+  r.rect(46, 13, 5, 1, "#9a9aa8");
+  r.line(48, 28, 48, 33, "#9a9aa8");
+  r.outline(INK);
+  return r;
+}
+
+function sushiMan(): Raster {
+  const r = new Raster(48, 48);
+  // Sushi de main : costume noir, lunettes noires, coiffe de riz et bandeau de nori
+  r.ball(24, 40, 13, 10, "#1b1626", "#3a3446", "#0e0b14", (_x, y) => y > 47);
+  r.rect(22, 31, 4, 10, "#f8f4e8");
+  r.rect(23, 32, 2, 7, "#c62828");
+  r.ball(24, 20, 9, 9, ...PEAU);
+  r.ball(24, 11, 10, 5, "#f8f4e8", "#ffffff", "#d8d2c8");
+  r.ball(24, 11, 3, 2, "#e86a4a");
+  r.rect(14, 14, 20, 2, "#1f3a2a");
+  r.rect(17, 18, 6, 3, INK);
+  r.rect(25, 18, 6, 3, INK);
+  r.rect(23, 19, 2, 1, INK);
+  r.rect(21, 25, 7, 1, INK);
+  r.ball(39, 30, 4, 4, ...PEAU);
+  r.line(40, 26, 45, 16, "#c9a06a");
+  r.line(42, 27, 46, 18, "#c9a06a");
+  r.outline(INK);
+  return r;
+}
+
+function oyabun(tatoue: boolean): Raster {
+  const r = new Raster(60, 60);
+  // Oyabun Tonkatsu : costume crème, banane, micro doré… puis torse tatoué d'une carpe
+  if (tatoue) {
+    r.ball(30, 46, 22, 14, ...PEAU, (_x, y) => y > 59);
+    r.ball(30, 46, 12, 8, "#e86a2a", "#ff8a4a", "#b84a1a");
+    r.ball(24, 44, 2, 2, "#f8f4e8");
+    for (let i = 0; i < 4; i++) r.line(18 + i * 7, 52, 22 + i * 7, 56, "#2e7dd2");
+  } else {
+    r.ball(30, 46, 22, 14, "#e8e2c8", "#f8f4e8", "#c8c2a4", (_x, y) => y > 59);
+    r.rect(27, 34, 6, 20, "#c62828");
+  }
+  r.ball(30, 21, 11, 11, ...PEAU);
+  r.ball(33, 9, 12, 5, "#1b1626", "#3a3446", "#0e0b14");
+  r.rect(40, 7, 6, 3, "#1b1626");
+  eyes(r, 24, 19, 9, tatoue ? "rage" : "fache");
+  r.rect(26, 27, 9, 1, INK);
+  r.line(23, 23, 26, 26, "#8e3a2a");
+  r.ball(8, 36, 6, 8, ...PEAU);
+  r.ball(52, 34, 6, 8, ...PEAU);
+  r.ball(53, 24, 3, 4, "#e8b830", "#ffd85a", "#a87a18");
+  r.rect(52, 28, 2, 6, "#9a9aa8");
+  r.outline(INK);
+  return r;
+}
+
+function pendule(): Raster {
+  const r = new Raster(52, 52);
+  // Videur Pendule : costume gris, tête en cadran d'horloge, balancier en guise de matraque
+  r.ball(26, 42, 15, 10, "#5a5a66", "#7a7a86", "#3a3a46", (_x, y) => y > 51);
+  r.rect(24, 33, 4, 12, "#c62828");
+  r.ball(26, 19, 11, 11, "#e8e2d4", "#f8f4e8", "#c8c2b4");
+  r.ball(26, 19, 9, 9, "#f8f4e8");
+  for (const [x, y] of [[26, 11], [34, 19], [26, 27], [18, 19]]) r.set(x, y, INK);
+  r.line(26, 19, 26, 13, INK);
+  r.line(26, 19, 31, 21, "#c62828");
+  r.ball(9, 32, 5, 5, "#5a5a66", "#7a7a86", "#3a3a46");
+  r.ball(43, 32, 5, 5, "#5a5a66", "#7a7a86", "#3a3a46");
+  r.line(45, 32, 47, 46, "#c99a2e");
+  r.ball(47, 47, 4, 4, "#e8b830", "#ffd85a", "#a87a18");
+  r.outline(INK);
+  return r;
+}
+
+function veuve(roulette: boolean): Raster {
+  const r = new Raster(60, 60);
+  // La Veuve du Cadran : robe noire à paillettes, voile, éventail de cartes… puis yeux-roulettes
+  r.ball(30, 46, 22, 14, "#1b1626", "#3a3446", "#0e0b14", (_x, y) => y > 59);
+  for (let i = 0; i < 18; i++) r.set(12 + ((i * 11) % 36), 38 + ((i * 7) % 18), "#e8b830");
+  r.ball(30, 21, 10, 11, "#e9c4a4", "#f6dcc4", "#c9a084");
+  r.ball(30, 10, 14, 6, "#1b1626", "#3a3446", "#0e0b14");
+  if (!roulette) {
+    for (let x = 18; x <= 42; x += 2) r.line(x, 12, x, 22, "#2a2436");
+    eyes(r, 25, 19, 8, "fache");
+  } else {
+    for (const ex of [26, 34]) {
+      r.ball(ex, 20, 3, 3, "#c62828");
+      r.set(ex, 18, "#1b1626");
+      r.set(ex, 22, "#1b1626");
+      r.set(ex, 20, "#e8b830");
+    }
+  }
+  r.rect(26, 27, 8, 2, "#8e1b3a");
+  // Éventail de cartes
+  for (let i = 0; i < 4; i++) r.rect(46 + i * 2, 22 - i, 4, 7, i % 2 ? "#c62828" : "#f8f4e8");
+  r.ball(48, 32, 4, 4, "#e9c4a4", "#f6dcc4", "#c9a084");
+  r.ball(8, 36, 5, 8, "#e9c4a4", "#f6dcc4", "#c9a084");
+  r.outline(INK);
+  return r;
+}
+
 const PAINT: Record<string, (tenue?: string) => Raster> = {
   brokito: () => brokito(false),
   "brokito-dos": () => brokito(true),
@@ -1023,6 +1201,17 @@ const PAINT: Record<string, (tenue?: string) => Raster> = {
   bulldozer,
   kiki: () => kiki(false),
   "kiki-chauve": () => kiki(true),
+  "jumeau-mayo": jumeauMayo,
+  "gras-double": grasDouble,
+  biscoto,
+  "dr-creatine": () => drCreatine(false),
+  "dr-creatine-gonfle": () => drCreatine(true),
+  "sushi-man": sushiMan,
+  oyabun: () => oyabun(false),
+  "oyabun-tatoue": () => oyabun(true),
+  pendule,
+  veuve: () => veuve(false),
+  "veuve-roulette": () => veuve(true),
   tambour,
   lanterne,
   metronome,

@@ -29,3 +29,17 @@ Ensuite Dédé avoue son mensonge et donne la clé du local : **Montre sans aigu
 - Code : `src/lib/rpg/afterdark.ts` (cartes, PNJ, objets, arrivées, après-combat).
 - Combats : `bestiary.ts` (`bg: "club"`, `brutal: true` → gouttes rouges stylisées, combats humains uniquement).
 - Tests : `tests/afterdark.test.ts` (parcours des 3 méthodes, textes, équilibrage).
+
+## Quêtes 2 à 5 — les quatre autres régions (`src/lib/rpg/afterdark2.ts`)
+
+Chaque quête s'ouvre par une porte dérobée (néon) sur une façade, une fois le chapitre de la région terminé.
+
+| Région | Quête | Cogner | Ruser | Trahir | Secret |
+| --- | --- | --- | --- | --- | --- |
+| Cité (bistrot fermé) | La dette de Papi Lardon | Jumeaux Mayo + Gras-Double → 3 Frites du diable | Jeu marqué de Loulou → 180 FP | Voler la recette de Lardon → Chevalière grasse | Congélateur : l'ardoise du Roi de la Salade |
+| Mont (arrière du refuge) | La salle du fond | Frères Biscotos + Dr Créatine → Bandeau de Brindille | Registre du frigo → dénoncer à Frère Rotule, 2 Méga-cornets | S'associer au Docteur → 220 FP + 2 Protéines louches | Commande « Coach G. — 40 doses » |
+| Kyukei (à côté de l'auberge) | Le Snack Sakura | Sushis de main + Oyabun → Micro d'or | Duel de karaoké (paroles chez Jirō) → 2 Sakés + Micro d'or | Collecter le racket → 300 FP | Jirō a co-écrit la chanson |
+| Tour (mur de la Tour) | Le Tic-Tac Club | Videurs Pendule + la Veuve → Jeton de minuit | Roulette : tout sur le zéro → 400 FP | S'associer → 350 FP + Dé pipé (maudit) | Le coffre : la fiche de Sparrow |
+
+Boss réglés pour l'équipe de fin de chapitre (≥ 70 % de victoires simulées), trop durs 4 niveaux plus tôt.
+Tests : `tests/afterdark2.test.ts`.

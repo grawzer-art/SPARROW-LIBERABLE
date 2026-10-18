@@ -8,7 +8,7 @@ import { emptyRpg } from "@/lib/rpg/state";
  * Empreinte de la grille des cases bloquées de chaque carte (début et fin du chapitre 1),
  * relevée avant le remaster. Si un décor ajouté bloquait une case, l'empreinte changerait.
  */
-const GRIDS: Record<string, string> = {"quartier":"6ea26d2c","cite":"25a059b8","maison-chou":"eadbfbfe","herboristerie":"9f0575c6","armurerie":"9f0575c6","restaurant":"d9597b38","egouts":"555559e","palais":"9f90dbbe","sentier":"cb6b037a","refuge":"82e5eec0","temple-cour":"9a80ecc6","temple":"8a7ca290","cerisiers":"96c60cf6","village":"eac29616","auberge":"b196103e","dojo":"41c279bc","tour-parvis":"edff9d40","tour":"75440c4a","tour-sommet":"2c1bd982","bar":"33083888","cave":"b9be03c2","local":"8e5032bc"};
+const GRIDS: Record<string, string> = {"quartier":"6ea26d2c","cite":"25a059b8","maison-chou":"eadbfbfe","herboristerie":"9f0575c6","armurerie":"9f0575c6","restaurant":"d9597b38","egouts":"555559e","palais":"9f90dbbe","sentier":"cb6b037a","refuge":"82e5eec0","temple-cour":"9a80ecc6","temple":"8a7ca290","cerisiers":"96c60cf6","village":"eac29616","auberge":"b196103e","dojo":"41c279bc","tour-parvis":"edff9d40","tour":"75440c4a","tour-sommet":"2c1bd982","bar":"33083888","cave":"b9be03c2","local":"8e5032bc","tripot":"c726297e","labo":"55027640","snack":"343e3d42","casino":"d1333042"};
 
 function grid(id: string) {
   const m = MAPS[id as keyof typeof MAPS]!;

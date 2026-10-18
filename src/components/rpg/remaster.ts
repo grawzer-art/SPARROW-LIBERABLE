@@ -39,6 +39,10 @@ const THEME: Partial<Record<string, Theme>> = {
   bar: "bar",
   cave: "bar",
   local: "egout",
+  tripot: "bar",
+  labo: "muscu",
+  snack: "bar",
+  casino: "palais",
 };
 
 const skip = (m: MapDef) => m.id === "quartier";
@@ -329,6 +333,8 @@ export function remasterDecorAll(base: Ctx, top: Ctx, m: MapDef) {
   if (m.id === "bar" || m.id === "cave") for (const w of m.warps) if (at(m, w.at.x, w.at.y) === "mur") ironDoor(base, w.at.x * TILE, w.at.y * TILE, w.id === "escalier");
   // Façades des bâtiments
   for (const p of m.props) if (p.kind === "batiment") facade(base, p);
+  // AFTER DARK : portes dérobées des régions (dessinées après la façade)
+  for (const w of m.warps) if (w.id.startsWith("ad-")) sideDoor(base, w.at.x * TILE, w.at.y * TILE, w.id);
   // Mousse sur les rochers (Mont)
   for (const p of m.props) if (p.kind === "rocher" || p.kind === "pierre") moss(base, p);
   // Feuilles mortes sous les arbres
@@ -417,6 +423,20 @@ function ironDoor(ctx: Ctx, X: number, Y: number, stairs: boolean) {
   for (const yy of [0, 4, 8]) px(ctx, "#2a2a34", X + 3, Y + yy, 10, 1);
   px(ctx, "#e8c35a", X + 11, Y + 3, 1, 2);
   px(ctx, "#ff4a5a", X + 5, Y - 2, 6, 1);
+}
+
+/** Petite porte de service et son néon (AFTER DARK), en bas de façade. */
+function sideDoor(ctx: Ctx, X: number, Y: number, id: string) {
+  const neon = id === "ad-snack" ? "#ff6ad8" : id === "ad-labo" ? "#6fdc6f" : id === "ad-casino" ? "#e8b830" : "#ff4a5a";
+  px(ctx, "#0f0c14", X + 3, Y + 1, 10, 15);
+  px(ctx, "#2a2430", X + 4, Y + 2, 8, 14);
+  px(ctx, "#3a3442", X + 4, Y + 2, 8, 1);
+  px(ctx, "#e8c35a", X + 10, Y + 9, 1, 2);
+  ctx.save();
+  ctx.globalAlpha = 0.22;
+  px(ctx, neon, X + 1, Y - 3, 14, 5);
+  ctx.restore();
+  px(ctx, neon, X + 4, Y - 2, 8, 2);
 }
 
 /** Néon de bar (AFTER DARK) : tube coudé et halo. */

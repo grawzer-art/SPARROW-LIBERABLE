@@ -143,7 +143,7 @@ export function paintGround2(ctx: Ctx, k: Ground, tx: number, ty: number, kit: K
     case "mur": {
       const below = at(m, tx, ty + 1);
       if (m.region === "interieur" || m.region === "palais") {
-        const pal = m.region === "palais" ? ["#5a3a6a", "#6a4a7a", "#46305a"] : m.id === "bar" ? ["#3a1e26", "#462630", "#2a141c"] : [Q.wall, Q.wallL, Q.wallD];
+        const pal = m.region === "palais" ? ["#5a3a6a", "#6a4a7a", "#46305a"] : m.id === "bar" || m.id === "tripot" ? ["#3a1e26", "#462630", "#2a141c"] : m.id === "snack" ? ["#3a2036", "#4a2a46", "#2a1426"] : m.id === "labo" ? ["#1e3a34", "#264a42", "#142a26"] : [Q.wall, Q.wallL, Q.wallD];
         px(ctx, pal[0], X, Y, TILE, TILE);
         for (let i = 2; i < TILE; i += 6) px(ctx, pal[1], X + i, Y, 2, TILE);
         if (below && below !== "mur") {
