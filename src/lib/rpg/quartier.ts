@@ -29,6 +29,7 @@ import {
   type Zone,
 } from "./mapdef";
 import { emptyRpg, type Rpg } from "./state";
+import { BAR_DOOR } from "./afterdark";
 
 export { TILE, step, type Facing, type Ground, type NpcDef, type Prop, type Tile, type Zone };
 export type Door = Warp;
@@ -172,7 +173,7 @@ export const DOORS: Warp[] = [
   { id: "route-cite", at: { x: 35, y: 11 }, dir: "right", to: { map: "cite", x: 19, y: 30, dir: "up" }, needs: routeLibre, lockedKey: "route" },
   { id: "route-cite-2", at: { x: 35, y: 12 }, dir: "right", to: { map: "cite", x: 20, y: 30, dir: "up" }, needs: routeLibre, lockedKey: "route" },
 ];
-QUARTIER.warps.push(...DOORS);
+QUARTIER.warps.push(...DOORS, BAR_DOOR);
 
 /** Où Sparrow apparaît quand il sort de chez lui. */
 export const SPAWN: Tile & { dir: Facing } = { x: 5, y: 9, dir: "down" };

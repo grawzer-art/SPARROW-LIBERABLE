@@ -40,6 +40,26 @@ export interface Move {
 }
 
 export const MOVES: Record<string, Move> = {
+  // ─── AFTER DARK : tournoi clandestin du Dernier Verre ───
+  "gifles-tornade": { id: "gifles-tornade", name: "Gifles tornade", desc: "", power: 14, acc: 95, target: "foe", hits: [2, 4], fx: "coup" },
+  "danse-keke": { id: "danse-keke", name: "Danse du kéké", desc: "", power: 0, acc: 100, target: "self", effects: [{ kind: "stage", stat: "atk", n: 1, who: "self" }, { kind: "stage", stat: "spd", n: 1, who: "self" }], fx: "bonus" },
+  "pas-chasse": { id: "pas-chasse", name: "Pas chassé", desc: "", power: 0, acc: 100, target: "self", priority: 2, effects: [{ kind: "guard" }], fx: "bouclier" },
+  "ventre-bouclier": { id: "ventre-bouclier", name: "Ventre-bouclier", desc: "", power: 0, acc: 100, target: "self", priority: 2, effects: [{ kind: "guard" }, { kind: "stage", stat: "def", n: 1, who: "self" }], fx: "bouclier" },
+  ecrasement: { id: "ecrasement", name: "Écrasement de 140 kg", desc: "", power: 95, acc: 90, target: "foe", charge: 1, effects: [{ kind: "status", status: "etourdi", chance: 30 }], fx: "terre" },
+  "rot-sonique": { id: "rot-sonique", name: "Rot sonique", desc: "", power: 0, acc: 95, target: "foe", effects: [{ kind: "stage", stat: "acc", n: -1, who: "target" }, { kind: "stage", stat: "def", n: -1, who: "target", chance: 40 }], fx: "malus" },
+  "claque-grasse": { id: "claque-grasse", name: "Claque grasse", desc: "", power: 45, acc: 95, target: "foe", fx: "coup" },
+  "coup-chapelet": { id: "coup-chapelet", name: "Coup de chapelet", desc: "", power: 40, acc: 95, target: "foe", effects: [{ kind: "status", status: "etourdi", chance: 30 }], fx: "coup" },
+  "gnole-enflammee": { id: "gnole-enflammee", name: "Gnôle enflammée", desc: "", power: 35, acc: 90, target: "foe", effects: [{ kind: "status", status: "brule", chance: 50 }], fx: "feu" },
+  "priere-louche": { id: "priere-louche", name: "Prière louche", desc: "", power: 0, acc: 100, target: "self", effects: [{ kind: "heal", pct: 30 }], fx: "soin" },
+  tesson: { id: "tesson", name: "Tesson de bouteille", desc: "", power: 58, acc: 85, target: "foe", fx: "lame" },
+  plaquage: { id: "plaquage", name: "Plaquage de videur", desc: "", power: 50, acc: 95, target: "foe", effects: [{ kind: "status", status: "etourdi", chance: 20 }], fx: "terre" },
+  "cou-taureau": { id: "cou-taureau", name: "Cou de taureau", desc: "", power: 0, acc: 100, target: "self", effects: [{ kind: "stage", stat: "def", n: 2, who: "self" }], fx: "bonus" },
+  "cle-bras": { id: "cle-bras", name: "Clé de bras", desc: "", power: 40, acc: 95, target: "foe", effects: [{ kind: "stage", stat: "atk", n: -1, who: "target" }], fx: "coup" },
+  "prise-matelas": { id: "prise-matelas", name: "Prise du matelas", desc: "", power: 55, acc: 95, target: "foe", effects: [{ kind: "status", status: "etourdi", chance: 25 }], fx: "terre" },
+  "clope-oeil": { id: "clope-oeil", name: "Clope dans l'œil", desc: "", power: 30, acc: 95, target: "foe", effects: [{ kind: "status", status: "brule", chance: 40 }, { kind: "stage", stat: "acc", n: -1, who: "target", chance: 50 }], fx: "feu" },
+  "big-splash": { id: "big-splash", name: "BIG SPLASH", desc: "", power: 120, acc: 90, target: "foe", charge: 1, fx: "terre" },
+  "regard-daronne": { id: "regard-daronne", name: "Regard de daronne", desc: "", power: 0, acc: 100, target: "foe", effects: [{ kind: "stage", stat: "def", n: -2, who: "target" }], fx: "malus" },
+  "coup-boule": { id: "coup-boule", name: "Coup de boule maternel", desc: "", power: 72, acc: 90, target: "foe", effects: [{ kind: "recoil", pct: 12 }], fx: "coup" },
   // Sparrow
   "coup-manette": { id: "coup-manette", name: "Coup de manette", desc: "Un coup sec avec la manette. Fiable.", power: 40, acc: 100, target: "foe", fx: "coup" },
   "frite-enflammee": { id: "frite-enflammee", name: "Frite enflammée", desc: "Une frite brûlante lancée avec conviction. Peut brûler.", power: 50, acc: 90, target: "foe", effects: [{ kind: "status", status: "brule", chance: 30 }], fx: "feu" },
@@ -347,6 +367,32 @@ export interface Foe {
 }
 
 export const FOES: Record<string, Foe> = {
+  // ─── AFTER DARK : la cave du Dernier Verre ───
+  kevin: { id: "kevin", name: "Kevin « La Tornade »", sprite: "kevin", lv: [7, 7], hp: 72, atk: 17, def: 11, spd: 21, moves: ["gifles-tornade", "danse-keke", "pas-chasse"] },
+  bertrand: { id: "bertrand", name: "Le Gros Bertrand", sprite: "bertrand", lv: [8, 8], hp: 128, atk: 18, def: 22, spd: 6, moves: ["ventre-bouclier", "ecrasement", "rot-sonique", "claque-grasse"] },
+  ginette: { id: "ginette", name: "Sœur Ginette", sprite: "ginette", lv: [9, 9], hp: 88, atk: 19, def: 15, spd: 15, moves: ["coup-chapelet", "gnole-enflammee", "priere-louche", "tesson"] },
+  bulldozer: { id: "bulldozer", name: "Bulldozer, le videur", sprite: "bulldozer", lv: [9, 9], hp: 112, atk: 21, def: 18, spd: 9, moves: ["plaquage", "cou-taureau", "cle-bras"] },
+  kiki: {
+    id: "kiki",
+    name: "BIG MAMA KIKI",
+    sprite: "kiki",
+    lv: [10, 10],
+    hp: 168,
+    atk: 21,
+    def: 17,
+    spd: 12,
+    boss: true,
+    moves: ["prise-matelas", "clope-oeil", "regard-daronne", "big-splash"],
+    phases: [
+      {
+        below: 0.5,
+        moves: ["coup-boule", "big-splash", "clope-oeil", "prise-matelas"],
+        line: "BIG MAMA KIKI arrache sa perruque et la jette dans la foule. Dessous : un crâne tatoué « MAMAN » et une cicatrice qui a vu des choses. La cave hurle.",
+        stages: { atk: 1 },
+        sprite: "kiki-chauve",
+      },
+    ],
+  },
   "sbire-metronome": { id: "sbire-metronome", name: "Sbire du Métronome", sprite: "sbire", lv: [9, 17], hp: 110, atk: 25, def: 19, spd: 19, moves: ["pas-cadence", "tempo-force", "shuriken-noire"] },
   tambour: { id: "tambour", name: "Tambour possédé", sprite: "tambour", lv: [9, 17], hp: 135, atk: 24, def: 24, spd: 11, moves: ["coup-baguette", "roulement", "pas-cadence"] },
   "lanterne-folle": { id: "lanterne-folle", name: "Lanterne Folle", sprite: "lanterne", lv: [9, 17], hp: 105, atk: 26, def: 18, spd: 17, moves: ["flamme-papier", "lueur-folle", "pas-cadence", "lueur-hypnose"] },
@@ -502,15 +548,23 @@ export interface BattleDef {
   /** Consommables gagnés à la victoire. */
   drops?: Record<string, number>;
   /** Fond de l'écran de combat. */
-  bg: "rue" | "cite" | "egout" | "palais" | "trone" | "montagne" | "temple" | "sanctuaire" | "cerisiers" | "festival" | "dojo" | "tour" | "sommet";
+  bg: "rue" | "cite" | "egout" | "palais" | "trone" | "montagne" | "temple" | "sanctuaire" | "cerisiers" | "festival" | "dojo" | "tour" | "sommet" | "club";
   /** Conseils affichés au premier combat (tutoriel). */
   tutorial?: boolean;
   music?: "combat" | "boss";
   /** Rencontre sauvage : l'espèce peut être capturée avec une capsule. */
   wild?: string;
+  /** Combat clandestin (AFTER DARK) : impacts plus violents, projections stylisées. */
+  brutal?: boolean;
 }
 
 export const BATTLES: Record<string, BattleDef> = {
+  // ─── AFTER DARK : « Dernier verre avant minuit » ───
+  "ad-kevin": { id: "ad-kevin", foes: ["kevin"], intro: "Kevin « La Tornade » entre sur le ring en faisant des moulinets. Personne ne lui a demandé.", canFlee: true, xp: 90, fp: 40, drops: { "biere-tiede": 1 }, bg: "club", brutal: true },
+  "ad-bertrand": { id: "ad-bertrand", foes: ["bertrand"], intro: "Le Gros Bertrand monte sur le ring. Le ring proteste.", canFlee: true, xp: 110, fp: 50, bg: "club", brutal: true },
+  "ad-ginette": { id: "ad-ginette", foes: ["ginette"], intro: "Sœur Ginette fait un signe de croix, puis casse une bouteille sur le poteau. « Que Dieu te pardonne. Moi, non. »", canFlee: true, xp: 130, fp: 60, drops: { "gnole-maison": 1 }, bg: "club", brutal: true },
+  "ad-bulldozer": { id: "ad-bulldozer", foes: ["bulldozer"], intro: "Bulldozer fait craquer sa nuque. Puis la tienne, mentalement.", canFlee: true, xp: 120, fp: 30, bg: "club", brutal: true },
+  "ad-kiki": { id: "ad-kiki", foes: ["kiki"], intro: "Les néons s'éteignent. Un projecteur. BIG MAMA KIKI, 112 combats, 112 victoires, descend sur le ring en peignoir léopard.", canFlee: false, xp: 260, fp: 120, bg: "club", music: "boss", brutal: true },
   "sbire-1": { id: "sbire-1", foes: ["sbire-metronome"], intro: "Un Sbire du Métronome surgit en rythme !", canFlee: true, xp: 110, fp: 60, drops: { "the-vert": 1 }, bg: "cerisiers" },
   "sbires-2": { id: "sbires-2", foes: ["sbire-metronome", "sbire-metronome"], intro: "Deux Sbires dansent en parfaite synchronisation. C'est presque beau.", canFlee: true, xp: 170, fp: 90, drops: { onigiri: 1 }, bg: "festival" },
   "tambour-1": { id: "tambour-1", foes: ["tambour"], intro: "Un Tambour possédé roule vers vous : BOUM, BOUM, BOUM !", canFlee: true, xp: 130, fp: 70, drops: { "the-vert": 1 }, bg: "festival" },
@@ -557,6 +611,8 @@ export interface Consumable {
 }
 
 export const CONSUMABLES: Record<string, Consumable> = {
+  "biere-tiede": { id: "biere-tiede", name: "Bière tiède", desc: "Rend 30 PV. Plate, tiède, et pourtant ça remonte. Comme un ex.", price: 12, use: { heal: 30 } },
+  "gnole-maison": { id: "gnole-maison", name: "Gnôle maison", desc: "Rend 70 PV. Arrache aussi un peu l'œsophage, mais c'est offert.", price: 40, use: { heal: 70 } },
   frites: { id: "frites", name: "Cornet de frites", desc: "Rend 35 PV. Le carburant officiel.", price: 20, use: { heal: 35 } },
   "mega-cornet": { id: "mega-cornet", name: "Méga-cornet", desc: "Rend 90 PV. Format familial.", price: 60, use: { heal: 90 } },
   "part-pizza": { id: "part-pizza", name: "Part de pizza", desc: "Rend 50 % des PV et soigne les états.", price: 45, use: { healPct: 50, cleanse: true } },
@@ -581,6 +637,9 @@ export interface Equipment {
 }
 
 export const EQUIPMENT: Record<string, Equipment> = {
+  "ceinture-ring": { id: "ceinture-ring", name: "Ceinture du Dernier Verre", slot: "armure", desc: "Ceinture de champion du tournoi clandestin. Défense +3, PV +12. Sent la bière.", price: 0, bonus: { def: 3, hp: 12 } },
+  "montre-maudite": { id: "montre-maudite", name: "Montre sans aiguilles", slot: "accessoire", desc: "Artefact maudit. Elle chuchote « 23:60 ». Attaque +6, Vitesse +3, mais Défense −4 et PV −10.", price: 0, bonus: { atk: 6, spd: 3, def: -4, hp: -10 } },
+  "poing-americain": { id: "poing-americain", name: "Poing américain en caoutchouc", slot: "arme", desc: "Marché noir. Rassurant, illégal, en caoutchouc. Attaque +6, Vitesse −1.", price: 260, bonus: { atk: 6, spd: -1 } },
   "manette-pro": { id: "manette-pro", name: "Manette pro", slot: "arme", desc: "Gâchettes sensibles. Attaque +3.", price: 90, bonus: { atk: 3 } },
   spatule: { id: "spatule", name: "Spatule de combat", slot: "arme", desc: "Retourne les crêpes et les situations. Attaque +5.", price: 160, bonus: { atk: 5 } },
   "fourchette-sacree": { id: "fourchette-sacree", name: "Fourchette sacrée", slot: "arme", desc: "Arme du dernier friturier royal. Attaque +8, Vitesse +1.", price: 0, bonus: { atk: 8, spd: 1 } },
@@ -603,6 +662,20 @@ export const EQUIPMENT: Record<string, Equipment> = {
 
 /** Boutiques : ce qu'elles vendent (consommables puis équipements). */
 export const SHOPS: Record<string, { name: string; keeper: string; items: string[]; hello: string; bye: string }> = {
+  bar: {
+    name: "Le Dernier Verre",
+    keeper: "Momo",
+    items: ["biere-tiede", "gnole-maison", "ketchup"],
+    hello: "On sert des verres, pas des miracles. Les miracles, c'est la maison d'à côté, et elle est fermée.",
+    bye: "Si tu vomis, c'est dehors. Si tu meurs, c'est dehors aussi.",
+  },
+  "marche-noir": {
+    name: "Le coin de La Fouine",
+    keeper: "La Fouine",
+    items: ["capsule-echo", "cafe-minuit", "sauce-piquante", "poing-americain"],
+    hello: "Rien n'est volé. Tout a juste changé de propriétaire un peu vite.",
+    bye: "On ne s'est jamais vus. Toi non plus, d'ailleurs.",
+  },
   herboristerie: {
     name: "Herboristerie Persil",
     keeper: "Madame Persil",

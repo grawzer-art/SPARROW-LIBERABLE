@@ -376,7 +376,9 @@ export function remasterDecor(base: Ctx, top: Ctx, m: MapDef) {
   px(b, "#e8e2d4", 32 * TILE + 3, 7 * TILE + 2, 5, 6);
   px(b, "#33364f", 32 * TILE + 5, 7 * TILE + 3, 1, 4);
   // ── Ruelle : tag sur le mur, vieux vélo d'affiches déchirées
-  graffiti(b, 19 * TILE + 1, 3 * TILE + 10, true);
+  graffiti(b, 20 * TILE + 3, 4 * TILE + 4, true);
+  // AFTER DARK : escalier du bar clandestin « Le Dernier Verre » (case 19,3), enseigne suspendue
+  barStairs(b, 19 * TILE, 3 * TILE);
   poster(b, 21 * TILE + 10, 3 * TILE + 6, "#9a7fd8", "#e8e2d4");
   // ── Place de la Fontaine : marelle à la craie
   hopscotch(b, 14 * TILE + 4, 16 * TILE + 2);
@@ -400,6 +402,44 @@ export function remasterDecor(base: Ctx, top: Ctx, m: MapDef) {
   wire(top, 18 * TILE + 14, 4 * TILE + 4, 22 * TILE + 1, 3 * TILE + 10, 4);
   wire(top, 26 * TILE + 8, 16 * TILE + 3, 33 * TILE + 8, 16 * TILE + 3, 5);
   laundry(top, 19 * TILE + 1, 5 * TILE + 2, 22 * TILE - 1, 5 * TILE + 2);
+  barSign(top, 19 * TILE + 1, 2 * TILE + 3);
+}
+
+/** Trémie d'escalier vers une porte rouge, rambardes de chaque côté (pur décor, la case reste libre). */
+function barStairs(ctx: Ctx, x: number, y: number) {
+  px(ctx, C.ink, x + 1, y + 1, 14, 14);
+  const steps = ["#4a4656", "#3d3a49", "#312e3c", "#26242f", "#1c1a23"];
+  steps.forEach((c, i) => {
+    px(ctx, c, x + 2, y + 2 + i * 2, 12, 2);
+    px(ctx, "#5a5668", x + 2, y + 2 + i * 2, 12, 1);
+  });
+  // Porte rouge au fond, filet de lumière
+  px(ctx, "#6a1a22", x + 4, y + 11, 8, 4);
+  px(ctx, "#a82a34", x + 5, y + 11, 6, 3);
+  px(ctx, "#ff5a6a", x + 5, y + 14, 6, 1);
+  px(ctx, "#e8c35a", x + 10, y + 12, 1, 1);
+  // Rambardes
+  px(ctx, C.metal, x, y, 1, 16);
+  px(ctx, C.metal, x + 15, y, 1, 16);
+  px(ctx, C.metal, x, y, 16, 1);
+  px(ctx, "#2a2836", x + 1, y + 1, 14, 1);
+}
+
+/** Enseigne néon rouge « BAR », suspendue au-dessus de l'escalier. */
+function barSign(ctx: Ctx, x: number, y: number) {
+  px(ctx, C.metal, x + 3, y - 3, 1, 3);
+  px(ctx, C.metal, x + 11, y - 3, 1, 3);
+  px(ctx, C.ink, x - 1, y, 16, 8);
+  px(ctx, "#2a1018", x, y + 1, 14, 6);
+  const on = "#ff4a5a";
+  // « BAR », centré
+  const rows = ["aa...a...aa.", "a.a.a.a..a.a", "aa..aaa..aa.", "a.a.a.a..a.a", "aa..a.a..a.a"];
+  rows.forEach((r, j) => [...r].forEach((c, i) => c !== "." && px(ctx, on, x + 1 + i, y + 1 + j)));
+  // halo
+  ctx.save();
+  ctx.globalAlpha = 0.18;
+  px(ctx, on, x - 3, y - 2, 20, 12);
+  ctx.restore();
 }
 
 export function drainpipe(ctx: Ctx, x: number, y: number, h: number) {

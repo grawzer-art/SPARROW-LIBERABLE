@@ -21,7 +21,7 @@ import { hash } from "./pixel";
 import { C, cobbleDetail, drainpipe, grassDetail, gravelDetail, ivy, lantern, leaves, noise, pathDetail, poster, puddle, px, walkDetail, wire } from "./remaster404";
 
 type Ctx = CanvasRenderingContext2D;
-type Theme = "maison" | "herbes" | "armes" | "cuisine" | "refuge" | "palais" | "muscu" | "japon" | "dojo" | "tour" | "egout";
+type Theme = "maison" | "herbes" | "armes" | "cuisine" | "refuge" | "palais" | "muscu" | "japon" | "dojo" | "tour" | "egout" | "bar";
 
 const THEME: Partial<Record<string, Theme>> = {
   "maison-chou": "maison",
@@ -36,6 +36,9 @@ const THEME: Partial<Record<string, Theme>> = {
   tour: "tour",
   "tour-sommet": "tour",
   egouts: "egout",
+  bar: "bar",
+  cave: "bar",
+  local: "egout",
 };
 
 const skip = (m: MapDef) => m.id === "quartier";
@@ -322,6 +325,8 @@ export function remasterDecorAll(base: Ctx, top: Ctx, m: MapDef) {
         wallItem(base, theme, tx * TILE, ty * TILE, n++, m);
       }
   }
+  // AFTER DARK : portes percées dans le mur du fond (cave, local technique, escalier)
+  if (m.id === "bar" || m.id === "cave") for (const w of m.warps) if (at(m, w.at.x, w.at.y) === "mur") ironDoor(base, w.at.x * TILE, w.at.y * TILE, w.id === "escalier");
   // Façades des bâtiments
   for (const p of m.props) if (p.kind === "batiment") facade(base, p);
   // Mousse sur les rochers (Mont)
@@ -391,8 +396,54 @@ function wallItem(ctx: Ctx, theme: Theme, X: number, Y: number, n: number, m: Ma
       if (k === 0) grate(ctx, X + 3, Y + 4);
       else pipe(ctx, X, Y + 3);
       break;
+    case "bar":
+      if (k === 0) neonTube(ctx, X + 2, y + 2, n % 2 ? "#ff4a5a" : "#ff6ad8");
+      else if (k === 1) dartboard(ctx, X + 4, y + 1);
+      else poster(ctx, X + 5, y, n % 2 ? "#c62828" : "#e8b830", "#1b1626");
+      break;
   }
   void m;
+}
+
+/** Porte en fer (ou départ d'escalier) dans une façade de mur. */
+function ironDoor(ctx: Ctx, X: number, Y: number, stairs: boolean) {
+  px(ctx, "#0f0c14", X + 2, Y - 4, 12, 16);
+  if (stairs) {
+    ["#4a4656", "#3d3a49", "#312e3c", "#26242f"].forEach((c, i) => px(ctx, c, X + 3, Y + 8 - i * 3, 10, 3));
+    return;
+  }
+  px(ctx, "#3a3a46", X + 3, Y - 3, 10, 14);
+  px(ctx, "#4a4a58", X + 3, Y - 3, 10, 1);
+  for (const yy of [0, 4, 8]) px(ctx, "#2a2a34", X + 3, Y + yy, 10, 1);
+  px(ctx, "#e8c35a", X + 11, Y + 3, 1, 2);
+  px(ctx, "#ff4a5a", X + 5, Y - 2, 6, 1);
+}
+
+/** Néon de bar (AFTER DARK) : tube coudé et halo. */
+function neonTube(ctx: Ctx, x: number, y: number, c: string) {
+  ctx.save();
+  ctx.globalAlpha = 0.2;
+  px(ctx, c, x - 2, y - 2, 16, 9);
+  ctx.restore();
+  px(ctx, c, x, y, 12, 1);
+  px(ctx, c, x, y, 1, 5);
+  px(ctx, c, x + 11, y, 1, 5);
+  px(ctx, c, x + 3, y + 2, 6, 1);
+  px(ctx, "#fff0f4", x + 4, y + 2, 2, 1);
+}
+
+/** Cible de fléchettes, deux fléchettes plantées. */
+function dartboard(ctx: Ctx, x: number, y: number) {
+  const rings = ["#1b1626", "#c62828", "#e8e2d4", "#2e7a4a", "#c62828"];
+  rings.forEach((c, i) => {
+    const r = 4 - i;
+    for (let dy = -r; dy <= r; dy++) {
+      const half = Math.round(Math.sqrt(r * r - dy * dy));
+      px(ctx, c, x + 4 - half, y + 4 + dy, half * 2 + 1, 1);
+    }
+  });
+  px(ctx, "#e8c35a", x + 6, y + 2, 3, 1);
+  px(ctx, "#e8c35a", x + 1, y + 5, 3, 1);
 }
 
 function frame(ctx: Ctx, x: number, y: number, w: number, h: number, sky: string, accent: string, window = false, gold = false) {

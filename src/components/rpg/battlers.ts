@@ -504,7 +504,7 @@ function gonflax(max: boolean): Raster {
 
 /** Lettres claires sur le débardeur de Gonflax (police 3 × 5 minimaliste). */
 function pixelText(r: Raster, t: string, x: number, y: number) {
-  const F: Record<string, string[]> = { G: ["011", "100", "101", "101", "011"], A: ["010", "101", "111", "101", "101"], I: ["111", "010", "010", "010", "111"], N: ["101", "111", "111", "111", "101"] };
+  const F: Record<string, string[]> = { G: ["011", "100", "101", "101", "011"], A: ["010", "101", "111", "101", "101"], I: ["111", "010", "010", "010", "111"], N: ["101", "111", "111", "111", "101"], M: ["101", "111", "111", "101", "101"] };
   [...t].forEach((ch, i) => F[ch]?.forEach((row, yy) => [...row].forEach((b, xx) => b === "1" && r.set(x + i * 4 + xx, y + yy, "#f8f4e8"))));
 }
 
@@ -886,6 +886,122 @@ function brokito(dos: boolean, evo = false): Raster {
   return r;
 }
 
+
+// ─── AFTER DARK : combattants de la cave du Dernier Verre ───
+
+function kevin(): Raster {
+  const r = new Raster(48, 48);
+  // Kevin « La Tornade » : survêt brillant, banane, chaîne en toc, bras en moulinet
+  r.ball(24, 40, 13, 10, "#2e7dd2", "#5aa0ea", "#1f5aa8", (_x, y) => y > 47);
+  r.rect(13, 38, 22, 2, "#f8f4e8");
+  r.line(18, 31, 30, 31, "#e8b830");
+  r.ball(24, 32, 2, 2, "#e8b830");
+  r.ball(24, 19, 8, 9, "#e2a982", "#f0c09a", "#c48a62");
+  // Banane gominée
+  r.ball(26, 10, 9, 4, "#3a2a20", "#5a4a3a", "#2a1a10");
+  r.rect(30, 8, 6, 3, "#3a2a20");
+  eyes(r, 19, 18, 7, "fache");
+  r.rect(21, 25, 7, 1, INK);
+  r.rect(26, 24, 2, 1, "#f8f4e8"); // dent en or ? non : sourire narquois
+  // Bras en moulinet
+  r.ball(8, 28, 4, 4, "#e2a982", "#f0c09a", "#c48a62");
+  r.ball(41, 22, 4, 4, "#e2a982", "#f0c09a", "#c48a62");
+  r.line(11, 31, 13, 35, "#2e7dd2");
+  r.line(38, 25, 35, 33, "#2e7dd2");
+  r.outline(INK);
+  return r;
+}
+
+function bertrand(): Raster {
+  const r = new Raster(56, 56);
+  // Le Gros Bertrand : ventre énorme, marcel taché, petite tête, serviette sur l'épaule
+  r.ball(28, 40, 24, 16, "#e2a982", "#f0c09a", "#c48a62", (_x, y) => y > 55);
+  r.ball(28, 41, 19, 13, "#e8e2d4", "#ffffff", "#c8c2b4", (_x, y) => y > 55);
+  r.ball(22, 44, 3, 2, "#c9a06a");
+  r.ball(33, 38, 2, 2, "#c9a06a");
+  r.ball(28, 18, 8, 8, "#e2a982", "#f0c09a", "#c48a62");
+  r.rect(21, 11, 14, 2, "#3a2a20");
+  eyes(r, 23, 17, 6, "neutre");
+  r.rect(25, 23, 6, 2, "#8e3a2a");
+  r.rect(36, 24, 10, 4, "#c62828");
+  r.ball(5, 38, 5, 8, "#e2a982", "#f0c09a", "#c48a62");
+  r.ball(51, 38, 5, 8, "#e2a982", "#f0c09a", "#c48a62");
+  r.outline(INK);
+  return r;
+}
+
+function ginette(): Raster {
+  const r = new Raster(48, 48);
+  // Sœur Ginette : voile, robe noire, chapelet, tesson de bouteille à la main
+  r.ball(24, 40, 14, 11, "#1b1626", "#3a3446", "#0e0b14", (_x, y) => y > 47);
+  r.ball(24, 18, 11, 12, "#1b1626", "#3a3446", "#0e0b14");
+  r.ball(24, 20, 7, 8, "#e9c4a4", "#f6dcc4", "#c9a084");
+  r.rect(17, 11, 14, 3, "#f8f4e8");
+  eyes(r, 20, 19, 6, "rage");
+  r.rect(21, 25, 6, 1, INK);
+  r.line(19, 31, 24, 38, "#c62828");
+  r.line(29, 31, 24, 38, "#c62828");
+  r.rect(23, 38, 2, 4, "#e8b830");
+  r.rect(22, 39, 4, 1, "#e8b830");
+  // Tesson
+  r.ball(40, 30, 4, 4, "#e9c4a4", "#f6dcc4", "#c9a084");
+  r.line(41, 26, 44, 17, "#6fae6a");
+  r.line(43, 26, 46, 19, "#4f8a4a");
+  r.outline(INK);
+  return r;
+}
+
+function bulldozer(): Raster {
+  const r = new Raster(60, 60);
+  // Bulldozer : crâne rasé, oreillette, t-shirt « SÉCURITÉ » trop petit, bras croisés
+  r.ball(30, 46, 23, 14, "#1d1826", "#3a3446", "#0e0b14", (_x, y) => y > 59);
+  r.rect(16, 38, 28, 7, "#1d1826");
+  r.ball(30, 21, 11, 12, "#c48a62", "#d8a07a", "#a46a42");
+  eyes(r, 24, 19, 9, "fache");
+  r.rect(25, 27, 10, 2, INK);
+  r.rect(40, 18, 2, 6, "#3a3446");
+  r.line(41, 24, 38, 32, "#3a3446");
+  // Bras croisés
+  r.ball(18, 40, 9, 5, "#c48a62", "#d8a07a", "#a46a42");
+  r.ball(42, 42, 9, 5, "#c48a62", "#d8a07a", "#a46a42");
+  r.rect(20, 49, 20, 3, "#f2c14e");
+  r.outline(INK);
+  return r;
+}
+
+function kiki(chauve: boolean): Raster {
+  const r = new Raster(60, 60);
+  // BIG MAMA KIKI : patronne du club, ex-catcheuse, peignoir léopard, clope, bigoudis… puis crâne tatoué
+  r.ball(30, 46, 24, 14, "#c9952e", "#e8b830", "#8e6a1c", (_x, y) => y > 59);
+  for (let i = 0; i < 26; i++) r.ball(10 + ((i * 7) % 40), 38 + ((i * 5) % 18), 1.5, 1.2, "#3a2a1a");
+  r.rect(26, 34, 8, 20, "#c62828");
+  r.ball(30, 20, 12, 13, "#e9b18a", "#f6c8a4", "#c98b66");
+  if (!chauve) {
+    // Perruque rouge volumineuse et bigoudis
+    r.ball(30, 10, 15, 9, "#d23a3a", "#ff5a5a", "#8e1b1b");
+    r.ball(16, 18, 5, 7, "#d23a3a", "#ff5a5a", "#8e1b1b");
+    r.ball(44, 18, 5, 7, "#d23a3a", "#ff5a5a", "#8e1b1b");
+    r.ball(22, 6, 2, 2, "#e8a6c8");
+    r.ball(36, 5, 2, 2, "#e8a6c8");
+    eyes(r, 24, 19, 9, "fache");
+  } else {
+    // Crâne tatoué « MAMAN » et cicatrice
+    r.ball(30, 12, 12, 7, "#e9b18a", "#f6c8a4", "#c98b66");
+    pixelText(r, "MAMAN", 21, 9);
+    r.line(36, 14, 40, 22, "#8e1b1b");
+    eyes(r, 24, 19, 9, "rage");
+  }
+  // Rouge à lèvres et clope
+  r.rect(26, 27, 9, 2, "#c62828");
+  r.rect(35, 27, 7, 1, "#f8f4e8");
+  r.set(42, 27, "#ff7a2a");
+  r.set(43, 26, "#9a9aa8");
+  r.ball(6, 34, 7, 10, "#e9b18a", "#f6c8a4", "#c98b66");
+  r.ball(54, 34, 7, 10, "#e9b18a", "#f6c8a4", "#c98b66");
+  r.outline(INK);
+  return r;
+}
+
 const PAINT: Record<string, (tenue?: string) => Raster> = {
   brokito: () => brokito(false),
   "brokito-dos": () => brokito(true),
@@ -901,6 +1017,12 @@ const PAINT: Record<string, (tenue?: string) => Raster> = {
   "sparrow-samourai": sparrowSamourai,
   pokeyz: pokeyzBack,
   sbire,
+  kevin,
+  bertrand,
+  ginette,
+  bulldozer,
+  kiki: () => kiki(false),
+  "kiki-chauve": () => kiki(true),
   tambour,
   lanterne,
   metronome,

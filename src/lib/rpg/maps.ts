@@ -1,6 +1,7 @@
 /** RPG — registre des cartes de l'aventure et reprise de la position sauvegardée. */
 
 import { restoreOn, type Facing, type MapDef, type MapId, type Tile } from "./mapdef";
+import { AD_MAPS } from "./afterdark";
 import { CH2_MAPS } from "./cite";
 import { nurseOn } from "./infirmerie";
 import { CH4_MAPS } from "./kyukei";
@@ -11,7 +12,7 @@ import type { Rpg } from "./state";
 
 export const MAPS: Partial<Record<MapId, MapDef>> = {
   quartier: QUARTIER,
-  ...Object.fromEntries([...CH2_MAPS, ...CH3_MAPS, ...CH4_MAPS, ...CH5_MAPS].map((m) => [m.id, m])),
+  ...Object.fromEntries([...CH2_MAPS, ...CH3_MAPS, ...CH4_MAPS, ...CH5_MAPS, ...AD_MAPS].map((m) => [m.id, m])),
 };
 
 // Infirmeries : Camomille attend dans chaque grande région

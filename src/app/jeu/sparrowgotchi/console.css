@@ -1942,6 +1942,16 @@
   animation: gwName 0.25s steps(3, end) 0.5s both, gwGlow 0.5s ease-out 0.7s both;
 }
 
+.gw-intro__age {
+  font-family: var(--mono, monospace);
+  font-size: clamp(9px, 2.6vmin, 12px);
+  letter-spacing: 0.22em;
+  color: #c9c3b4;
+  border: 1px solid rgba(229, 57, 53, 0.7);
+  padding: 3px 8px;
+  animation: gwName 0.25s steps(3, end) 0.9s both;
+}
+
 .gw-intro__name b {
   color: var(--red);
   font-weight: inherit;
@@ -2051,6 +2061,7 @@
 @media (prefers-reduced-motion: reduce) {
   .gw-intro__hand,
   .gw-intro__name,
+  .gw-intro__age,
   .gw-phone {
     animation: none;
   }

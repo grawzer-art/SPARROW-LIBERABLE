@@ -7,6 +7,7 @@
  * Ce fichier contient le chapitre 1 (Quartier 404) et l'aiguillage vers les autres chapitres.
  */
 
+import { AD } from "./afterdark";
 import { CH2, CH2_CARD } from "./ch2";
 import { INFIRMERIE_NPCS } from "./infirmerie";
 import { CH3, CH3_CARD } from "./ch3";
@@ -351,7 +352,7 @@ const CH1: Chapter = {
   things: {},
 };
 
-const ALL: Chapter = { npcs: { ...CH1.npcs, ...CH2.npcs, ...CH3.npcs, ...CH4.npcs, ...CH5.npcs }, things: { ...CH1.things, ...CH2.things, ...CH3.things, ...CH4.things, ...CH5.things } };
+const ALL: Chapter = { npcs: { ...CH1.npcs, ...CH2.npcs, ...CH3.npcs, ...CH4.npcs, ...CH5.npcs, ...AD.npcs }, things: { ...CH1.things, ...CH2.things, ...CH3.things, ...CH4.things, ...CH5.things, ...AD.things } };
 
 /** Réplique d'un PNJ sur une carte. */
 export function talkTo(id: string, r: Rpg, map = "quartier"): Conversation {
@@ -383,7 +384,7 @@ export function examine(id: string, r: Rpg, text?: string, map = "quartier"): Co
 
 /** Réplique à l'arrivée sur une carte (`first` = première visite). */
 export function arrival(map: string, r: Rpg, first: boolean): Conversation | null {
-  return CH2.arrival?.(map, r, first) ?? CH3.arrival?.(map, r, first) ?? CH4.arrival?.(map, r, first) ?? CH5.arrival?.(map, r, first) ?? null;
+  return CH2.arrival?.(map, r, first) ?? CH3.arrival?.(map, r, first) ?? CH4.arrival?.(map, r, first) ?? CH5.arrival?.(map, r, first) ?? AD.arrival?.(map, r, first) ?? null;
 }
 
 /** Après une victoire. */
@@ -399,7 +400,7 @@ export function afterBattle(id: string, r: Rpg): Conversation | null {
       ],
       effects: [{ kind: "quest", id: "frites-perdues" }],
     };
-  return CH2.afterBattle?.(id, r) ?? CH3.afterBattle?.(id, r) ?? CH4.afterBattle?.(id, r) ?? CH5.afterBattle?.(id, r) ?? null;
+  return CH2.afterBattle?.(id, r) ?? CH3.afterBattle?.(id, r) ?? CH4.afterBattle?.(id, r) ?? CH5.afterBattle?.(id, r) ?? AD.afterBattle?.(id, r) ?? null;
 }
 
 /** Scène enchaînée après un dialogue (`then: { kind: "scene" }`). */

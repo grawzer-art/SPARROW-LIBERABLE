@@ -71,6 +71,8 @@ interface Particle {
   max: number;
   c: string;
   s: number;
+  /** Gravité (gouttes qui retombent). */
+  g?: number;
   kind?: "z" | "up" | "down" | "ring";
 }
 
@@ -183,6 +185,58 @@ function background(kind: Battle["def"]["bg"], h: number): HTMLCanvasElement {
     band(horizon, h, night ? ["#2a2933", "#24232c", "#1f1e27"] : ["#8a6a5a", "#7a5c4e", "#6a4f44"]);
     x.fillStyle = night ? "#3a3946" : "#9c7c6a";
     for (let gy = horizon + 6; gy < h; gy += 10) for (let gx = (gy / 10) % 2 ? 0 : 8; gx < W; gx += 16) x.fillRect(gx, gy, 10, 1);
+  } else if (kind === "club") {
+    // AFTER DARK : cave du Dernier Verre — briques, néon rouge, foule dans l'ombre, cordes du ring
+    band(0, horizon + 6, ["#120a10", "#1a0e14", "#22121a"]);
+    x.fillStyle = "#0c0609";
+    for (let y = 3; y < horizon + 6; y += 6) {
+      x.fillRect(0, y, W, 1);
+      for (let bx = (y / 6) % 2 ? 0 : 6; bx < W; bx += 12) x.fillRect(bx, y, 1, 6);
+    }
+    // Néon « DERNIER VERRE »
+    x.fillStyle = "#3a0a12";
+    x.fillRect(70, 10, 100, 14);
+    x.fillStyle = "#ff3a4a";
+    const word = (t: string, X: number) => {
+      for (let i = 0; i < t.length; i++) x.fillRect(X + i * 6, 14, 4, 6);
+    };
+    word("DERNIER", 76);
+    x.fillStyle = "#ffb0b8";
+    for (let i = 0; i < 7; i++) x.fillRect(77 + i * 6, 15, 2, 1);
+    x.fillStyle = "#ff3a4a";
+    x.fillRect(122, 14, 40, 2);
+    x.fillRect(122, 18, 40, 2);
+    // Bouteilles et foule
+    for (let i = 0; i < 9; i++) {
+      x.fillStyle = ["#2f5a3a", "#5a3a1a", "#3a2a5a"][i % 3];
+      x.fillRect(12 + i * 6, 30, 3, 8);
+      x.fillRect(13 + i * 6, 27, 1, 3);
+    }
+    for (let i = 0; i < 22; i++) {
+      const cx = Math.floor(hash(i, 4, 11) * W);
+      const r = 5 + Math.floor(hash(i, 5, 11) * 3);
+      x.fillStyle = i % 2 ? "#08040a" : "#0e070c";
+      for (let y = -r; y <= r; y++) {
+        const half = Math.round(Math.sqrt(r * r - y * y));
+        x.fillRect(cx - half, horizon - 2 + y, half * 2, 1);
+      }
+      x.fillRect(cx - r - 3, horizon + 2, r * 2 + 6, 8);
+      if (hash(i, 6, 11) < 0.3) {
+        x.fillStyle = "#ff3a4a";
+        x.fillRect(cx - 2, horizon - 3, 1, 1);
+        x.fillRect(cx + 1, horizon - 3, 1, 1);
+      }
+    }
+    band(horizon + 6, h, ["#3a2a2e", "#33242a", "#2c1f24"]);
+    // Taches au sol et cordes du ring
+    x.fillStyle = "#4a1a1e";
+    for (let i = 0; i < 6; i++) x.fillRect(Math.floor(hash(i, 7, 11) * W), horizon + 14 + Math.floor(hash(i, 8, 11) * (h - horizon - 20)), 6, 2);
+    for (const ry of [horizon + 4, horizon + 9]) {
+      x.fillStyle = "#c62828";
+      x.fillRect(0, ry, W, 1);
+      x.fillStyle = "#e8e2d4";
+      for (let rx = 0; rx < W; rx += 40) x.fillRect(rx, ry, 4, 1);
+    }
   } else if (kind === "egout") {
     band(0, horizon + 10, ["#0f1a17", "#13221d", "#172a24"]);
     x.fillStyle = "#0b1411";
@@ -399,6 +453,7 @@ const PLAT: Record<Battle["def"]["bg"], [string, string]> = {
   dojo: ["#a89858", "#8a7a48"],
   tour: ["#4a3a5a", "#2e2440"],
   sommet: ["#3a3046", "#221a2e"],
+  club: ["#5a2a2a", "#3a1a1e"],
 };
 
 const FX_COLORS: Record<Fx, string[]> = {
@@ -644,6 +699,14 @@ export function BattleScreen({
           a.flashColor = "255,255,255";
         }
         a.pops.push({ side: e.side, text: `-${e.amount}`, c: e.crit ? "#ffd04a" : "#ffffff", t: 0 });
+        if (bRef.current.def.brutal && !reduced) {
+          // AFTER DARK : projections stylisées (gouttes de pixels qui retombent)
+          const sc = scene();
+          const at = e.side === "foe" ? { x: sc.foe.x, y: sc.foe.y - 24 * sc.k } : { x: sc.ally.x, y: sc.ally.y - 26 * sc.k };
+          const n = e.crit ? 14 : 6;
+          for (let k = 0; k < n; k++) a.parts.push({ x: at.x, y: at.y, vx: (Math.random() - 0.5) * 140, vy: -40 - Math.random() * 70, life: 0.55, max: 0.55, c: k % 3 ? "#b0141e" : "#e0303a", s: k % 4 ? 2 : 3, g: 320 });
+          a.shake = e.crit ? 0.6 : 0.35;
+        }
         audio.strike(e.crit);
         navigator.vibrate?.(e.crit ? [30, 20, 40] : 18);
         const i = idx(e.side);
@@ -874,6 +937,7 @@ export function BattleScreen({
       for (const p of a.parts) {
         p.x += p.vx * dt;
         p.y += p.vy * dt;
+        if (p.g) p.vy += p.g * dt;
         p.life -= dt;
       }
       a.parts = a.parts.filter((p) => p.life > 0);

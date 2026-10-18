@@ -160,6 +160,20 @@ export const QUESTS: Quest[] = [
     ],
     reward: { xp: 120, coins: 120 },
   },
+  {
+    id: "dernier-verre",
+    chapter: 1,
+    name: "AFTER DARK — Dernier verre avant minuit",
+    desc: "Au bar clandestin du Quartier 404, Dédé le pochtron jure savoir pourquoi l'horloge est bloquée. Il parlera quand le tournoi truqué de la cave sera tombé. Toi, tu choisis comment.",
+    steps: [
+      { id: "entrer", txt: "Entrer au Dernier Verre" },
+      { id: "dede", txt: "Écouter le « secret » de Dédé" },
+      { id: "tournoi", txt: "Faire tomber le tournoi de la cave" },
+      { id: "verite", txt: "Obtenir la vérité de Dédé" },
+      { id: "local", txt: "Fouiller l'ancien local technique" },
+    ],
+    reward: { xp: 150, coins: 0 },
+  },
 ];
 
 export const questById = (id: string) => QUESTS.find((q) => q.id === id);
@@ -191,6 +205,10 @@ export const RPG_ITEMS: ItemDef[] = [
   { id: "cle-egouts", name: "Clé des égouts", desc: "Une grosse clé rouillée. Elle sent la patate.", icon: "⚿" },
   { id: "uniforme", name: "Uniforme de garde", desc: "Une armure en feuilles de laitue. Ça gratte, mais personne ne te regardera deux fois au palais.", icon: "▤" },
   { id: "graines", name: "Sachets de graines", desc: "Des graines de pommes de terre. L'avenir de la frite tient dans ce sachet.", icon: "⁂" },
+  { id: "chateau-petrole", name: "Château Pétrole 1987", desc: "Le dernier grand cru de Momo. Ça sent le vernis et les regrets. Certains tueraient pour une gorgée.", icon: "▯" },
+  { id: "seringue", name: "Seringue de « jus »", desc: "Trouvée dans le tonneau. Étiquette : « KIKI — AVANT CHAQUE COMBAT ». Une preuve, et une mauvaise idée.", icon: "╪" },
+  { id: "carnet-tarif", name: "Carnet de Monsieur Tarif", desc: "Les paris truqués, les perdants payés, les noms. Écrit proprement. C'est ça le plus inquiétant.", icon: "▤" },
+  { id: "cle-local", name: "Clé du local technique", desc: "Donnée par Dédé. Une étiquette : « NE PAS OUVRIR. SÉRIEUX. »", icon: "⚿" },
   { id: "note-cadran", name: "Note du Cadran", desc: "Un coin de page arraché : un cadran sans aiguilles et « PROTOCOLE ». Le reste a disparu avec Lili.", icon: "❍" },
 ];
 

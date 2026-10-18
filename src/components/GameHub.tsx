@@ -47,6 +47,7 @@ export function GameHub() {
 
         <a href="/jeu/sparrowgotchi" className="hub-card hub-card--gotchi hub-card--cover" aria-labelledby="hub-rpg-title">
           <span className="hub-card__new mono">NOUVEAU</span>
+          <span className="hub-card__age mono" aria-label="Déconseillé aux moins de 18 ans : contenu mature">18+</span>
           {/* Jaquette officielle : le titre est déjà dessiné dessus (titre HTML accessible juste en dessous) */}
           <picture className="hub-cover">
             <source type="image/webp" srcSet="/jeu/sparrow-2359-724.webp 724w, /jeu/sparrow-2359-1086.webp 1086w" sizes="(max-width: 520px) 92vw, 460px" />
