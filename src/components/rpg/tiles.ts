@@ -13,6 +13,7 @@ import { TILE, animated, type Ground, type MapDef, type Prop } from "@/lib/rpg/m
 import { LIVE_KINDS, paintGround2, paintProp2, type Kit } from "./tiles2";
 import { hash, pixelText, textWidth } from "./pixel";
 import { remasterDecor, remasterGround, remasterLights } from "./remaster404";
+import { remasterDecorAll, remasterGroundAll, remasterLightsAll } from "./remaster";
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -764,6 +765,7 @@ export function buildLayers(map: MapDef): Layers {
   const t = top.getContext("2d")!;
   for (let y = 0; y < map.h; y++) for (let x = 0; x < map.w; x++) paintGround(b, x, y);
   remasterGround(b, map);
+  remasterGroundAll(b, map);
   // Ordre : du fond (haut de carte) vers l'avant
   const props = [...map.props].sort((a, c) => a.y + a.h - (c.y + c.h));
   for (const p of props) {
@@ -810,7 +812,8 @@ export function buildLayers(map: MapDef): Layers {
     }
   }
   remasterDecor(b, t, map);
-  LIGHTS.push(...remasterLights(map));
+  remasterDecorAll(b, t, map);
+  LIGHTS.push(...remasterLights(map), ...remasterLightsAll(map));
   return { base, top, lights: LIGHTS };
 }
 
