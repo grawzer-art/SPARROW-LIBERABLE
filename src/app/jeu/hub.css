@@ -163,6 +163,22 @@
   padding: 10px 10px 14px;
 }
 
+/* Mention d'âge (signalétique maison, pas une classification officielle) */
+.hub-card__age {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 2;
+  padding: 4px 7px;
+  background: #14121c;
+  color: #f1efe8;
+  border: 2px solid #e53935;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1;
+}
+
 .hub-cover {
   display: block;
   width: 100%;

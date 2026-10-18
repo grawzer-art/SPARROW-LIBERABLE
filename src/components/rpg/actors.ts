@@ -1253,6 +1253,21 @@ Object.assign(DEFS, {
   },
 });
 
+// AFTER DARK — clientèle du Dernier Verre
+Object.assign(DEFS, {
+  momo: variant("raymond", { H: "#2a1a14", M: "#2a1a14", S: "#c48a62", s: "#a46a42", C: "#f1efe8", c: "#cfc8bc", A: "#1b1626", a: "#0f0c16", P: "#2a2a32", p: "#1a1a22" }),
+  dede: variant("bouchon", { H: "#8a8478", h: "#6a6458", S: "#e8a08a", s: "#c8806a", G: "#e8a08a", C: "#7a6a4a", c: "#5a4a32", A: "#c8b48a", P: "#4a4036", p: "#36302a", r: "#d84a4a" }),
+  bulldozer: variant("gonflax", { S: "#8a5a3a", s: "#6a4228", L: "#1b1626", B: "#1b1626", C: "#1b1626", c: "#0f0c16", W: "#f1efe8", P: "#2a2a32", p: "#1a1a22", Y: "#e8b830" }),
+  fouine: variant("nico", { X: "#3a3a46", x: "#2a2a34", W: "#8a8a96", H: "#5a3a2a", S: "#d8b894", s: "#b8946a", C: "#5a4a6a", c: "#3f3450", A: "#e8b830", P: "#2a2a34", p: "#1b1a24" }),
+  josiane: variant("lili", { X: "#c62828", x: "#8e1b1b", H: "#e8b830", A: "#f1efe8", C: "#c62828", c: "#8e1b1b", P: "#1b1626", p: "#0f0c16", S: "#f0c9a8", r: "#d84a6a" }),
+  habitue: variant("raymond", { H: "#5a5a5a", M: "#5a5a5a", S: "#d8a684", s: "#b8866a", C: "#5a6a4a", c: "#3f4a32", A: "#8a6a3a", a: "#6a4a28", P: "#3a3a3a", p: "#2a2a2a" }),
+  tarif: variant("nico", { X: "#1b1626", x: "#0f0c16", W: "#c62828", H: "#1b1626", S: "#e2c0a0", s: "#c2a080", C: "#2a2a3a", c: "#1a1a28", A: "#e8b830", P: "#1b1626", p: "#0f0c16" }),
+  kevin: variant("nico", { X: "#f1efe8", x: "#cfc8bc", W: "#2e7dd2", H: "#e8c84a", S: "#f0c9a8", s: "#d8a684", C: "#2e7dd2", c: "#1f5a9e", A: "#f1efe8", P: "#2a2a34", p: "#1b1a24" }),
+  bertrand: variant("gonflax", { S: "#f0c9a8", s: "#d8a684", L: "#6a4a2a", B: "#6a4a2a", C: "#f1efe8", c: "#cfc8bc", W: "#f1efe8", P: "#3a4a6a", p: "#2a364e", Y: "#c62828" }),
+  ginette: variant("moine", { R: "#1b1626", C: "#1b1626", c: "#0f0c16", S: "#f0c9a8", s: "#d8a684", H: "#f1efe8", A: "#f1efe8", P: "#1b1626", p: "#0f0c16" }),
+  kiki: variant("gonflax", { S: "#d8a684", s: "#b8866a", L: "#e86aa8", B: "#e86aa8", C: "#e86aa8", c: "#b84a80", W: "#e8b830", P: "#c62828", p: "#8e1b1b", Y: "#e8b830" }),
+});
+
 /** Recoloration de la tenue de Sparrow selon l'objet équipé (même logique que l'appartement). */
 const OUTFIT: Record<string, [string, string]> = {
   "ten-survet": ["#e53935", "#9e1f1c"],

@@ -90,12 +90,13 @@ export function GrawIntro({ sound, onDone }: { sound: boolean; onDone: () => voi
         done.current = true;
         onDone();
       }}
-      aria-label="GRAW STUDIO. Toucher pour passer."
+      aria-label="GRAW STUDIO. 18 ans et plus, contenu mature. Toucher pour passer."
     >
       <PixelHand className="gw-intro__hand" px={7} />
       <span className="gw-intro__name">
         GRAW <b>STUDIO</b>
       </span>
+      <span className="gw-intro__age">18+ — CONTENU MATURE</span>
     </button>
   );
 }

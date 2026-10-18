@@ -49,6 +49,8 @@ export const MOVE_TYPE: Record<string, ElemType> = {
   "developpe-cosmique": "force", "biceps-sismique": "force", "roule-boule": "force", "chute-libre": "force", "shake-explosif": "force", "coup-serviette": "force", "squat-sismique": "force", "pas-cadence": "force", "coup-baguette": "force", "mousse-aveuglante": "force", "kata-vent": "force",
   // Temps
   "iai-eclair": "temps", "lame-temps": "temps", "tic-tac": "temps", "coupe-seconde": "temps", "minute-ultime": "temps", "pique-aiguille": "temps", "tic-rapide": "temps", "sable-temps": "temps", "tempete-sable": "temps", "minute-volee": "temps", "aiguilles-jumelles": "temps", "protocole-minuit": "temps",
+  // AFTER DARK
+  "gnole-enflammee": "feu", "clope-oeil": "feu",
 };
 
 /** Type des membres de l'équipe et des ennemis (les formes de Sparrow changent son type). */
@@ -59,6 +61,7 @@ export const FIGHTER_TYPE: Record<string, ElemType> = {
   "haltere-sauvage": "force", proteinator: "force", "moine-gain": "force", gonflax: "force",
   "sbire-metronome": "temps", tambour: "force", "lanterne-folle": "feu", metronome: "temps", katsu: "force",
   trotteuse: "temps", coucou: "tech", "grand-sablier": "temps", minuit: "temps",
+  kevin: "force", bertrand: "force", ginette: "ombre", bulldozer: "force", kiki: "feu",
 };
 
 /** Texte affiché après un coup (null = neutre). */
