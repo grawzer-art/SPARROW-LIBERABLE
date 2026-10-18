@@ -9,12 +9,13 @@ import { MINIGAMES, type GameId } from "@/lib/gotchi/minigames";
 import { missionDef } from "@/lib/gotchi/missions";
 import { CONSUMABLES, EQUIPMENT, MEMBERS, MOVES } from "@/lib/rpg/bestiary";
 import { makeAlly, usableOutside } from "@/lib/rpg/combat";
+import type { UiPrefs } from "./uiMode";
 import { ACTIVE, EVOLUTIONS, RARITY_LABEL, SPECIES, evolvedForms, isSeen, ownLevels, xpNeed } from "@/lib/rpg/monsters";
 import { TYPE_LABEL } from "@/lib/rpg/types";
 import { battler } from "@/components/rpg/battlers";
 import { QUESTS, RPG_ITEMS, isDone, nextStep, status } from "@/lib/rpg/quest";
 
-export type PageId = "quetes" | "jeux" | "missions" | "inventaire" | "appart" | "profil" | "equipe" | "bestiaire" | "options";
+export type PageId = "quetes" | "jeux" | "missions" | "inventaire" | "appart" | "profil" | "equipe" | "bestiaire" | "options" | "quitter";
 
 export const MENU: { id: PageId; label: string; icon: string }[] = [
   { id: "quetes", label: "Quêtes", icon: "!" },
@@ -26,6 +27,7 @@ export const MENU: { id: PageId; label: string; icon: string }[] = [
   { id: "profil", label: "Profil", icon: "☺" },
   { id: "jeux", label: "Mini-jeux", icon: "★" },
   { id: "options", label: "Options", icon: "⚙" },
+  { id: "quitter", label: "Quitter l'aventure", icon: "⏏" },
 ];
 
 const TITLE: Record<PageId, string> = {
@@ -38,6 +40,7 @@ const TITLE: Record<PageId, string> = {
   equipe: "ÉQUIPE",
   bestiaire: "BESTIAIRE",
   options: "OPTIONS",
+  quitter: "QUITTER",
 };
 
 const STATUS_LABEL = { disponible: "DISPONIBLE", active: "EN COURS", terminee: "TERMINÉE" } as const;
@@ -71,6 +74,11 @@ export interface PageHandlers {
   useItem: (id: string) => void;
   goRoom: (r: RoomId) => void;
   toggleSound: () => void;
+  /** Opacité des commandes tactiles au repos (0,2 à 0,7). */
+  setPadOpacity: (v: number) => void;
+  toggleIntro: () => void;
+  /** Autoriser / interdire le jeu en portrait sur téléphone. */
+  setPortrait: (on: boolean) => void;
   exportSave: () => void;
   importSave: () => void;
   reset: () => void;
@@ -84,12 +92,13 @@ interface Props {
   room: RoomId;
   /** Sparrow est dehors (Quartier 404). */
   outside: boolean;
+  prefs: UiPrefs;
   h: PageHandlers;
   onClose: () => void;
 }
 
 /** Pages du MENU, affichées dans l'écran de la console. */
-export function Page({ page, state, now, sound, room, outside, h, onClose }: Props) {
+export function Page({ page, state, now, sound, room, outside, prefs, h, onClose }: Props) {
   const [slot, setSlot] = useState<Slot | "objets" | "combat">("objets");
   const [qtab, setQtab] = useState<"quetes" | "journal">("quetes");
   const [tab, setTab] = useState<"meubles" | "deco" | "plan">("plan");
@@ -692,6 +701,16 @@ export function Page({ page, state, now, sound, room, outside, h, onClose }: Pro
             <div className="gb-opts">
               <button type="button" className="gb-btn gb-btn--wide" onClick={h.toggleSound}>
                 SON : {sound ? "ACTIVÉ" : "COUPÉ"}
+              </button>
+              <label className="gb-range">
+                <span>OPACITÉ DES COMMANDES : {Math.round(prefs.padOpacity * 100)} %</span>
+                <input type="range" min={20} max={70} step={5} value={Math.round(prefs.padOpacity * 100)} onChange={(e) => h.setPadOpacity(Number(e.target.value) / 100)} aria-label="Opacité des commandes tactiles" />
+              </label>
+              <button type="button" className="gb-btn gb-btn--wide" onClick={h.toggleIntro}>
+                INTRO GRAW STUDIO : {prefs.intro ? "ACTIVÉE" : "DÉSACTIVÉE"}
+              </button>
+              <button type="button" className="gb-btn gb-btn--wide" onClick={() => h.setPortrait(false)}>
+                REVENIR AU MODE PAYSAGE
               </button>
               <button type="button" className="gb-btn gb-btn--wide" onClick={h.exportSave}>
                 EXPORTER LA SAUVEGARDE

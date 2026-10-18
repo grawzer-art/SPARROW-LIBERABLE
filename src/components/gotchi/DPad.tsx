@@ -59,7 +59,7 @@ export function DPad({ onMove, onStep }: Props) {
   return (
     <div
       ref={zone}
-      className="gb-dpad"
+      className={`gb-dpad${lit.x || lit.y ? " is-active" : ""}`}
       onPointerDown={(e) => {
         if (active.current !== null) return;
         active.current = e.pointerId;

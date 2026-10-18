@@ -53,6 +53,8 @@ import { RythmeGame } from "../rpg/RythmeGame";
 import { ShopScreen } from "../rpg/ShopScreen";
 import { OW_H, OW_W, Overworld, type OwFrame } from "../rpg/overworld";
 import { DPad, type Dir } from "./DPad";
+import { GrawIntro, RotateScreen } from "./ImmersiveScreens";
+import { DEFAULT_PREFS, loadPrefs, releaseLandscape, savePrefs, tryLandscape, useUiMode, type UiPrefs } from "./uiMode";
 import { FarmGame, type FarmSummary } from "./FarmGame";
 import { MuscuGame, type MuscuSummary } from "./MuscuGame";
 import { MENU, Page, type PageId } from "./Pages";
@@ -65,12 +67,14 @@ const WHERE_KEY = "sp.gotchi.where";
 /** L'appartement (160 × 144) est centré dans l'écran du RPG, comme les intérieurs des RPG portables. */
 /** Échelle de l'appartement : ×1,5 dès que l'écran est assez haut (la pièce remplit alors la largeur). */
 const aptScale = (h: number) => (h >= VIEW_H * 1.5 ? 1.5 : 1);
-const aptBox = (h: number) => {
+const aptBox = (h: number, w = OW_W) => {
   const k = aptScale(h);
-  return { k, x: Math.round((OW_W - VIEW_W * k) / 2), y: Math.round((h - VIEW_H * k) / 2) };
+  return { k, x: Math.round((w - VIEW_W * k) / 2), y: Math.round((h - VIEW_H * k) / 2) };
 };
 /** Hauteur de la vue (pixels de jeu) : elle s'adapte à l'espace libre sur le téléphone. */
 const MIN_VH = 168;
+/** Combat en paysage : scène centrée (largeur 240, rapport ≈ 1,3), commandes sur les côtés. */
+const BATTLE_H_LAND = 184;
 const MAX_VH = 420;
 
 const MOOD_LABEL: Record<Mood, string> = {
@@ -189,6 +193,38 @@ export function Gotchi() {
   /** Dialogue à ouvrir quand l'écran titre du chapitre est refermé. */
   const afterCard = useRef<Conversation | null>(null);
   const [vh, setVh] = useState(OW_H);
+  // Paysage immersif (iPhone) : vue plus large, pixels nets (échelle entière ×2 ou ×3)
+  const ui = useUiMode();
+  const immersive = ui.mode === "immersive";
+  const [vw, setVw] = useState(OW_W);
+  const viewW = useRef(OW_W);
+  const [prefs, setPrefs] = useState<UiPrefs>(DEFAULT_PREFS);
+  const [intro, setIntro] = useState(false);
+  const introDone = useRef(false);
+  useEffect(() => {
+    const p = loadPrefs();
+    setPrefs(p);
+    if (!p.intro) introDone.current = true;
+  }, []);
+  // L'intro GRAW STUDIO se joue une fois par lancement, quand l'écran de jeu est prêt (pas pendant « tourne ton iPhone »)
+  useEffect(() => {
+    if (!ui.ready || introDone.current || ui.mode === "rotate") return;
+    introDone.current = true;
+    setIntro(true);
+  }, [ui.ready, ui.mode]);
+  // Pendant l'aventure en paysage, la barre de navigation de l'application disparaît complètement
+  useEffect(() => {
+    const on = ui.mode !== "classic";
+    document.documentElement.classList.toggle("sp-play", on);
+    return () => document.documentElement.classList.remove("sp-play");
+  }, [ui.mode]);
+  const updPrefs = useCallback((p: Partial<UiPrefs>) => {
+    setPrefs((cur) => {
+      const next = { ...cur, ...p };
+      savePrefs(next);
+      return next;
+    });
+  }, []);
 
   // L'écran de jeu prend toute la hauteur libre : on montre plus de carte au lieu d'agrandir les pixels.
   useEffect(() => {
@@ -197,15 +233,28 @@ export function Gotchi() {
     const fit = () => {
       const r = box.getBoundingClientRect();
       if (r.width < 10 || r.height < 10) return;
+      if (box.dataset.immersive === "1") {
+        // Paysage : 1 pixel de jeu = 2 pixels d'écran (3 sur grand écran) → plus de monde visible, rien d'étiré
+        const k = r.height <= 470 ? 2 : 3;
+        const h = Math.max(150, Math.min(320, Math.floor(r.height / k)));
+        const w = Math.max(OW_W, Math.min(640, Math.floor(r.width / k)));
+        viewH.current = h;
+        viewW.current = w;
+        setVh(h);
+        setVw(w);
+        return;
+      }
       const h = Math.max(MIN_VH, Math.min(MAX_VH, Math.floor((OW_W * r.height) / r.width)));
       viewH.current = h;
+      viewW.current = OW_W;
       setVh(h);
+      setVw(OW_W);
     };
     fit();
     const ro = new ResizeObserver(fit);
     ro.observe(box);
     return () => ro.disconnect();
-  }, []);
+  }, [immersive]);
   const uiRef = useRef({ menu, page, game, conv: false, fight: false, chapter: false, credits: false });
   useEffect(() => {
     uiRef.current = { menu, page, game, conv: !!conv, fight: !!fight, chapter: !!chapter, credits };
@@ -922,7 +971,7 @@ export function Gotchi() {
       if (s && w) {
         const t = Date.now();
         if (whereRef.current !== "appart" && ow.current) {
-          ow.current.setView(OW_W, viewH.current);
+          ow.current.setView(viewW.current, viewH.current);
           ow.current.draw(ctx, owFrameOf(s, reduced.current), dt);
         } else {
           const actx = aptCanvas.current?.getContext("2d");
@@ -942,9 +991,9 @@ export function Gotchi() {
               dt,
             );
             ctx.imageSmoothingEnabled = false;
-            const ab = aptBox(viewH.current);
+            const ab = aptBox(viewH.current, viewW.current);
             ctx.fillStyle = "#06060a";
-            ctx.fillRect(0, 0, OW_W, viewH.current);
+            ctx.fillRect(0, 0, viewW.current, viewH.current);
             ctx.fillStyle = "#14121c";
             ctx.fillRect(ab.x - 3, ab.y - 3, VIEW_W * ab.k + 6, VIEW_H * ab.k + 6);
             ctx.drawImage(aptCanvas.current!, ab.x, ab.y, VIEW_W * ab.k, VIEW_H * ab.k);
@@ -1062,6 +1111,7 @@ export function Gotchi() {
   };
 
   const openPage = (p: PageId) => {
+    if (p === "quitter") return quitAdventure();
     setMenu(null);
     setPage(p);
     audio.current.coin();
@@ -1134,8 +1184,8 @@ export function Gotchi() {
     if (line) setLine(null);
     if (whereRef.current !== "appart") return; // dehors : on explore à la croix
     const rect = e.currentTarget.getBoundingClientRect();
-    const ab = aptBox(viewH.current);
-    const px = (((e.clientX - rect.left) / rect.width) * OW_W - ab.x) / ab.k;
+    const ab = aptBox(viewH.current, viewW.current);
+    const px = (((e.clientX - rect.left) / rect.width) * viewW.current - ab.x) / ab.k;
     const py = (((e.clientY - rect.top) / rect.height) * viewH.current - ab.y) / ab.k;
     if (px < 0 || py < 0 || px > VIEW_W || py > VIEW_H) return;
     const cache = cacheOf(s, Date.now());
@@ -1361,6 +1411,17 @@ export function Gotchi() {
     say("Nouveau Sparrow, mêmes exigences. Frites, s'il te plaît.");
   };
 
+  /** START › Quitter l'aventure : tout est enregistré, puis retour à l'accueil (en portrait). */
+  const quitAdventure = () => {
+    const s = stateRef.current;
+    if (s) save(KEY, tick(s, Date.now()));
+    if (world.current) save(POS_KEY, world.current.place);
+    const o = ow.current;
+    if (whereRef.current !== "appart" && o && !o.moving) save(WHERE_KEY, { map: o.map.id, x: o.x, y: o.y, dir: o.dir });
+    void releaseLandscape();
+    location.href = "/";
+  };
+
   const toggleSound = () => {
     const v = !sound;
     setSound(v);
@@ -1398,7 +1459,10 @@ export function Gotchi() {
   const cur = conv ? conv.lines[conv.i] : null;
 
   return (
-    <div className={`gb-wrap${legend ? " is-legend" : ""}`}>
+    <div
+      className={`gb-wrap${legend ? " is-legend" : ""}${immersive ? " gb-wrap--immersive" : ""}${page ? " is-page" : ""}${chapter || credits || intro ? " is-cine" : ""}${fight ? " is-fight" : ""}`}
+      style={{ "--pad-op": prefs.padOpacity } as React.CSSProperties}
+    >
       <main className="gb">
         <header className="gb-top mono">
           <a href="/jeu" className="gb-top__back" aria-label="Retour aux jeux">
@@ -1426,10 +1490,10 @@ export function Gotchi() {
           )}
         </header>
 
-        <div ref={screenBox} className={`gb-screen gb-screen--${outside ? "rue" : m}`}>
+        <div ref={screenBox} data-immersive={immersive ? "1" : "0"} className={`gb-screen gb-screen--${outside ? "rue" : m}`}>
           <canvas
             ref={canvas}
-            width={OW_W}
+            width={vw}
             height={vh}
             className="gb-screen__canvas"
             onPointerDown={onCanvas}
@@ -1503,7 +1567,7 @@ export function Gotchi() {
               tenue={state.equip.tenue}
               audio={audio.current}
               reduced={reduced.current}
-              height={vh}
+              height={immersive ? BATTLE_H_LAND : vh}
               pad={pad}
               onEnd={endFight}
             />
@@ -1592,6 +1656,7 @@ export function Gotchi() {
             sound={sound}
             room={room}
             outside={outside}
+            prefs={prefs}
             onClose={() => setPage(null)}
             h={{
               playGame: openGame,
@@ -1623,6 +1688,9 @@ export function Gotchi() {
                 world.current?.goTo({ room: r, x: 80, y: 90 }, undefined, reduced.current);
               },
               toggleSound,
+              setPadOpacity: (v) => updPrefs({ padOpacity: v }),
+              toggleIntro: () => updPrefs({ intro: !prefs.intro }),
+              setPortrait: (on) => ui.allowPortrait(on),
               exportSave,
               importSave: () => fileInput.current?.click(),
               reset,
@@ -1630,6 +1698,8 @@ export function Gotchi() {
           />
         </div>
       )}
+      {ui.mode === "rotate" && <RotateScreen onTry={() => void tryLandscape()} onPortrait={() => ui.allowPortrait(true)} />}
+      {intro && <GrawIntro sound={sound} onDone={() => setIntro(false)} />}
       <input ref={fileInput} type="file" accept="application/json,.json" hidden onChange={(e) => importSave(e.target.files?.[0])} />
 
       {game === "farm" && state && <FarmGame audio={audio.current} best={state.bestFarm} reduced={reduced.current} onFinish={onFarmFinish} onClose={closeGame} />}
