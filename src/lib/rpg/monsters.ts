@@ -8,18 +8,74 @@
 
 import { BATTLES, MEMBERS, MOVES } from "./bestiary";
 import type { MonSave, Rpg } from "./state";
+import type { ElemType } from "./types";
 
+export type Rarity = "commun" | "peu-commun" | "rare" | "epique" | "legendaire";
+export const RARITY_LABEL: Record<Rarity, string> = { commun: "Commun", "peu-commun": "Peu commun", rare: "Rare", epique: "Épique", legendaire: "Légendaire" };
+
+/** Bestiaire officiel du Chaos : 24 espèces de base (référence : noms, numéros, types, raretés, régions). */
 export interface Species {
   id: string;
-  /** Numéro dans le Bestiaire. */
+  /** Numéro officiel dans le Bestiaire. */
   n: number;
-  type: string;
-  habitat: string;
-  /** Sprite de face (combat). */
-  sprite: string;
+  name: string;
+  type: ElemType;
+  rarity: Rarity;
+  region: string;
+  /** Capacité signature (officielle). */
+  signature: string;
+  /** Lieu précis où on la trouve (espèces déjà présentes dans le jeu). */
+  habitat?: string;
+  /** Sprite de face (combat) : seulement les espèces déjà jouables. */
+  sprite?: string;
 }
 
-export const SPECIES: Species[] = [{ id: "brokito", n: 1, type: "Végétal", habitat: "Potager du Jardin royal (Cité des Frites Perdues)", sprite: "brokito" }];
+const R404 = "Quartier 404", CITE = "Cité des Frites", MUSCLE = "Confrérie du Muscle", SAMOURAI = "Voie du Samouraï", TOUR = "Tour des Heures";
+const sp = (n: number, id: string, name: string, type: ElemType, rarity: Rarity, region: string, signature: string, more: Partial<Species> = {}): Species => ({ n, id, name, type, rarity, region, signature, ...more });
+
+export const SPECIES: Species[] = [
+  sp(1, "grizap", "Grizap", "tech", "commun", R404, "Court-circuit"),
+  sp(2, "lampix", "Lampix", "tech", "peu-commun", R404, "Flash électrique"),
+  sp(3, "poubrom", "Poubrom", "ombre", "rare", R404, "Nuage toxique"),
+  sp(4, "brokito", "Brokito", "nature", "commun", CITE, "Spores empoisonnées", { habitat: "Potager du Jardin royal (Cité des Frites Perdues)", sprite: "brokito" }),
+  sp(5, "patatox", "Patatox", "feu", "peu-commun", CITE, "Patate brûlante"),
+  sp(6, "saladrille", "Saladrille", "nature", "commun", CITE, "Fouet végétal"),
+  sp(7, "fritcrabe", "Fritcrabe", "feu", "rare", CITE, "Pince dorée"),
+  sp(8, "mayochaos", "Mayochaos", "ombre", "epique", CITE, "Sauce maudite"),
+  sp(9, "gonflin", "Gonflin", "force", "commun", MUSCLE, "Petit uppercut"),
+  sp(10, "proteino", "Protéino", "force", "peu-commun", MUSCLE, "Shake explosif"),
+  sp(11, "musclopin", "Musclopin", "force", "rare", MUSCLE, "Triple répétition"),
+  sp(12, "bancome", "Bancôme", "ombre", "epique", MUSCLE, "Développé spectral"),
+  sp(13, "bambushi", "Bambushi", "nature", "commun", SAMOURAI, "Bambou tranchant"),
+  sp(14, "ombrelot", "Ombrelot", "ombre", "peu-commun", SAMOURAI, "Frappe invisible"),
+  sp(15, "kataneko", "Kataneko", "force", "rare", SAMOURAI, "Griffe du dojo"),
+  sp(16, "paradojo", "Paradojo", "tech", "epique", SAMOURAI, "Parade parfaite"),
+  sp(17, "rouageon", "Rouageon", "tech", "commun", TOUR, "Rouage tournoyant"),
+  sp(18, "minicro", "Minicro", "temps", "peu-commun", TOUR, "Ralentissement"),
+  sp(19, "bugfantom", "Bugfantom", "tech", "rare", TOUR, "Erreur fatale"),
+  sp(20, "sablombre", "Sablombre", "temps", "epique", TOUR, "Sablier inversé"),
+  sp(21, "fritalune", "Fritalune", "temps", "legendaire", CITE, "Tempête dorée"),
+  sp(22, "halterox", "Haltérox", "force", "legendaire", MUSCLE, "Dernière répétition"),
+  sp(23, "kagezora", "Kagezora", "ombre", "legendaire", SAMOURAI, "Lame céleste"),
+  sp(24, "chronarque", "Chronarque", "temps", "legendaire", TOUR, "Fracture temporelle"),
+];
+
+/**
+ * Évolutions officielles : formes supplémentaires suivies dans la collection (elles ne remplacent
+ * pas les espèces de base). Les légendaires n'évoluent pas.
+ */
+export const EVOLUTIONS: { from: string; name: string; lv: number; extra?: string }[] = [
+  { from: "brokito", name: "Brokolosse", lv: 16 },
+  { from: "patatox", name: "Patatorche", lv: 20 },
+  { from: "lampix", name: "Lampionox", lv: 18 },
+  { from: "ombrelot", name: "Ombracier", lv: 22 },
+  { from: "minicro", name: "Minuitro", lv: 25 },
+  { from: "gonflin", name: "Gonflator", lv: 20 },
+  { from: "kataneko", name: "Kataneko Shogun", lv: 25, extra: "épreuve du dojo" },
+];
+
+/** Formes évoluées obtenues (une créature capturée qui a atteint son niveau d'évolution). */
+export const evolvedForms = (r: Rpg) => EVOLUTIONS.filter((e) => (r.mons?.[e.from]?.level ?? 0) >= e.lv && MEMBERS[e.from]?.evo).map((e) => e.name);
 
 export const speciesOf = (id: string) => SPECIES.find((s) => s.id === id) ?? null;
 

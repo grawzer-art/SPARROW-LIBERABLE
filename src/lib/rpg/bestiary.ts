@@ -206,7 +206,8 @@ export const MEMBERS: Record<string, Member> = {
       { lv: 8, replaces: "fouet-tige", move: "fouet-epineux" },
       { lv: 14, replaces: "pluie-florets", move: "tempete-florets" },
     ],
-    evo: { lv: 14, name: "Brokolosse", sprite: "brokolosse-dos", front: "brokolosse" },
+    // Évolution officielle : niveau 16
+    evo: { lv: 16, name: "Brokolosse", sprite: "brokolosse-dos", front: "brokolosse" },
     desc: "Créature végétale des potagers. Têtu, joueur, il pousse plus vite quand on le complimente.",
   },
   sparrow: {

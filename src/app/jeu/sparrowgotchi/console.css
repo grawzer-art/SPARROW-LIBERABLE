@@ -1715,3 +1715,23 @@
 .rythme__pop.is-parfait { color: #3ccf6a; }
 .rythme__pop.is-bien { color: #f2c14e; }
 .rythme__pop.is-rate { color: #ff6f7a; }
+
+/* Types officiels (badge de l'ennemi en combat) */
+.bt-type {
+  margin-left: 4px;
+  padding: 0 3px;
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fff;
+  border-radius: 2px;
+  vertical-align: middle;
+}
+.bt-type--tech { background: #3a7ab8; }
+.bt-type--ombre { background: #5a3a7a; }
+.bt-type--nature { background: #3f8a3a; }
+.bt-type--feu { background: #c8462a; }
+.bt-type--force { background: #a8742a; }
+.bt-type--temps { background: #2a8a8a; }

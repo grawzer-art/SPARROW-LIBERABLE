@@ -71,3 +71,60 @@ Le mode en ligne est en pause. Son code reste en place (`/jeu/online`, `src/lib/
   - Camomille qui soigne et enregistre le point de retour ;
   - défaite face à deux Trotteuses, choix « À L'INFIRMERIE », puis réveil devant Camomille, équipe soignée ;
   - aucune erreur.
+
+## Étape 2 : types officiels, faiblesses et résistances, Bestiaire officiel
+
+### Matrice (`src/lib/rpg/types.ts`)
+| Attaque ↓ / cible → | Tech | Ombre | Nature | Feu | Force | Temps |
+|---|---|---|---|---|---|---|
+| **Tech** | = | ▲ | = | ▼ | ▼ | ▲ |
+| **Ombre** | ▼ | = | ▲ | ▲ | ▼ | = |
+| **Nature** | = | ▼ | = | ▼ | ▲ | ▲ |
+| **Feu** | ▲ | ▼ | ▲ | = | = | ▼ |
+| **Force** | ▲ | ▲ | ▼ | = | = | ▼ |
+| **Temps** | ▼ | = | ▼ | ▲ | ▲ | = |
+
+▲ super efficace (×1,3) · ▼ peu efficace (×0,77) · = neutre. Une technique du même type que son lanceur gagne ×1,1.
+
+Chaque type bat 2 types, en craint 2, et reste neutre face à 2. Aucun ne domine.
+
+### Types des combattants
+- **Équipe :** Sparrow Tech, Chevalier Noir Ombre, Gérard Feu, Lili Ombre, Pokeyz Tech, Brokito Nature.
+- **Transformations :** en Titan, Sparrow devient Force ; en Samouraï, il devient Temps.
+- **Ennemis :**
+  - le Potager royal (chapitre 2) est Nature ;
+  - la Confrérie est Force ;
+  - la Tour est surtout Temps, avec le Coucou mécanique en Tech ;
+  - au chapitre 4, on trouve du Temps, de la Force et du Feu.
+- **Boss :** ses attaques fétiches (comme celles de Gonflax) sont neutres. Seules quelques-unes portent son type, pour que l'équilibrage des chapitres soit conservé.
+- **Techniques :** chaque technique offensive a un type ou reste neutre (coups sans élément). Les techniques de soin et de bonus n'ont pas de type.
+
+### Affichage en combat
+- Le type de l'ennemi est un badge de couleur dans son encadré.
+- Le menu des techniques affiche le type de la technique et « SUPER EFFICACE » ou « PEU EFFICACE » face à l'ennemi actuel.
+- Après le coup, le message « C'est super efficace ! » ou « Ce n'est pas très efficace… » s'affiche.
+
+L'IA ennemie tient compte des types, car ses dégâts estimés les incluent.
+
+### Bestiaire officiel (`SPECIES`, `EVOLUTIONS` dans `monsters.ts`)
+- **24 espèces** avec leur numéro, nom, type, rareté, région et capacité signature officiels.
+- **Les espèces encore absentes du jeu** apparaissent en « ??? », avec leur région et leur rareté.
+- **Brokito :** il devient le N°004, de type Nature. Il évolue en Brokolosse au **niveau 16** (niveau officiel).
+- **7 évolutions officielles**, suivies dans la collection (« formes évoluées X / 7 »). Les légendaires n'évoluent pas.
+- **Compteur :** « Collection X / 24 ».
+
+### Tests
+- `tests/types.test.ts` (7 tests) :
+  - matrice équilibrée ;
+  - données complètes ;
+  - super efficace et peu efficace, avec leurs messages ;
+  - changement de type en Titan ;
+  - registre officiel (24 espèces, 4 légendaires) ;
+  - évolutions.
+- Les équilibrages des 5 chapitres passent, avec les mêmes seuils qu'avant. Le joueur simulé fait maintenant entrer un équipier qui ne craint pas l'ennemi.
+- **Navigateur** :
+  - badge FORCE sur l'Haltère Sauvage ;
+  - menu « TECH · … · PEU EFFICACE » ;
+  - message « C'est super efficace ! » ;
+  - Bestiaire sur 24 entrées ;
+  - aucune erreur.

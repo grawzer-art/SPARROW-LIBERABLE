@@ -17,12 +17,12 @@
 | Gérard | 10 Fleur de sel · 18 Frite colossale |
 | Lili | 12 Dague fantôme · 18 Coup de maître |
 | Pokeyz | 18 Drop sismique · 22 Scratch suprême |
-| Brokito | 8 Fouet épineux · 14 Tempête de florets |
+| Brokito | 8 Fouet épineux · 14 Tempête de florets (évolue au niveau 16) |
 
 Les techniques de l'histoire, comme Pluie de frites, restent en place.
 
 ## Évolution
-`Member.evo` : Brokito devient **Brokolosse** au niveau 14.
+`Member.evo` : Brokito devient **Brokolosse** au niveau 16 (niveau officiel).
 - Il change de nom et de sprites (face et dos).
 - Ses statistiques gagnent +12 %.
 - Le message « Quoi ? Brokito évolue en Brokolosse ! » s'affiche.

@@ -13,6 +13,7 @@
 
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 import { CONSUMABLES, FORMS, MEMBERS, MOVES, nameOf, type Fx } from "@/lib/rpg/bestiary";
+import { MOVE_TYPE, TYPE_LABEL, typeMult } from "@/lib/rpg/types";
 import { ally, bagAfter, foe, forced, forms, freshFight, hpAfter, mustSwap, playTurn, spoils, startBattle, type Action, type Battle, type BattleEvent, type Side, type Team } from "@/lib/rpg/combat";
 import type { Chiptune } from "../game/audio";
 import { battler } from "./battlers";
@@ -1194,7 +1195,7 @@ export function BattleScreen({
   const sel =
     mode === "moves"
       ? cur >= 4 && fl[cur - 4]
-        ? { power: 0, acc: 100, desc: `Transformation (une seule par combat) : ${FORMS[fl[cur - 4]].desc} pendant ${b.titan.turns} tours.`, hits: undefined, charge: undefined }
+        ? { id: "", power: 0, acc: 100, desc: `Transformation (une seule par combat) : ${FORMS[fl[cur - 4]].desc} pendant ${b.titan.turns} tours.`, hits: undefined, charge: undefined }
         : MOVES[me.moves[cur]]
       : null;
 
@@ -1206,6 +1207,7 @@ export function BattleScreen({
           <p className="bt-box__name">
             {fo.name}
             {st(disp.foeStatus[disp.f])}
+            {fo.type && <em className={`bt-type bt-type--${fo.type}`}>{TYPE_LABEL[fo.type]}</em>}
             <span>Nv{fo.lv}</span>
           </p>
           <p className="bt-hp">
@@ -1277,8 +1279,9 @@ export function BattleScreen({
             {sel && (
               <p className="bt-info">
                 <span>
-                  PUI {sel.power ? (sel.hits ? `${sel.power}×${sel.hits[0]}-${sel.hits[1]}` : sel.power) : "—"} · PRÉ {sel.acc}
+                  {MOVE_TYPE[sel.id] ? `${TYPE_LABEL[MOVE_TYPE[sel.id]].toUpperCase()} · ` : ""}PUI {sel.power ? (sel.hits ? `${sel.power}×${sel.hits[0]}-${sel.hits[1]}` : sel.power) : "—"} · PRÉ {sel.acc}
                   {sel.charge ? " · 1 tour" : ""}
+                  {sel.power && fo ? (typeMult(MOVE_TYPE[sel.id], fo.type) > 1 ? " · SUPER EFFICACE" : typeMult(MOVE_TYPE[sel.id], fo.type) < 1 ? " · PEU EFFICACE" : "") : ""}
                 </span>
                 {sel.desc}
               </p>
