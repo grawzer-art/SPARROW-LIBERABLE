@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 import { CONSUMABLES, FORMS, MEMBERS, MOVES, nameOf, type Fx } from "@/lib/rpg/bestiary";
 import { MOVE_TYPE, TYPE_LABEL, typeMult } from "@/lib/rpg/types";
+import { battleAmbient } from "./remaster";
 import { ally, bagAfter, foe, forced, forms, freshFight, hpAfter, mustSwap, playTurn, spoils, startBattle, type Action, type Battle, type BattleEvent, type Side, type Team } from "@/lib/rpg/combat";
 import type { Chiptune } from "../game/audio";
 import { battler } from "./battlers";
@@ -914,6 +915,7 @@ export function BattleScreen({
       ctx.save();
       ctx.translate(sx, 0);
       ctx.drawImage(background(bt.def.bg, height), 0, 0);
+      battleAmbient(ctx, bt.def.bg, a.t, W, height, reduced);
       const [pb, pe] = PLAT[bt.def.bg];
       platform(ctx, s.foe.x, s.foe.y, 40 * s.k, 8 * s.k, pb, pe);
       platform(ctx, s.ally.x, s.ally.y - 2, Math.min(58, 40 * s.k), 9 * s.k, pb, pe);

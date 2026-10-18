@@ -52,6 +52,7 @@ import { CookGame } from "../rpg/CookGame";
 import { RythmeGame } from "../rpg/RythmeGame";
 import { ShopScreen } from "../rpg/ShopScreen";
 import { OW_H, OW_W, Overworld, type OwFrame } from "../rpg/overworld";
+import { apartmentAmbient } from "../rpg/remaster";
 import { DPad, type Dir } from "./DPad";
 import { GrawIntro, RotateScreen } from "./ImmersiveScreens";
 import { DEFAULT_PREFS, loadPrefs, releaseLandscape, savePrefs, tryLandscape, useUiMode, type UiPrefs } from "./uiMode";
@@ -997,6 +998,7 @@ export function Gotchi() {
             ctx.fillStyle = "#14121c";
             ctx.fillRect(ab.x - 3, ab.y - 3, VIEW_W * ab.k + 6, VIEW_H * ab.k + 6);
             ctx.drawImage(aptCanvas.current!, ab.x, ab.y, VIEW_W * ab.k, VIEW_H * ab.k);
+            apartmentAmbient(ctx, viewW.current, viewH.current, t / 1000, reduced.current, { x: ab.x, y: ab.y, w: VIEW_W * ab.k, h: VIEW_H * ab.k });
           }
         }
       }

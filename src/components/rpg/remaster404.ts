@@ -17,13 +17,13 @@ import { hash } from "./pixel";
 
 type Ctx = CanvasRenderingContext2D;
 
-const px = (ctx: Ctx, c: string, x: number, y: number, w = 1, h = 1) => {
+export const px = (ctx: Ctx, c: string, x: number, y: number, w = 1, h = 1) => {
   ctx.fillStyle = c;
   ctx.fillRect(x, y, w, h);
 };
 
 /** Bruit de valeur lissé (taches d'herbe, usure) : 0..1, continu d'une case à l'autre. */
-function noise(x: number, y: number, cell: number, seed: number) {
+export function noise(x: number, y: number, cell: number, seed: number) {
   const gx = Math.floor(x / cell);
   const gy = Math.floor(y / cell);
   const fx = (x - gx * cell) / cell;
@@ -39,7 +39,7 @@ function noise(x: number, y: number, cell: number, seed: number) {
 }
 
 // Palette (identique à la palette de nuit de tiles.ts, plus quelques nuances)
-const C = {
+export const C = {
   grass: "#2c4a3a",
   grassD: "#233c2f",
   grassDD: "#1d3328",
@@ -128,15 +128,14 @@ export function remasterGround(ctx: Ctx, m: MapDef) {
 }
 
 /** Herbe : grandes taches plus sombres / plus claires, touffes, trèfles, cailloux. */
-function grassDetail(ctx: Ctx, X: number, Y: number, tx: number, ty: number) {
+export function grassDetail(ctx: Ctx, X: number, Y: number, tx: number, ty: number) {
   for (let y = 0; y < TILE; y++)
     for (let x = 0; x < TILE; x++) {
       const wx = X + x;
       const wy = Y + y;
       const n = noise(wx, wy, 22, 71);
       const chk = (wx + wy) % 2 === 0;
-      if (n < 0.28 && chk) px(ctx, C.grassD, wx, wy);
-      else if (n < 0.2) px(ctx, C.grassDD, wx, wy);
+      if (n < 0.24 && chk) px(ctx, C.grassD, wx, wy);
       else if (n > 0.78 && chk && hash(wx, wy, 72) < 0.5) px(ctx, C.grassL, wx, wy);
     }
   // Touffes (petit « v » clair sur ombre)
@@ -159,7 +158,7 @@ function grassDetail(ctx: Ctx, X: number, Y: number, tx: number, ty: number) {
 }
 
 /** Trottoir : grandes dalles irrégulières, joints, fissures, chewing-gums, bordure ombrée. */
-function walkDetail(ctx: Ctx, X: number, Y: number, tx: number, ty: number, m: MapDef) {
+export function walkDetail(ctx: Ctx, X: number, Y: number, tx: number, ty: number, m: MapDef) {
   // Nuance de dalle (une dalle sur trois un peu plus usée)
   for (let s = 0; s < 4; s++) {
     const sx = X + (s % 2) * 8;
@@ -190,7 +189,7 @@ function walkDetail(ctx: Ctx, X: number, Y: number, tx: number, ty: number, m: M
 }
 
 /** Route : asphalte irrégulier, réparations, traces d'usure, fissures. */
-function roadDetail(ctx: Ctx, X: number, Y: number, tx: number, ty: number, lower: boolean) {
+export function roadDetail(ctx: Ctx, X: number, Y: number, tx: number, ty: number, lower: boolean) {
   for (let y = 0; y < TILE; y++)
     for (let x = 0; x < TILE; x++) {
       const wx = X + x;
@@ -255,7 +254,7 @@ function manhole(ctx: Ctx, x: number, y: number) {
   px(ctx, "#454452", x + 2, y + 1, 3, 1);
 }
 
-function puddle(ctx: Ctx, x: number, y: number, w: number, h: number) {
+export function puddle(ctx: Ctx, x: number, y: number, w: number, h: number) {
   for (let dy = 0; dy < h; dy++) {
     const k = Math.abs(dy - (h - 1) / 2) / (h / 2);
     const inset = Math.round(k * k * (w / 3));
@@ -266,11 +265,12 @@ function puddle(ctx: Ctx, x: number, y: number, w: number, h: number) {
 }
 
 /** Place pavée : usure au centre, mousse dans les joints près des bords, pavés manquants. */
-function cobbleDetail(ctx: Ctx, X: number, Y: number, tx: number, ty: number, m: MapDef) {
-  // Anneau décoratif autour de la fontaine (centre 17.5, 18.5)
+export function cobbleDetail(ctx: Ctx, X: number, Y: number, tx: number, ty: number, m: MapDef) {
+  // Anneau décoratif autour de la fontaine (centre 17.5, 18.5) — Quartier 404 seulement
   const cx = 17.5 * TILE;
   const cy = 18.5 * TILE;
-  for (let y = 0; y < TILE; y++)
+  if (isQuartier(m))
+    for (let y = 0; y < TILE; y++)
     for (let x = 0; x < TILE; x++) {
       const d = Math.hypot(X + x - cx, (Y + y - cy) * 1.05);
       if (d > 34 && d < 38) px(ctx, (Math.floor(Math.atan2(Y + y - cy, X + x - cx) * 8) & 1) === 0 ? C.stoneL : "#9890a4", X + x, Y + y);
@@ -293,7 +293,7 @@ function cobbleDetail(ctx: Ctx, X: number, Y: number, tx: number, ty: number, m:
   }
 }
 
-function gravelDetail(ctx: Ctx, X: number, Y: number, tx: number, ty: number) {
+export function gravelDetail(ctx: Ctx, X: number, Y: number, tx: number, ty: number) {
   // Taches d'huile et ornières
   if (hash(tx, ty, 130) < 0.08) {
     const ox = X + 3 + Math.floor(hash(tx, ty, 131) * 6);
@@ -305,7 +305,7 @@ function gravelDetail(ctx: Ctx, X: number, Y: number, tx: number, ty: number) {
 }
 
 /** Chemin de terre : bordure de petites pierres côté herbe, ornières. */
-function pathDetail(ctx: Ctx, X: number, Y: number, tx: number, ty: number, m: MapDef) {
+export function pathDetail(ctx: Ctx, X: number, Y: number, tx: number, ty: number, m: MapDef) {
   const sides: [number, number][] = [
     [-1, 0],
     [1, 0],
@@ -402,14 +402,14 @@ export function remasterDecor(base: Ctx, top: Ctx, m: MapDef) {
   laundry(top, 19 * TILE + 1, 5 * TILE + 2, 22 * TILE - 1, 5 * TILE + 2);
 }
 
-function drainpipe(ctx: Ctx, x: number, y: number, h: number) {
+export function drainpipe(ctx: Ctx, x: number, y: number, h: number) {
   px(ctx, C.metalD, x, y, 3, h);
   px(ctx, C.metal, x, y, 1, h);
   for (let i = 6; i < h; i += 14) px(ctx, C.metalL, x - 1, y + i, 5, 1);
   px(ctx, C.metalD, x - 1, y + h - 2, 5, 2);
 }
 
-function acUnit(ctx: Ctx, x: number, y: number) {
+export function acUnit(ctx: Ctx, x: number, y: number) {
   px(ctx, C.ink, x - 1, y - 1, 6, 6);
   px(ctx, "#8b8f9c", x, y, 4, 4);
   px(ctx, "#a4a8b4", x, y, 4, 1);
@@ -440,7 +440,7 @@ function graffiti(ctx: Ctx, x: number, y: number, alt = false) {
   glyph(x + 8, ["a.a", "a.a", "aaa", "..a", "..b"]);
 }
 
-function poster(ctx: Ctx, x: number, y: number, c1: string, c2: string) {
+export function poster(ctx: Ctx, x: number, y: number, c1: string, c2: string) {
   px(ctx, C.ink, x - 1, y - 1, 8, 10);
   px(ctx, c1, x, y, 6, 8);
   px(ctx, c2, x + 1, y + 2, 4, 2);
@@ -457,7 +457,7 @@ function neon24(ctx: Ctx, x: number, y: number) {
   g.forEach((r, j) => [...r].forEach((c, i) => c === "a" && px(ctx, on, x + i, y + j)));
 }
 
-function ivy(ctx: Ctx, x: number, y: number, h: number, w: number, seed: number) {
+export function ivy(ctx: Ctx, x: number, y: number, h: number, w: number, seed: number) {
   for (let j = 0; j < h; j++) {
     const spread = Math.round(w * (0.5 + 0.5 * noise(x, y + j, 9, seed)));
     for (let i = 0; i < spread; i++) {
@@ -467,7 +467,7 @@ function ivy(ctx: Ctx, x: number, y: number, h: number, w: number, seed: number)
   }
 }
 
-function lantern(ctx: Ctx, x: number, y: number) {
+export function lantern(ctx: Ctx, x: number, y: number) {
   px(ctx, C.metalD, x + 2, y - 3, 1, 3);
   px(ctx, C.ink, x, y, 5, 7);
   px(ctx, "#ffcf6a", x + 1, y + 1, 3, 5);
@@ -497,14 +497,14 @@ function hopscotch(ctx: Ctx, x: number, y: number) {
   px(ctx, "rgba(232,226,212,0.5)", x + 5, y + 2, 2, 2);
 }
 
-function lily(ctx: Ctx, x: number, y: number) {
+export function lily(ctx: Ctx, x: number, y: number) {
   px(ctx, "#2f6a3a", x, y, 5, 3);
   px(ctx, "#3f8a48", x + 1, y, 3, 1);
   px(ctx, "#1f3d63", x + 2, y + 1, 1, 2);
   if ((x + y) % 3 === 0) px(ctx, "#f0b8c8", x + 3, y - 1, 2, 1);
 }
 
-function reeds(ctx: Ctx, x: number, y: number) {
+export function reeds(ctx: Ctx, x: number, y: number) {
   for (let i = 0; i < 5; i++) {
     const h = 5 + ((i * 3) % 4);
     px(ctx, i % 2 ? C.leafM : C.leafL, x + i, y - h, 1, h);
@@ -512,7 +512,7 @@ function reeds(ctx: Ctx, x: number, y: number) {
   }
 }
 
-function leaves(ctx: Ctx, cx: number, cy: number, seed: number) {
+export function leaves(ctx: Ctx, cx: number, cy: number, seed: number) {
   const cols = ["#7a4a32", "#9a6a2a", "#5c3a2a"];
   for (let i = 0; i < 7; i++) {
     const a = hash(seed, i, 160) * Math.PI * 2;
@@ -538,7 +538,7 @@ function conduit(ctx: Ctx, x1: number, y1: number, x2: number, y2: number) {
 }
 
 /** Câble suspendu (chaînette), 1 px, sombre avec un reflet. */
-function wire(ctx: Ctx, x1: number, y1: number, x2: number, y2: number, sag: number) {
+export function wire(ctx: Ctx, x1: number, y1: number, x2: number, y2: number, sag: number) {
   const n = Math.max(2, Math.abs(x2 - x1));
   let last: [number, number] | null = null;
   for (let i = 0; i <= n; i++) {

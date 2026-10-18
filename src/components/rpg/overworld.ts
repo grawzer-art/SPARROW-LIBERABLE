@@ -32,6 +32,7 @@ import { charSprite, type Dir, type Frame } from "./actors";
 import { lightSprite, pixelText, textWidth } from "./pixel";
 import { LIVE_KINDS, drawLive, drawMuck } from "./tiles2";
 import { remasterLive, remasterTop } from "./remaster404";
+import { remasterLiveAll, remasterTopAll } from "./remaster";
 import { buildLayers, drawBarrier, drawClockFace, drawCore, drawFountainWater, drawGate, drawWater, propOf, type Layers, type Light } from "./tiles";
 
 export const OW_W = 240;
@@ -609,6 +610,7 @@ export class Overworld {
     if (this.map.region === "egout") drawMuck(ctx, this.map, this.t, ox, oy);
     for (const p of this.live) if (shown(p, r)) drawLive(ctx, p, isOpen(p, r) || !!p.on?.(r), this.t, ox, oy);
     remasterLive(ctx, this.map, this.t, ox, oy, this.vw, this.vh, f.reduced);
+    remasterLiveAll(ctx, this.map, this.t, ox, oy, this.vw, this.vh, f.reduced);
 
     // Personnages triés par profondeur
     const actors: { y: number; draw: () => void }[] = [];
@@ -658,6 +660,7 @@ export class Overworld {
       drawClockFace(ctx, p, p.text ?? (frozen ? "23:59" : "00:00"), this.t, ox, oy, frozen);
     }
     remasterTop(ctx, this.map, this.t, ox, oy, f.reduced);
+    remasterTopAll(ctx, this.map, this.t, ox, oy, this.vw, this.vh, f.reduced);
 
     // Ambiance + lumières
     this.drawLight(ctx, f, ox, oy, me);
@@ -762,7 +765,7 @@ export class Overworld {
       const ly = L.y - oy;
       if (lx < -L.r || ly < -L.r || lx > this.vw + L.r || ly > this.vh + L.r) continue;
       // Quartier 404 (remaster) : halos des lampadaires un peu plus chauds
-      if (this.map.id === "quartier" && L.color !== "#a66cff") {
+      if (L.color !== "#a66cff") {
         // Remaster : halo chaud en anneaux tramés (pixel art, sans flou)
         warmPool(ctx, lx, ly, L.r, L.color === "#ffd98a" ? "#ffc46a" : L.color);
         continue;
