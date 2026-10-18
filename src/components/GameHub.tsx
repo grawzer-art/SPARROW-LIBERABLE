@@ -2,20 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { load } from "@/lib/storage";
-import { mood, restore, tick, type Mood } from "@/lib/gotchi/engine";
 import { bake } from "./game/sprites";
 import { SpritePreview } from "./game/SpritePreview";
 import { sparrow } from "./gotchi/sprites";
-
-const STATUS: Partial<Record<Mood, string>> = {
-  affame: "Sparrow réclame des frites !",
-  creve: "Sparrow est épuisé (il nie)",
-  deprime: "Sparrow déprime. Viens le voir.",
-  crise: "Sparrow fait une crise dramatique",
-  gras: "Sparrow est devenu une frite",
-  dofus: "Sparrow est en session Dofus",
-  content: "Sparrow est au top",
-};
 
 function GotchiFace() {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -39,16 +28,9 @@ function GotchiFace() {
 /** Onglet JEU : choix entre les deux jeux. */
 export function GameHub() {
   const [best, setBest] = useState(0);
-  const [gotchi, setGotchi] = useState<string | null>(null);
 
   useEffect(() => {
     setBest(load<number>("sp.game.best", 0));
-    const raw = load<unknown>("sp.gotchi.v1", null);
-    if (raw) {
-      const t = Date.now();
-      const s = tick(restore(raw, t), t);
-      setGotchi(STATUS[mood(s, t)] ?? "Sparrow t'attend. Il fait semblant que non.");
-    } else setGotchi("Un Sparrow attend d'être adopté.");
   }, []);
 
   return (
@@ -77,17 +59,20 @@ export function GameHub() {
           <span className="btn btn--primary hub-card__cta">▶ Jouer</span>
         </a>
 
-        <a href="/jeu/sparrowgotchi" className="hub-card hub-card--gotchi">
+        <a href="/jeu/sparrowgotchi" className="hub-card hub-card--gotchi hub-card--cover" aria-labelledby="hub-rpg-title">
           <span className="hub-card__new mono">NOUVEAU</span>
-          <div className="hub-card__art hub-card__art--egg" aria-hidden="true">
-            <GotchiFace />
-          </div>
+          {/* Jaquette officielle : le titre est déjà dessiné dessus (titre HTML accessible juste en dessous) */}
+          <picture className="hub-cover">
+            <source type="image/webp" srcSet="/jeu/sparrow-2359-724.webp 724w, /jeu/sparrow-2359-1086.webp 1086w" sizes="(max-width: 520px) 92vw, 460px" />
+            <img src="/jeu/sparrow-2359.jpg" width={1086} height={1448} alt="Jaquette de SPARROW : 23:59 — Sparrow, barbe rousse, devant la grande horloge figée à minuit, sous un ciel rouge." decoding="async" />
+          </picture>
           <div className="hub-card__txt">
-            <span className="mono hub-card__tag">JEU 02 · RPG + ANIMAL VIRTUEL</span>
-            <h2 className="hub-card__title">SPARROW : 23:59</h2>
-            <p className="mono hub-card__subtitle">L&apos;Élu de la Minute</p>
-            <p className="mono hub-card__desc">Une aventure RPG rétro : combats au tour par tour, compagnons, boss, et le temps figé à 23:59. Et toujours son appart, ses frites et ses sessions de farm.</p>
-            <span className="mono hub-card__meta hub-card__meta--live">{gotchi ?? "…"}</span>
+            <span className="mono hub-card__tag">JEU 02 · RPG RÉTRO</span>
+            <h2 id="hub-rpg-title" className="sr-only">
+              SPARROW : 23:59
+            </h2>
+            <p className="hub-card__hook">Tout est figé à 23:59. Sauf l&apos;aventure.</p>
+            <p className="mono hub-card__desc">Explore la ville, recrute des compagnons, affronte des monstres et perce le mystère de minuit.</p>
           </div>
           <span className="btn btn--primary hub-card__cta">▶ Jouer</span>
         </a>

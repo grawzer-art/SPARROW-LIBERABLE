@@ -154,3 +154,47 @@
   letter-spacing: 0.16em;
   transform: rotate(3deg);
 }
+
+/* ─── Carte du RPG : la jaquette en vedette ─── */
+
+.hub-card--cover {
+  grid-template-columns: 1fr;
+  gap: 12px;
+  padding: 10px 10px 14px;
+}
+
+.hub-cover {
+  display: block;
+  width: 100%;
+  max-width: 460px;
+  justify-self: center;
+  border: 1px solid #2a2418;
+  box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(242, 193, 78, 0.18);
+}
+
+.hub-cover img {
+  display: block;
+  width: 100%;
+  height: auto; /* proportions d'origine : rien n'est rogné */
+}
+
+.hub-card--cover .hub-card__txt {
+  gap: 8px;
+  padding: 0 4px;
+}
+
+.hub-card__hook {
+  margin: 0;
+  font-family: var(--display);
+  font-size: clamp(21px, 6.2vw, 26px);
+  line-height: 1.08;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: #f2c14e;
+  text-wrap: balance;
+}
+
+.hub-card--cover .hub-card__desc {
+  font-size: 12.5px;
+  line-height: 1.5;
+}
