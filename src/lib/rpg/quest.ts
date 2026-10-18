@@ -174,6 +174,54 @@ export const QUESTS: Quest[] = [
     ],
     reward: { xp: 150, coins: 0 },
   },
+  {
+    id: "dette-lardon",
+    chapter: 2,
+    name: "AFTER DARK — La dette de Papi Lardon",
+    desc: "Derrière le bistrot fermé de la Cité, un tripot. Papi Lardon doit 500 FP à Gras-Double, qui compte lui casser les doigts. Un friteur sans doigts, c'est une tragédie.",
+    steps: [
+      { id: "entrer", txt: "Entrer dans le tripot" },
+      { id: "lardon", txt: "Écouter Papi Lardon" },
+      { id: "regler", txt: "Régler la dette (d'une façon ou d'une autre)" },
+    ],
+    reward: { xp: 150, coins: 0 },
+  },
+  {
+    id: "salle-fond",
+    chapter: 3,
+    name: "AFTER DARK — La salle du fond",
+    desc: "Derrière le refuge du Mont, le Docteur Créatine vend un « jus » miracle aux moines. Le petit Frère Brindille va y laisser ses économies. Et peut-être ses reins.",
+    steps: [
+      { id: "entrer", txt: "Entrer dans la salle du fond" },
+      { id: "brindille", txt: "Parler à Frère Brindille" },
+      { id: "labo", txt: "Régler le cas du Docteur" },
+    ],
+    reward: { xp: 220, coins: 0 },
+  },
+  {
+    id: "snack-sakura",
+    chapter: 4,
+    name: "AFTER DARK — Le Snack Sakura",
+    desc: "Au village, un karaoké où l'Oyabun Tonkatsu fait payer « sa chanson » à Mama Fumiko tous les soirs. Il chante faux. C'est presque le pire.",
+    steps: [
+      { id: "entrer", txt: "Entrer au Snack Sakura" },
+      { id: "fumiko", txt: "Écouter Mama Fumiko" },
+      { id: "racket", txt: "Régler le cas de l'Oyabun" },
+    ],
+    reward: { xp: 300, coins: 0 },
+  },
+  {
+    id: "tic-tac",
+    chapter: 5,
+    name: "AFTER DARK — Le Tic-Tac Club",
+    desc: "Dans le mur de la Tour, un casino où l'on mise ses minutes. Monsieur Encore-Une a perdu la sienne : il est bloqué à 23:58. Même pour cette ville, c'est triste.",
+    steps: [
+      { id: "entrer", txt: "Entrer au Tic-Tac Club" },
+      { id: "joueur", txt: "Écouter Monsieur Encore-Une" },
+      { id: "banque", txt: "Faire sauter la banque (ou s'y associer)" },
+    ],
+    reward: { xp: 400, coins: 0 },
+  },
 ];
 
 export const questById = (id: string) => QUESTS.find((q) => q.id === id);
@@ -209,6 +257,9 @@ export const RPG_ITEMS: ItemDef[] = [
   { id: "seringue", name: "Seringue de « jus »", desc: "Trouvée dans le tonneau. Étiquette : « KIKI — AVANT CHAQUE COMBAT ». Une preuve, et une mauvaise idée.", icon: "╪" },
   { id: "carnet-tarif", name: "Carnet de Monsieur Tarif", desc: "Les paris truqués, les perdants payés, les noms. Écrit proprement. C'est ça le plus inquiétant.", icon: "▤" },
   { id: "cle-local", name: "Clé du local technique", desc: "Donnée par Dédé. Une étiquette : « NE PAS OUVRIR. SÉRIEUX. »", icon: "⚿" },
+  { id: "recette-lardon", name: "Recette des frites du diable", desc: "Le secret de Papi Lardon, sur un papier gras. Il pèse plus lourd qu'il ne devrait.", icon: "✎" },
+  { id: "cartes-marquees", name: "Jeu de cartes marqué", desc: "Prêté par Loulou. Cinq rois, deux as de pique, et une conscience en option.", icon: "▤" },
+  { id: "registre-doc", name: "Registre du Docteur", desc: "« JUS : eau, colorant, piment. Coût 0,02 FP. Prix 300 FP. » La science, version escroc.", icon: "▤" },
   { id: "note-cadran", name: "Note du Cadran", desc: "Un coin de page arraché : un cadran sans aiguilles et « PROTOCOLE ». Le reste a disparu avec Lili.", icon: "❍" },
 ];
 

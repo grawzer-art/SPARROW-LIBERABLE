@@ -11,9 +11,9 @@ import type { Rpg } from "./state";
 
 export const TILE = 16;
 
-export type MapId = "quartier" | "cite" | "maison-chou" | "herboristerie" | "armurerie" | "restaurant" | "egouts" | "palais" | "sentier" | "refuge" | "temple-cour" | "temple" | "cerisiers" | "village" | "auberge" | "dojo" | "tour-parvis" | "tour" | "tour-sommet" | "bar" | "cave" | "local";
+export type MapId = "quartier" | "cite" | "maison-chou" | "herboristerie" | "armurerie" | "restaurant" | "egouts" | "palais" | "sentier" | "refuge" | "temple-cour" | "temple" | "cerisiers" | "village" | "auberge" | "dojo" | "tour-parvis" | "tour" | "tour-sommet" | "bar" | "cave" | "local" | "tripot" | "labo" | "snack" | "casino";
 
-export const MAP_IDS: MapId[] = ["quartier", "cite", "maison-chou", "herboristerie", "armurerie", "restaurant", "egouts", "palais", "sentier", "refuge", "temple-cour", "temple", "cerisiers", "village", "auberge", "dojo", "tour-parvis", "tour", "tour-sommet", "bar", "cave", "local"];
+export const MAP_IDS: MapId[] = ["quartier", "cite", "maison-chou", "herboristerie", "armurerie", "restaurant", "egouts", "palais", "sentier", "refuge", "temple-cour", "temple", "cerisiers", "village", "auberge", "dojo", "tour-parvis", "tour", "tour-sommet", "bar", "cave", "local", "tripot", "labo", "snack", "casino"];
 
 /** Ambiance : règle l'éclairage (nuit, crépuscule, intérieur, souterrain, palais). */
 export type Region = "nuit" | "crepuscule" | "interieur" | "egout" | "palais" | "aube";

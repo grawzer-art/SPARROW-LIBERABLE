@@ -2,6 +2,7 @@
 
 import { restoreOn, type Facing, type MapDef, type MapId, type Tile } from "./mapdef";
 import { AD_MAPS } from "./afterdark";
+import { AD2_DOORS, AD2_MAPS } from "./afterdark2";
 import { CH2_MAPS } from "./cite";
 import { nurseOn } from "./infirmerie";
 import { CH4_MAPS } from "./kyukei";
@@ -12,8 +13,11 @@ import type { Rpg } from "./state";
 
 export const MAPS: Partial<Record<MapId, MapDef>> = {
   quartier: QUARTIER,
-  ...Object.fromEntries([...CH2_MAPS, ...CH3_MAPS, ...CH4_MAPS, ...CH5_MAPS, ...AD_MAPS].map((m) => [m.id, m])),
+  ...Object.fromEntries([...CH2_MAPS, ...CH3_MAPS, ...CH4_MAPS, ...CH5_MAPS, ...AD_MAPS, ...AD2_MAPS].map((m) => [m.id, m])),
 };
+
+// AFTER DARK : portes dérobées des quatre régions
+for (const d of AD2_DOORS) MAPS[d.map]?.warps.push(d.warp);
 
 // Infirmeries : Camomille attend dans chaque grande région
 for (const m of Object.values(MAPS)) if (m) m.npcs.push(...nurseOn(m.id));

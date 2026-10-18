@@ -50,7 +50,7 @@ export const MOVE_TYPE: Record<string, ElemType> = {
   // Temps
   "iai-eclair": "temps", "lame-temps": "temps", "tic-tac": "temps", "coupe-seconde": "temps", "minute-ultime": "temps", "pique-aiguille": "temps", "tic-rapide": "temps", "sable-temps": "temps", "tempete-sable": "temps", "minute-volee": "temps", "aiguilles-jumelles": "temps", "protocole-minuit": "temps",
   // AFTER DARK
-  "gnole-enflammee": "feu", "clope-oeil": "feu",
+  "gnole-enflammee": "feu", "clope-oeil": "feu", "friture-bouillante": "feu", "wasabi-nez": "feu", "piqure-doc": "tech", "baguettes-yeux": "ombre", banco: "temps", "rateau-croupier": "temps",
 };
 
 /** Type des membres de l'équipe et des ennemis (les formes de Sparrow changent son type). */
@@ -62,6 +62,7 @@ export const FIGHTER_TYPE: Record<string, ElemType> = {
   "sbire-metronome": "temps", tambour: "force", "lanterne-folle": "feu", metronome: "temps", katsu: "force",
   trotteuse: "temps", coucou: "tech", "grand-sablier": "temps", minuit: "temps",
   kevin: "force", bertrand: "force", ginette: "ombre", bulldozer: "force", kiki: "feu",
+  "jumeau-mayo": "force", "gras-double": "feu", biscoto: "force", "dr-creatine": "tech", "sushi-man": "ombre", oyabun: "ombre", pendule: "temps", veuve: "temps",
 };
 
 /** Texte affiché après un coup (null = neutre). */
