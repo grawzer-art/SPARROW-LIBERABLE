@@ -1,10 +1,12 @@
 import * as THREE from "three";
 import { findPath } from "../sim/path";
+import { streetCount, streetPolyline } from "../sim/Layout";
 import type { SimulationEngine } from "../sim/SimulationEngine";
 import type { City } from "../sim/types";
 import { T } from "../sim/World";
 import { box, cyl, merge } from "./geo";
 import { GrowMesh } from "./grow";
+import type { PathSeg } from "./Terrain";
 import { carModel, droneModel, lampModel, pylonModel, trainCar } from "./units";
 
 interface Edge { a: City; b: City; era: number; pts: [number, number][]; cum: number[]; len: number; trains: boolean; civ: number; seed: number; }
@@ -28,6 +30,9 @@ export class Infra {
   private d = new THREE.Object3D();
   private col = new THREE.Color();
   private N = 64;
+  /** Chemins peints dans le sol (terre battue, pavés, ballast) : transitions naturelles avec le terrain. */
+  paths: PathSeg[] = [];
+  pathVer = 0;
   stats = { edges: 0, vehicles: 0, pylons: 0, wallPieces: 0 };
 
   constructor(private scene: THREE.Scene, private mobile: boolean) {
@@ -110,6 +115,25 @@ export class Infra {
       for (const v of [A, B, C2, B, D, C2]) { arrP.push(v[0] - N / 2, v[1], v[2] - N / 2); arrC.push(c.r, c.g, c.b); }
     };
     const pylonPts: [number, number, number, number][] = [];
+    const paths: PathSeg[] = [];
+    // rues rayonnantes et place centrale de chaque ville (peintes dans le sol : transitions naturelles)
+    for (const c of sim.cities) {
+      if (!c.hasHall && c.pop < 6) continue;
+      const era = this.cityEra(sim, c);
+      let reach = 2.4;
+      for (const b of sim.buildings) if (b.city === c.id && b.civ >= 0 && b.hp > 0 && b.type !== "farm") reach = Math.max(reach, Math.hypot(b.x - c.x, b.y - c.y));
+      const len = Math.min(10, reach + 0.6);
+      const bed = [[0.26, 0x8a6f4a], [0.3, 0xb3a47c], [0.3, 0x8c867b], [0.3, 0x6f695f], [0.32, 0x55575a], [0.32, 0x3d444c]][era];
+      for (let i = 0; i < streetCount(c); i++) {
+        const pts = streetPolyline(c, i, len);
+        for (let k = 0; k + 1 < pts.length; k++) paths.push({ ax: pts[k][0], ay: pts[k][1], bx: pts[k + 1][0], by: pts[k + 1][1], w: bed[0] as number, col: bed[1] as number });
+      }
+      const cx = c.x + 0.5, cy = c.y + 0.5;
+      for (let k = 0; k < 10; k++) {
+        const a0 = (k / 10) * Math.PI * 2, a1 = ((k + 1) / 10) * Math.PI * 2;
+        paths.push({ ax: cx + Math.cos(a0) * 0.85, ay: cy + Math.sin(a0) * 0.85, bx: cx + Math.cos(a1) * 0.85, by: cy + Math.sin(a1) * 0.85, w: 0.5, col: [0x9a7f58, 0xc4b88e, 0xa39c8e, 0x7a736a, 0x6a6e73, 0xbcd0dc][era] });
+      }
+    }
     for (const e of edges) {
       const style = [[0.05, 0x9a7c52], [0.085, 0xd2c6a4], [0.085, 0x8e8a80], [0.11, 0x7a736a], [0.11, 0x3c4046], [0.11, 0x1f2a36]][e.era];
       const hw = style[0] as number, color = style[1] as number;
@@ -120,7 +144,9 @@ export class Infra {
         const nx = (-dz / L), nz = dx / L;
         const ha = w.heightAt(ax, ay) + 0.04, hb = w.heightAt(bx, by) + 0.04;
         const P = (x: number, z: number, h: number, off: number) => [x + nx * off, h, z + nz * off];
-        quad(P(ax, ay, ha, hw), P(ax, ay, ha, -hw), P(bx, by, hb, hw), P(bx, by, hb, -hw), color, pos, col);
+        const bed = [[0.3, 0x8a6f4a], [0.34, 0xb3a47c], [0.34, 0x8c867b], [0.34, 0x6f695f], [0.36, 0x55575a], [0.36, 0x3d444c]][e.era];
+        paths.push({ ax, ay, bx, by, w: bed[0] as number, col: bed[1] as number });
+        if (e.era >= 3) quad(P(ax, ay, ha, hw), P(ax, ay, ha, -hw), P(bx, by, hb, hw), P(bx, by, hb, -hw), color, pos, col);
         if (e.era === 3) { // voie ferrée : deux rails et des traverses
           for (const off of [-0.035, 0.035]) quad(P(ax, ay, ha + 0.012, off + 0.011), P(ax, ay, ha + 0.012, off - 0.011), P(bx, by, hb + 0.012, off + 0.011), P(bx, by, hb + 0.012, off - 0.011), 0x2a2d31, pos, col);
           if (e.cum[k] >= nextTie) { nextTie = e.cum[k] + 0.22; const mx = (ax + bx) / 2, mz = (ay + by) / 2, mh = (ha + hb) / 2 + 0.008; quad(P(mx - dx / L * 0.02, mz - dz / L * 0.02, mh, 0.075), P(mx - dx / L * 0.02, mz - dz / L * 0.02, mh, -0.075), P(mx + dx / L * 0.02, mz + dz / L * 0.02, mh, 0.075), P(mx + dx / L * 0.02, mz + dz / L * 0.02, mh, -0.075), 0x5e4630, pos, col); }
@@ -151,6 +177,8 @@ export class Infra {
     set(this.roads.geometry, pos, col);
     set(this.glow.geometry, gpos, gcol);
     set(this.wires.geometry, wire);
+    this.paths = paths;
+    this.pathVer++;
     this.stats.edges = edges.length;
   }
 

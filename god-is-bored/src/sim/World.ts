@@ -20,6 +20,7 @@ export class World {
   scorch: Float32Array;
   corner: Float32Array;
   region: Int16Array;
+  riv: Float32Array; // masque des rivières (1 = case de rivière), pour creuser le lit visuel
   hillH = 1.0;
   mtnH = 2.0;
   // versions pour que le rendu sache quand reconstruire
@@ -42,6 +43,7 @@ export class World {
     this.scorch = new Float32Array(n);
     this.corner = new Float32Array((this.size + 1) * (this.size + 1));
     this.region = new Int16Array(n).fill(-1);
+    this.riv = new Float32Array(n);
   }
 
   idx(x: number, y: number): number {
@@ -92,18 +94,34 @@ export class World {
         this.corner[cy * m + cx] = s / c;
       }
     }
+    for (let i = 0; i < n * n; i++) this.riv[i] = this.type[i] === T.RIVER ? 1 : 0;
     this.terrainV++;
   }
 
-  /** Hauteur de surface (bilinéaire sur les coins), identique à celle du mesh. */
+  /**
+   * Hauteur de surface continue : interpolation bicubique (Catmull-Rom) des hauteurs de cases, avec lit de rivière creusé.
+   * Aucune arête de case n'est visible : relief progressif, côtes et berges sinueuses. Le rendu et les entités utilisent
+   * exactement cette fonction, donc personne ne flotte ni ne s'enfonce.
+   */
   heightAt(x: number, y: number): number {
-    const n = this.size, m = n + 1;
-    const cx = Math.max(0, Math.min(n - 0.001, x)), cy = Math.max(0, Math.min(n - 0.001, y));
-    const ix = Math.floor(cx), iy = Math.floor(cy);
-    const u = cx - ix, v = cy - iy;
-    const a = this.corner[iy * m + ix], b = this.corner[iy * m + ix + 1];
-    const c = this.corner[(iy + 1) * m + ix], d = this.corner[(iy + 1) * m + ix + 1];
-    return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+    const n = this.size;
+    const u = Math.max(0, Math.min(n - 0.001, x)) - 0.5, v = Math.max(0, Math.min(n - 0.001, y)) - 0.5;
+    const i0 = Math.floor(u), j0 = Math.floor(v);
+    const fu = u - i0, fv = v - j0;
+    const H = this.height, R = this.riv;
+    const cl = (k: number) => (k < 0 ? 0 : k >= n ? n - 1 : k);
+    const cr = (a: number, b: number, c: number, d: number, t: number) => b + 0.5 * t * (c - a + t * (2 * a - 5 * b + 4 * c - d + t * (3 * (b - c) + d - a)));
+    const rows = [0, 0, 0, 0];
+    for (let m = -1; m <= 2; m++) {
+      const jj = cl(j0 + m) * n;
+      rows[m + 1] = cr(H[jj + cl(i0 - 1)], H[jj + cl(i0)], H[jj + cl(i0 + 1)], H[jj + cl(i0 + 2)], fu);
+    }
+    let h = cr(rows[0], rows[1], rows[2], rows[3], fv);
+    // lit de rivière : bilinéaire du masque, profil lissé
+    const a0 = R[cl(j0) * n + cl(i0)], b0 = R[cl(j0) * n + cl(i0 + 1)], c0 = R[cl(j0 + 1) * n + cl(i0)], d0 = R[cl(j0 + 1) * n + cl(i0 + 1)];
+    const rv = (a0 + (b0 - a0) * fu) * (1 - fv) + (c0 + (d0 - c0) * fu) * fv;
+    if (rv > 0) { const k = rv * rv * (3 - 2 * rv); h -= Math.min(Math.max(h + 0.12, 0), 0.7) * k; }
+    return h > 0 ? h * 1.4 : h; // relief un peu accentué : collines et montagnes lisibles
   }
 
   retype(i: number): void {

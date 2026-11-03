@@ -19,9 +19,13 @@ export const MIN_ERA: Partial<Record<BuildingType, number>> = { castle: 2, marke
 export function styleMatters(type: BuildingType, era: number): boolean {
   return type === "hall" || type === "temple" || type === "castle" || (type === "house" && era <= 2);
 }
-export function modelKey(type: BuildingType, era: number, style: number): string {
+/** Nombre de variantes de forme/taille par type : plusieurs maisons distinctes par époque et par culture. */
+export function variantCount(type: BuildingType): number {
+  return type === "house" ? 3 : type === "hall" || type === "temple" ? 2 : 1;
+}
+export function modelKey(type: BuildingType, era: number, style: number, variant = 0): string {
   const e = Math.max(MIN_ERA[type] ?? 0, Math.min(5, era));
-  return `${type}:${e}:${styleMatters(type, e) ? style & 3 : 0}`;
+  return `${type}:${e}:${styleMatters(type, e) ? style & 3 : 0}:${variant % variantCount(type)}`;
 }
 
 const win = (x: number, y: number, z: number, w = 0.07, h = 0.08, col: number = C.door): G => box(w, h, 0.02, x, y, z, col);
@@ -37,51 +41,90 @@ function motif(style: number, x: number, y: number, z: number, k = 1): G[] {
   }
 }
 
-function house(era: number, st: number): [G[], G[], [number, number, number][]] {
-  const smoke: [number, number, number][] = [];
+/** Générateur de maisons détaillées : socle, murs, fenêtres encadrées, porte, toit à débord, cheminée, annexe selon la variante. */
+function houseV2(era: number, st: number, v: number): [G[], G[], [number, number, number][]] {
+  const body: G[] = [], acc: G[] = [], smoke: [number, number, number][] = [];
+  const dims = [[0.5, 0.42], [0.62, 0.46], [0.72, 0.48]][v];
+  const [w, d] = dims;
+  const win = (x: number, y: number, z: number, ww = 0.075, hh = 0.09, glass: number = C.door, frame: number = C.beam, shutter = 0): void => {
+    body.push(box(ww + 0.03, hh + 0.03, 0.018, x, y - 0.015, z, frame), box(ww, hh, 0.024, x, y, z + 0.002, glass));
+    if (shutter) { body.push(box(0.03, hh, 0.014, x - ww / 2 - 0.03, y, z, shutter), box(0.03, hh, 0.014, x + ww / 2 + 0.03, y, z, shutter)); }
+  };
+  const door = (x: number, z: number, hh = 0.15, col: number = C.door, frame: number = C.beam): void => { body.push(box(0.1, hh + 0.02, 0.02, x, 0, z, frame), box(0.075, hh, 0.026, x, 0, z + 0.002, col), box(0.13, 0.02, 0.07, x, 0, z + 0.03, C.stone)); };
+  const chim = (x: number, z: number, y: number, hh: number, col: number): void => { body.push(box(0.08, hh, 0.08, x, y, z, col), box(0.1, 0.02, 0.1, x, y + hh, z, C.iron)); smoke.push([x, y + hh + 0.04, z]); };
   switch (era) {
-    case 0: {
-      if (st === 0) return [[cyl(0.3, 0.34, 0.2, 9, 0, 0, 0, C.fur), cone(0.42, 0.36, 9, 0, 0.2, 0, C.straw), box(0.1, 0.13, 0.03, 0, 0, 0.33, C.door)], [cyl(0.345, 0.345, 0.035, 9, 0, 0.1, 0, 0xffffff), ball(0.04, 0, 0.58, 0, 0xffffff, 5, 4)], smoke];
-      if (st === 1) return [[dome(0.36, 0, 0.02, 0, C.straw, 0.9), box(0.1, 0.12, 0.03, 0, 0, 0.33, C.door)], [box(0.16, 0.05, 0.04, 0, 0.13, 0.33, 0xffffff), ball(0.045, 0, 0.35, 0, 0xffffff, 5, 4)], smoke];
-      if (st === 2) return [[prism(0.62, 0.42, 0.5, 0, 0, 0, C.straw), box(0.08, 0.1, 0.03, 0, 0, 0.26, C.door)], [box(0.04, 0.08, 0.04, -0.3, 0, 0.26, 0xffffff), box(0.04, 0.08, 0.04, 0.3, 0, 0.26, 0xffffff), box(0.64, 0.03, 0.03, 0, 0.12, 0.27, 0xffffff)], smoke];
-      return [[box(0.7, 0.18, 0.4, 0, 0, 0, C.wood), prism(0.8, 0.22, 0.46, 0, 0.18, 0, C.straw)], [box(0.05, 0.2, 0.42, 0.37, 0.04, 0, 0xffffff), box(0.05, 0.2, 0.42, -0.37, 0.04, 0, 0xffffff)], smoke];
+    case 0: { // huttes : forme selon la culture, enrichie selon la variante
+      const wall = 0xb59a6e, straw = C.straw;
+      if (st === 0) { body.push(cyl(0.27 + v * 0.03, 0.31 + v * 0.03, 0.2, 9, 0, 0, 0, wall), cone(0.4 + v * 0.04, 0.34 + v * 0.05, 9, 0, 0.2, 0, straw), cone(0.3 + v * 0.03, 0.2, 9, 0, 0.34 + v * 0.03, 0, 0xb8964c), box(0.1, 0.14, 0.03, 0, 0, 0.3 + v * 0.03, C.door)); acc.push(cyl(0.325 + v * 0.03, 0.325 + v * 0.03, 0.035, 9, 0, 0.1, 0, 0xffffff), ball(0.04, 0, 0.62 + v * 0.05, 0, 0xffffff, 5, 4)); }
+      else if (st === 1) { body.push(dome(0.34 + v * 0.03, 0, 0.01, 0, straw, 0.95), cyl(0.3 + v * 0.03, 0.33 + v * 0.03, 0.12, 9, 0, 0, 0, wall), box(0.1, 0.13, 0.03, 0, 0, 0.3, C.door)); acc.push(box(0.2, 0.05, 0.04, 0, 0.14, 0.3, 0xffffff), ball(0.04, 0, 0.36 + v * 0.03, 0, 0xffffff, 5, 4)); }
+      else if (st === 2) { body.push(prism(0.6 + v * 0.06, 0.44 + v * 0.05, 0.5, 0, 0, 0, straw), box(0.4, 0.1, 0.03, 0, 0, 0.255, C.door), cyl(0.012, 0.012, 0.16, 4, -0.31 - v * 0.03, 0.4, 0, C.dwood), cyl(0.012, 0.012, 0.16, 4, 0.31 + v * 0.03, 0.4, 0, C.dwood)); acc.push(box(0.04, 0.1, 0.04, -0.3, 0, 0.26, 0xffffff), box(0.04, 0.1, 0.04, 0.3, 0, 0.26, 0xffffff), box(0.62 + v * 0.06, 0.03, 0.03, 0, 0.14, 0.27, 0xffffff)); }
+      else { body.push(box(0.72 + v * 0.06, 0.18, 0.4, 0, 0, 0, C.wood), prism(0.82 + v * 0.06, 0.24, 0.48, 0, 0.18, 0, straw), box(0.1, 0.13, 0.02, -0.12, 0, 0.205, C.door), box(0.1, 0.13, 0.02, 0.18, 0, 0.205, C.door)); acc.push(box(0.04, 0.22, 0.44, 0.38 + v * 0.03, 0.04, 0, 0xffffff), box(0.04, 0.22, 0.44, -0.38 - v * 0.03, 0.04, 0, 0xffffff)); }
+      if (v === 1) body.push(box(0.26, 0.02, 0.02, 0.42, 0.18, 0.1, C.dwood), cyl(0.012, 0.012, 0.2, 4, 0.34, 0, 0.1, C.dwood), cyl(0.012, 0.012, 0.2, 4, 0.5, 0, 0.1, C.dwood), box(0.16, 0.02, 0.06, 0.42, 0.14, 0.1, 0xc9b184)); // séchoir à peaux
+      if (v === 2) body.push(cyl(0.14, 0.16, 0.12, 7, -0.4, 0, 0.18, wall), cone(0.2, 0.2, 7, -0.4, 0.12, 0.18, straw)); // appentis rond
+      for (const g of [...body, ...acc]) g.scale(0.74, 0.74, 0.74); // huttes plus modestes
+      return [body, acc, smoke];
     }
-    case 1: {
-      const walls = [box(0.5, 0.3, 0.46, 0, 0, 0, C.sand), win(-0.13, 0.12, 0.235), win(0.13, 0.12, 0.235), winSide(0.255, 0.12, 0)];
-      if (st === 0) return [walls, [prism(0.6, 0.26, 0.56, 0, 0.3, 0, 0xffffff)], smoke];
-      if (st === 1) return [walls, [dome(0.24, 0, 0.3, 0, 0xffffff, 1), box(0.54, 0.04, 0.5, 0, 0.26, 0, 0xffffff)], smoke];
-      if (st === 2) return [[box(0.5, 0.22, 0.46, 0, 0, 0, C.sand), box(0.36, 0.2, 0.34, 0, 0.26, 0, C.sand), win(-0.12, 0.08, 0.235), win(0.12, 0.08, 0.235)], [box(0.58, 0.04, 0.54, 0, 0.22, 0, 0xffffff), box(0.42, 0.04, 0.4, 0, 0.46, 0, 0xffffff)], smoke];
-      return [[cyl(0.26, 0.28, 0.3, 9, 0, 0, 0, C.sand), win(0, 0.1, 0.27)], [cone(0.34, 0.28, 9, 0, 0.3, 0, 0xffffff)], smoke];
+    case 1: { // maisons de pierre : appareil en assises, linteaux, toit selon la culture
+      const wallH = 0.28 + (v === 2 ? 0.05 : 0);
+      body.push(box(w + 0.04, 0.045, d + 0.04, 0, 0, 0, C.stone), box(w, wallH, d, 0, 0.045, 0, C.sand));
+      for (const y of [0.1, 0.17, 0.24]) body.push(box(w + 0.006, 0.012, d + 0.006, 0, y, 0, 0xc9bb92));
+      win(-w * 0.28, 0.14, d / 2 + 0.002, 0.07, 0.085, C.door, 0xb09a78); win(w * 0.28, 0.14, d / 2 + 0.002, 0.07, 0.085, C.door, 0xb09a78);
+      door(0, d / 2 + 0.002, 0.14, C.dwood, 0xb09a78);
+      if (v >= 1) body.push(box(0.012, 0.085, 0.07, w / 2 + 0.006, 0.14, 0, C.door));
+      if (v === 2) { body.push(box(0.3, 0.2, 0.28, w / 2 + 0.12, 0.045, -0.05, C.sand), box(0.32, 0.03, 0.3, w / 2 + 0.12, 0.245, -0.05, 0xc9bb92)); }
+      if (st === 0) acc.push(prism(w + 0.1, 0.24, d + 0.1, 0, 0.045 + wallH, 0, 0xffffff), box(w + 0.1, 0.02, 0.025, 0, 0.045 + wallH + 0.235, 0, 0xffffff));
+      else if (st === 1) acc.push(dome(0.25 + v * 0.02, 0, 0.045 + wallH, 0, 0xffffff, 1.0), box(w + 0.08, 0.035, d + 0.08, 0, 0.045 + wallH - 0.02, 0, 0xffffff));
+      else if (st === 2) { body.push(box(w * 0.7, 0.18, d * 0.7, 0, 0.045 + wallH, 0, C.sand)); acc.push(prism(w + 0.14, 0.12, d + 0.14, 0, 0.045 + wallH - 0.02, 0, 0xffffff), prism(w * 0.7 + 0.14, 0.12, d * 0.7 + 0.14, 0, 0.045 + wallH + 0.17, 0, 0xffffff)); }
+      else { acc.push(cone(Math.max(w, d) * 0.62, 0.3, 9, 0, 0.045 + wallH, 0, 0xffffff)); }
+      if (v === 1) chim(w * 0.25, -d * 0.2, 0.045 + wallH + 0.1, 0.16, C.stone);
+      return [body, acc, smoke];
     }
-    case 2: {
-      const base = [box(0.52, 0.1, 0.48, 0, 0, 0, C.stone), box(0.5, 0.26, 0.46, 0, 0.1, 0, C.plaster), box(0.57, 0.2, 0.5, 0, 0.36, 0, C.plaster),
-        box(0.04, 0.46, 0.04, -0.24, 0.1, 0.24, C.beam), box(0.04, 0.46, 0.04, 0.24, 0.1, 0.24, C.beam), box(0.04, 0.46, 0.04, 0, 0.1, 0.25, C.beam),
-        box(0.58, 0.035, 0.04, 0, 0.35, 0.26, C.beam), win(-0.12, 0.18, 0.235, 0.07, 0.07, C.beam), win(0.12, 0.18, 0.235, 0.07, 0.07, C.beam), win(-0.12, 0.42, 0.26, 0.07, 0.07, C.beam),
-        box(0.08, 0.3, 0.08, 0.17, 0.42, -0.12, C.stone)];
-      smoke.push([0.17, 0.74, -0.12]);
-      if (st === 0) return [base, [prism(0.64, 0.38, 0.58, 0, 0.56, 0, 0xffffff)], smoke];
-      if (st === 1) return [base, [cone(0.52, 0.3, 4, 0, 0.56, 0, 0xffffff, Q)], smoke];
-      if (st === 2) return [base, [prism(0.68, 0.14, 0.62, 0, 0.56, 0, 0xffffff), prism(0.44, 0.2, 0.4, 0, 0.68, 0, 0xffffff)], smoke];
-      return [[...base, cyl(0.12, 0.13, 0.5, 8, -0.28, 0.1, -0.2, C.plaster)], [prism(0.62, 0.34, 0.54, 0.04, 0.56, 0, 0xffffff), cone(0.16, 0.2, 8, -0.28, 0.6, -0.2, 0xffffff)], smoke];
+    case 2: { // colombages : jambage de pierre, jetée, poutres, lucarne, cheminée
+      body.push(box(w + 0.04, 0.09, d + 0.04, 0, 0, 0, C.stone), box(w, 0.25, d, 0, 0.09, 0, C.plaster), box(w + 0.07, 0.22, d + 0.07, 0, 0.34, 0, C.plaster));
+      for (const x of [-w / 2 + 0.01, 0, w / 2 - 0.01]) body.push(box(0.035, 0.47, 0.035, x, 0.09, d / 2 + 0.003, C.beam), box(0.035, 0.22, 0.035, x * 1.1, 0.34, (d + 0.07) / 2 + 0.003, C.beam));
+      body.push(box(w + 0.02, 0.03, 0.03, 0, 0.33, d / 2 + 0.03, C.beam), box(w * 0.9, 0.025, 0.025, 0, 0.55, (d + 0.07) / 2 + 0.003, C.beam));
+      win(-w * 0.26, 0.16, d / 2 + 0.004, 0.07, 0.08, 0x7a96a8, C.beam, 0x6a8a4a); win(w * 0.26, 0.16, d / 2 + 0.004, 0.07, 0.08, 0x7a96a8, C.beam, 0x6a8a4a);
+      win(-w * 0.2, 0.41, (d + 0.07) / 2 + 0.004, 0.07, 0.08, 0x7a96a8, C.beam, 0x8a4a3a); win(w * 0.2, 0.41, (d + 0.07) / 2 + 0.004, 0.07, 0.08, 0x7a96a8, C.beam, 0x8a4a3a);
+      door(0, d / 2 + 0.004, 0.16, C.dwood, C.beam);
+      chim(-w * 0.28, -d * 0.2, 0.5, 0.28 + v * 0.04, C.stone);
+      if (v === 2) body.push(box(0.3, 0.3, 0.3, w / 2 + 0.12, 0.09, 0.0, C.plaster), box(0.04, 0.3, 0.04, w / 2 + 0.12, 0.09, 0.16, C.beam));
+      if (st === 0) acc.push(prism(w + 0.14, 0.34, d + 0.14, 0, 0.56, 0, 0xffffff), box(w + 0.14, 0.02, 0.025, 0, 0.9, 0, 0xffffff));
+      else if (st === 1) acc.push(cone(Math.max(w, d) * 0.85, 0.3, 4, 0, 0.56, 0, 0xffffff, Q));
+      else if (st === 2) acc.push(prism(w + 0.18, 0.14, d + 0.18, 0, 0.55, 0, 0xffffff), prism(w * 0.62, 0.2, d * 0.62, 0, 0.67, 0, 0xffffff));
+      else { body.push(cyl(0.12, 0.13, 0.52, 8, -w / 2 - 0.02, 0.09, -d / 2 + 0.04, C.plaster)); acc.push(prism(w + 0.14, 0.32, d + 0.14, 0.02, 0.56, 0, 0xffffff), cone(0.17, 0.22, 8, -w / 2 - 0.02, 0.61, -d / 2 + 0.04, 0xffffff)); }
+      if (v >= 1) acc.push(prism(0.16, 0.12, 0.14, -w * 0.2, 0.62, d / 2 - 0.02, 0xffffff)); // lucarne
+      return [body, acc, smoke];
     }
-    case 3: {
-      const base = [box(0.72, 0.1, 0.46, 0, 0, 0, C.brickD), box(0.7, 0.4, 0.44, 0, 0.1, 0, C.brick),
-        win(-0.22, 0.2, 0.225, 0.08, 0.1, C.glow), win(0, 0.2, 0.225, 0.08, 0.1, C.glow), win(0.22, 0.2, 0.225, 0.08, 0.1, C.glow), win(-0.22, 0.38, 0.225, 0.08, 0.08, C.glow), win(0.22, 0.38, 0.225, 0.08, 0.08, C.glow),
-        box(0.08, 0.3, 0.08, -0.2, 0.5, -0.1, C.soot), box(0.08, 0.34, 0.08, 0.22, 0.5, -0.1, C.soot)];
-      smoke.push([-0.2, 0.84, -0.1], [0.22, 0.88, -0.1]);
-      if (st === 0) return [base, [prism(0.78, 0.18, 0.52, 0, 0.5, 0, 0xffffff)], smoke];
-      if (st === 1) return [base, [cone(0.56, 0.2, 4, 0, 0.5, 0, 0xffffff, Q)], smoke];
-      if (st === 2) return [base, [box(0.78, 0.06, 0.52, 0, 0.5, 0, 0xffffff)], smoke];
-      return [base, [prism(0.78, 0.1, 0.52, 0, 0.5, 0, 0xffffff), prism(0.5, 0.14, 0.44, 0, 0.6, 0, 0xffffff)], smoke];
+    case 3: { // maisons de brique : bandeaux, encadrements blancs, cheminées multiples
+      const wh = v === 2 ? 0.56 : 0.42;
+      body.push(box(w + 0.04, 0.08, d + 0.04, 0, 0, 0, C.brickD), box(w, wh, d, 0, 0.08, 0, C.brick), box(w + 0.03, 0.025, d + 0.03, 0, 0.08 + wh * 0.5, 0, 0x8a3f2c));
+      const rows = v === 2 ? [0.16, 0.38, 0.6] : [0.2, 0.42];
+      for (const y of rows) for (const xs of v === 0 ? [-0.2, 0.2] : [-0.24, 0, 0.24]) win(xs * (w / 0.7), y, d / 2 + 0.004, 0.075, 0.1, C.glow, 0xe8e2d4);
+      door(v === 0 ? 0 : -w * 0.34, d / 2 + 0.004, 0.17, 0x3a2c22, 0xe8e2d4);
+      chim(-w * 0.28, -d * 0.2, 0.08 + wh + 0.06, 0.26, C.soot); if (v >= 1) chim(w * 0.26, -d * 0.2, 0.08 + wh + 0.06, 0.3, C.soot);
+      if (st === 0) acc.push(prism(w + 0.1, 0.2, d + 0.1, 0, 0.08 + wh, 0, 0xffffff));
+      else if (st === 1) acc.push(cone(Math.max(w, d) * 0.8, 0.2, 4, 0, 0.08 + wh, 0, 0xffffff, Q));
+      else if (st === 2) acc.push(box(w + 0.07, 0.07, d + 0.07, 0, 0.08 + wh, 0, 0xffffff), box(w + 0.07, 0.04, 0.025, 0, 0.15 + wh, d / 2 + 0.04, 0xffffff));
+      else acc.push(prism(w + 0.1, 0.12, d + 0.1, 0, 0.08 + wh, 0, 0xffffff), prism(w * 0.6, 0.1, d * 0.8, 0, 0.2 + wh, 0, 0xffffff));
+      return [body, acc, smoke];
     }
-    case 4: {
-      const body = [box(0.54, 1.0, 0.52, 0, 0, 0, C.concrete), box(0.56, 0.06, 0.54, 0, 0.14, 0, C.glass), box(0.56, 0.06, 0.54, 0, 0.36, 0, C.glass), box(0.56, 0.06, 0.54, 0, 0.58, 0, C.glass), box(0.56, 0.06, 0.54, 0, 0.8, 0, C.glass),
-        box(0.2, 0.04, 0.12, 0.2, 0.3, 0.3, C.steel), box(0.2, 0.04, 0.12, -0.2, 0.52, 0.3, C.steel), cyl(0.09, 0.09, 0.14, 7, -0.14, 1.06, -0.1, C.steel)];
-      return [body, [box(0.6, 0.06, 0.58, 0, 1.0, 0, 0xffffff), box(0.3, 0.02, 0.5, 0, 0.68, 0.0, 0xffffff)], smoke];
+    case 4: { // immeubles de béton : bandeaux vitrés, balcons, toit-terrasse équipé
+      const floors = [3, 5, 7][v], fh = 0.15, H = floors * fh;
+      body.push(box(w * 0.86 + 0.04, 0.05, d * 0.9 + 0.04, 0, 0, 0, C.stone), box(w * 0.86, H, d * 0.9, 0, 0.05, 0, C.concrete));
+      for (let f = 0; f < floors; f++) {
+        body.push(box(w * 0.86 + 0.012, 0.062, d * 0.9 + 0.012, 0, 0.05 + f * fh + 0.05, 0, C.glass));
+        if (f % 2 === 1 && f > 0) body.push(box(w * 0.5, 0.012, 0.09, -w * 0.12, 0.05 + f * fh + 0.03, d * 0.45 + 0.045, C.steel));
+      }
+      body.push(box(0.14, 0.1, 0.16, -w * 0.18, 0.05 + H, -d * 0.1, C.steel), cyl(0.07, 0.07, 0.1, 7, w * 0.16, 0.05 + H, d * 0.1, C.iron), cyl(0.012, 0.012, 0.2, 4, w * 0.3, 0.05 + H, -d * 0.2, C.steel));
+      acc.push(box(w * 0.86 + 0.06, 0.04, d * 0.9 + 0.06, 0, 0.05 + H, 0, 0xffffff), box(w * 0.86 + 0.012, 0.03, d * 0.9 + 0.012, 0, 0.05 + fh * 0.5, 0, 0xffffff));
+      return [body, acc, smoke];
     }
-    default: {
-      return [[cyl(0.18, 0.23, 0.85, 10, 0, 0, 0, C.white), cyl(0.195, 0.195, 0.035, 10, 0, 0.2, 0, C.cyan), cyl(0.195, 0.195, 0.035, 10, 0, 0.4, 0, C.cyan), cyl(0.195, 0.195, 0.035, 10, 0, 0.6, 0, C.cyan),
-        cyl(0.012, 0.012, 0.3, 4, 0, 1.05, 0, C.cyan), box(0.8, 0.03, 0.8, 0, 0, 0, C.panel)], [dome(0.22, 0, 0.85, 0, 0xffffff, 0.9)], smoke];
+    default: { // futuriste : tours effilées, bandes vitrées, passerelles, terrasses végétalisées, lumière
+      const glassBands = (r: number, x: number, z: number, h0: number, h1: number) => { for (let y = h0; y < h1; y += 0.16) body.push(cyl(r, r, 0.07, 10, x, y, z, C.glass)); };
+      if (v === 0) { body.push(cyl(0.14, 0.21, 0.9, 10, 0, 0, 0, C.white), cyl(0.18, 0.2, 0.05, 10, 0, 0, 0, C.panel), cyl(0.012, 0.012, 0.34, 4, 0, 0.96, 0, C.cyan), box(0.84, 0.025, 0.84, 0, 0, 0, C.panel)); glassBands(0.16, 0, 0, 0.14, 0.82); body.push(cyl(0.155, 0.155, 0.025, 10, 0, 0.88, 0, C.cyan)); acc.push(cyl(0.152, 0.152, 0.035, 10, 0, 0.9, 0, 0xffffff), cyl(0.06, 0.06, 0.05, 8, 0, 0.935, 0, 0xffffff)); }
+      else if (v === 1) { body.push(cyl(0.1, 0.14, 0.78, 8, -0.2, 0, 0, C.white), cyl(0.1, 0.14, 1.02, 8, 0.2, 0, 0, C.white), box(0.4, 0.045, 0.09, 0, 0.5, 0, C.glass), box(0.4, 0.012, 0.09, 0, 0.545, 0, C.cyan), box(0.84, 0.025, 0.84, 0, 0, 0, C.panel)); glassBands(0.115, -0.2, 0, 0.14, 0.7); glassBands(0.115, 0.2, 0, 0.14, 0.95); body.push(cyl(0.012, 0.012, 0.26, 4, 0.2, 1.02, 0, C.cyan)); acc.push(cyl(0.1, 0.1, 0.03, 8, -0.2, 0.76, 0, 0xffffff), cyl(0.1, 0.1, 0.03, 8, 0.2, 1.0, 0, 0xffffff)); }
+      else { body.push(box(0.62, 0.28, 0.5, 0, 0, 0, C.white), box(0.48, 0.28, 0.4, 0, 0.28, 0, C.white), box(0.34, 0.28, 0.3, 0, 0.56, 0, C.white), box(0.64, 0.025, 0.52, 0, 0.28, 0, C.green), box(0.5, 0.025, 0.42, 0, 0.56, 0, C.green), box(0.62, 0.05, 0.512, 0, 0.14, 0, C.glass), box(0.48, 0.05, 0.412, 0, 0.42, 0, C.glass), box(0.34, 0.05, 0.312, 0, 0.7, 0, C.glass), box(0.62, 0.014, 0.014, 0, 0.1, 0.26, C.cyan), box(0.84, 0.025, 0.84, 0, 0, 0, C.panel), ball(0.07, 0.2, 0.34, 0.1, C.green, 6, 5), ball(0.06, -0.14, 0.62, 0.0, C.green, 6, 5)); acc.push(box(0.36, 0.03, 0.32, 0, 0.84, 0, 0xffffff)); }
+      return [body, acc, smoke];
     }
   }
 }
@@ -261,15 +304,15 @@ function lab(era: number): [G[], G[], [number, number, number][]] {
 const cache = new Map<string, ModelInfo>();
 
 /** Modèle low-poly d'un bâtiment pour une époque et un style de civilisation (mis en cache, géométrie réutilisée). */
-export function buildingModel(type: BuildingType, era: number, style: number): ModelInfo {
-  const key = modelKey(type, era, style);
+export function buildingModel(type: BuildingType, era: number, style: number, variant = 0): ModelInfo {
+  const key = modelKey(type, era, style, variant);
   const hit = cache.get(key);
   if (hit) return hit;
   const e = Math.max(MIN_ERA[type] ?? 0, Math.min(5, era));
   const st = styleMatters(type, e) ? style & 3 : 0;
   let r: [G[], G[], [number, number, number][]];
   switch (type) {
-    case "house": r = house(e, st); break;
+    case "house": r = houseV2(e, st, variant % 3); break;
     case "hall": r = hall(e, st); break;
     case "farm": r = farm(e) as never; break;
     case "lumber": r = lumber(e); break;
@@ -285,6 +328,12 @@ export function buildingModel(type: BuildingType, era: number, style: number): M
     case "station": r = station(e); break;
     case "power": r = power(e); break;
     default: r = lab(e);
+  }
+  // variante de bâtiment public : aile latérale et toit propre
+  if ((type === "hall" || type === "temple") && variant % variantCount(type) > 0) {
+    const wc = [C.wood, C.sand, C.stone, C.brick, C.concrete, C.white][e];
+    r[0] = [...r[0], box(0.3, 0.22 + e * 0.03, 0.36, 0.52, 0, -0.08, wc), box(0.02, 0.1, 0.02, 0.52, 0, 0.11, C.door)];
+    r[1] = [...(r[1] ?? []), prism(0.36, 0.16 + e * 0.02, 0.42, 0.52, 0.22 + e * 0.03, -0.08, 0xffffff)];
   }
   const [bodyParts, accParts, smoke] = r;
   const body = merge(bodyParts.filter(Boolean));

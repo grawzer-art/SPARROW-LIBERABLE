@@ -211,11 +211,11 @@ export class SimulationEngine {
     if (any) this.citizens = this.citizens.filter((c) => !c.dead);
   }
 
-  addBuilding(type: Building["type"], civ: number, cityId: number, x: number, y: number, built = false, era = 0): Building {
+  addBuilding(type: Building["type"], civ: number, cityId: number, x: number, y: number, built = false, era = 0, rot = 0): Building {
     const info = this.econ.cost(type);
     const b: Building = {
       id: this.newId(), type, civ, city: cityId, x, y,
-      hp: built ? info.hp : 1, maxHp: info.hp, progress: built ? 1 : 0, workers: 0, ruin: 0, era, up: -1, upTo: era,
+      hp: built ? info.hp : 1, maxHp: info.hp, progress: built ? 1 : 0, workers: 0, ruin: 0, era, rot, up: -1, upTo: era,
     };
     this.buildings.push(b);
     this.buildingById.set(b.id, b);

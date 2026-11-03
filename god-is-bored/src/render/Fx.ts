@@ -7,56 +7,101 @@ import type { Renderer } from "./Renderer";
 interface Anim { t: number; dur: number; step: (p: number, dt: number) => void; end?: () => void; }
 
 
-/** Effets visuels purs : particules, éclairs, anneaux, météo. Aucune logique de jeu ici. */
+/** Effets visuels purs : particules (sprites doux), éclairs, anneaux, météo. Aucune logique de jeu ici. */
 export class Fx {
   private scene: THREE.Scene;
   private cap: number;
-  private mesh: THREE.InstancedMesh;
   private n = 0;
-  private P!: Float32Array;
-  private V!: Float32Array;
-  private L!: Float32Array;
-  private S!: Float32Array;
-  private C!: Float32Array;
-  private G!: Float32Array;
-  private dummy = new THREE.Object3D();
+  private P: Float32Array;
+  private V: Float32Array;
+  private L: Float32Array; // life, max
+  private S: Float32Array; // size, grow
+  private C: Float32Array;
+  private G: Float32Array;
+  private A: Uint8Array; // 1 = additif (feu, étincelles)
+  private pts: { mesh: THREE.Points; pos: Float32Array; col: Float32Array; size: Float32Array; alpha: Float32Array; add: boolean }[] = [];
+  private tex: THREE.Texture;
+  private uniforms = { uScale: { value: 600 }, uTex: { value: null as THREE.Texture | null } };
   private anims: Anim[] = [];
   private flash: THREE.PointLight;
   private weather = new Set<THREE.Group>();
   private lastT = 0;
   private boltMat = new THREE.MeshBasicMaterial({ color: 0xdff0ff, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false });
   private glowMat = new THREE.MeshBasicMaterial({ color: 0x8fb8ff, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false });
+  private tmpC = new THREE.Color();
 
   constructor(scene: THREE.Scene, cap = 3200) {
     this.scene = scene;
     this.cap = cap;
     this.P = new Float32Array(cap * 3); this.V = new Float32Array(cap * 3); this.L = new Float32Array(cap * 2);
-    this.S = new Float32Array(cap * 2); this.C = new Float32Array(cap * 3); this.G = new Float32Array(cap);
-    const g = new THREE.BoxGeometry(1, 1, 1);
-    this.mesh = new THREE.InstancedMesh(g, new THREE.MeshBasicMaterial({}), cap);
-    this.mesh.frustumCulled = false;
-    this.mesh.count = 0;
-    scene.add(this.mesh);
+    this.S = new Float32Array(cap * 2); this.C = new Float32Array(cap * 3); this.G = new Float32Array(cap); this.A = new Uint8Array(cap);
+    // sprite doux (dégradé radial) pour fumée, flammes, poussière
+    const cv = document.createElement("canvas"); cv.width = cv.height = 64;
+    const g = cv.getContext("2d")!;
+    const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, "rgba(255,255,255,1)"); gr.addColorStop(0.45, "rgba(255,255,255,0.55)"); gr.addColorStop(1, "rgba(255,255,255,0)");
+    g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+    this.tex = new THREE.CanvasTexture(cv);
+    this.uniforms.uTex.value = this.tex;
+    for (const add of [false, true]) {
+      const geo = new THREE.BufferGeometry();
+      const pos = new Float32Array(cap * 3), col = new Float32Array(cap * 3), size = new Float32Array(cap), alpha = new Float32Array(cap);
+      geo.setAttribute("position", new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage));
+      geo.setAttribute("aColor", new THREE.BufferAttribute(col, 3).setUsage(THREE.DynamicDrawUsage));
+      geo.setAttribute("aSize", new THREE.BufferAttribute(size, 1).setUsage(THREE.DynamicDrawUsage));
+      geo.setAttribute("aAlpha", new THREE.BufferAttribute(alpha, 1).setUsage(THREE.DynamicDrawUsage));
+      const mat = new THREE.ShaderMaterial({
+        uniforms: this.uniforms, transparent: true, depthWrite: false, blending: add ? THREE.AdditiveBlending : THREE.NormalBlending,
+        vertexShader: `attribute vec3 aColor; attribute float aSize; attribute float aAlpha; uniform float uScale; varying vec3 vC; varying float vA;
+          void main(){ vC=aColor; vA=aAlpha; vec4 mv=modelViewMatrix*vec4(position,1.0); gl_Position=projectionMatrix*mv; gl_PointSize=max(1.0, aSize*uScale/max(0.1,-mv.z)); }`,
+        fragmentShader: `uniform sampler2D uTex; varying vec3 vC; varying float vA;
+          void main(){ vec4 t=texture2D(uTex, gl_PointCoord); gl_FragColor=vec4(vC, t.a*vA);
+#include <tonemapping_fragment>
+#include <colorspace_fragment>
+}`,
+      });
+      const mesh = new THREE.Points(geo, mat);
+      mesh.frustumCulled = false;
+      mesh.renderOrder = add ? 12 : 11;
+      geo.setDrawRange(0, 0);
+      scene.add(mesh);
+      this.pts.push({ mesh, pos, col, size, alpha, add });
+    }
     this.flash = new THREE.PointLight(0xbcd8ff, 0, 40, 1.6);
     scene.add(this.flash);
   }
 
+  /** À appeler au redimensionnement : taille des sprites en pixels. */
+  setScale(heightPx: number, fovDeg: number): void {
+    this.uniforms.uScale.value = (heightPx * 0.5) / Math.tan((fovDeg * Math.PI) / 360);
+  }
+
   clear(): void {
-    this.n = 0; this.mesh.count = 0; this.anims.length = 0;
+    this.n = 0;
+    for (const p of this.pts) p.mesh.geometry.setDrawRange(0, 0);
+    this.anims.length = 0;
     for (const w of this.weather) { this.scene.remove(w); }
     this.weather.clear();
   }
 
-  emit(x: number, y: number, z: number, vx: number, vy: number, vz: number, life: number, size: number, color: number, grav = 0, grow = 0): void {
+  emit(x: number, y: number, z: number, vx: number, vy: number, vz: number, life: number, size: number, color: number, grav = 0, grow = 0, additive?: boolean): void {
     if (this.n >= this.cap) return;
     const i = this.n++;
     this.P[i * 3] = x; this.P[i * 3 + 1] = y; this.P[i * 3 + 2] = z;
     this.V[i * 3] = vx; this.V[i * 3 + 1] = vy; this.V[i * 3 + 2] = vz;
     this.L[i * 2] = life; this.L[i * 2 + 1] = life;
     this.S[i * 2] = size; this.S[i * 2 + 1] = grow;
-    const c = new THREE.Color(color);
-    this.C[i * 3] = c.r; this.C[i * 3 + 1] = c.g; this.C[i * 3 + 2] = c.b;
+    this.tmpC.setHex(color);
+    this.C[i * 3] = this.tmpC.r; this.C[i * 3 + 1] = this.tmpC.g; this.C[i * 3 + 2] = this.tmpC.b;
     this.G[i] = grav;
+    // chaud et lumineux (flammes, étincelles) : mélange additif ; sinon (fumée, poussière) : mélange normal
+    this.A[i] = additive ?? (this.tmpC.r > 0.7 && this.tmpC.g > 0.25 && this.tmpC.b < 0.8 && grow < 0.2 ? 1 : 0) ? 1 : 0;
+  }
+
+  /** Flamme animée (sprites additifs montants) : utilisée pour les incendies et les feux de camp. */
+  flame(x: number, y: number, z: number, intensity = 1): void {
+    this.emit(x + (Math.random() - 0.5) * 0.14, y, z + (Math.random() - 0.5) * 0.14, (Math.random() - 0.5) * 0.12, 0.55 + Math.random() * 0.5, (Math.random() - 0.5) * 0.12, 0.5 + Math.random() * 0.35, 0.2 * intensity, Math.random() < 0.5 ? 0xff7a1c : 0xffb02e, 0, -0.1, true);
+    if (Math.random() < 0.35) this.emit(x, y + 0.05, z, (Math.random() - 0.5) * 0.25, 0.9 + Math.random() * 0.6, (Math.random() - 0.5) * 0.25, 0.7, 0.05, 0xffe07a, 1.2, 0, true);
   }
 
   dust(x: number, y: number, z: number): void {
@@ -64,7 +109,7 @@ export class Fx {
     if (Math.random() < 0.5) this.emit(x, y + 0.1, z, (Math.random() - 0.5) * 2, 1 + Math.random(), (Math.random() - 0.5) * 2, 0.35, 0.04, 0xffd36b, 4);
   }
   smoke(x: number, y: number, z: number): void {
-    this.emit(x, y, z, (Math.random() - 0.5) * 0.12, 0.5, (Math.random() - 0.5) * 0.12, 1.5, 0.06, 0x8c8c8c, -0.05, 0.1);
+    this.emit(x, y, z, (Math.random() - 0.5) * 0.12, 0.5, (Math.random() - 0.5) * 0.12, 2.0, 0.17, 0x8d8d90, -0.05, 0.28, false);
   }
 
   private burst(x: number, y: number, z: number, count: number, color: number, speed: number, life: number, size: number, grav = 6, up = 1): void {
@@ -229,33 +274,38 @@ export class Fx {
       a.step(p, dt);
       if (p >= 1) { a.end?.(); this.anims.splice(i, 1); }
     }
-    // particules
+    // particules : intégration puis séparation additif / normal
     let k = 0;
+    for (const p of this.pts) p.mesh.userData.n = 0;
     for (let i = 0; i < this.n; i++) {
       const life = this.L[i * 2] - dt;
       if (life <= 0) continue;
-      let j = k;
+      const j = k;
       if (j !== i) {
         for (let q = 0; q < 3; q++) { this.P[j * 3 + q] = this.P[i * 3 + q]; this.V[j * 3 + q] = this.V[i * 3 + q]; this.C[j * 3 + q] = this.C[i * 3 + q]; }
-        this.L[j * 2 + 1] = this.L[i * 2 + 1]; this.S[j * 2] = this.S[i * 2]; this.S[j * 2 + 1] = this.S[i * 2 + 1]; this.G[j] = this.G[i];
+        this.L[j * 2 + 1] = this.L[i * 2 + 1]; this.S[j * 2] = this.S[i * 2]; this.S[j * 2 + 1] = this.S[i * 2 + 1]; this.G[j] = this.G[i]; this.A[j] = this.A[i];
       }
       this.L[j * 2] = life;
       this.V[j * 3 + 1] -= this.G[j] * dt;
       this.P[j * 3] += this.V[j * 3] * dt; this.P[j * 3 + 1] += this.V[j * 3 + 1] * dt; this.P[j * 3 + 2] += this.V[j * 3 + 2] * dt;
       const t = life / this.L[j * 2 + 1];
-      const s = (this.S[j * 2] + this.S[j * 2 + 1] * (1 - t)) * Math.min(1, t * 2.5 + 0.1);
-      this.dummy.position.set(this.P[j * 3], this.P[j * 3 + 1], this.P[j * 3 + 2]);
-      this.dummy.scale.set(s, s, s);
-      this.dummy.rotation.set(life * 3, life * 2, 0);
-      this.dummy.updateMatrix();
-      this.mesh.setMatrixAt(j, this.dummy.matrix);
-      this.mesh.setColorAt(j, new THREE.Color(this.C[j * 3], this.C[j * 3 + 1], this.C[j * 3 + 2]));
+      const sz = Math.max(0.01, this.S[j * 2] + this.S[j * 2 + 1] * (1 - t));
+      const alpha = this.A[j] ? Math.min(1, t * 2.2) * 0.95 : Math.min(1, t * 1.6) * 0.5 * Math.min(1, (1 - t) * 8 + 0.2);
+      const sys = this.pts[this.A[j]];
+      const m = (sys.mesh.userData.n as number) | 0;
+      sys.pos[m * 3] = this.P[j * 3]; sys.pos[m * 3 + 1] = this.P[j * 3 + 1]; sys.pos[m * 3 + 2] = this.P[j * 3 + 2];
+      sys.col[m * 3] = this.C[j * 3]; sys.col[m * 3 + 1] = this.C[j * 3 + 1]; sys.col[m * 3 + 2] = this.C[j * 3 + 2];
+      sys.size[m] = sz; sys.alpha[m] = alpha;
+      sys.mesh.userData.n = m + 1;
       k++;
     }
     this.n = k;
-    this.mesh.count = k;
-    this.mesh.instanceMatrix.needsUpdate = true;
-    if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
+    for (const p of this.pts) {
+      const m = (p.mesh.userData.n as number) | 0;
+      const g = p.mesh.geometry;
+      g.setDrawRange(0, m);
+      for (const name of ["position", "aColor", "aSize", "aAlpha"]) (g.attributes[name] as THREE.BufferAttribute).needsUpdate = true;
+    }
     void time;
   }
 

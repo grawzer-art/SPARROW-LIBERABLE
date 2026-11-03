@@ -115,3 +115,17 @@ Le temps est découplé : `advance(dt)` accumule `dt × vitesse` et exécute aut
 ## Pistes d'amélioration
 
 Sons et musique, commerce et routes fonctionnelles, ponts/navires, héros et dirigeants visibles, plus de prophéties et de pouvoirs (séisme, déluge, miracle ciblé), agents ennemis/espions, saisons, cycle jour/nuit, minimap, historique/arbre généalogique des dynasties, Web Worker pour la simulation, équilibrage fin des guerres, internationalisation, modes de jeu (défis, « rendre l'humanité heureuse »).
+
+## Refonte graphique 3D V2
+
+Rendu semi-réaliste stylisé (sans voxel ni damier) ; la simulation reste pure TypeScript, le rendu ne fait que la lire.
+
+- **Terrain** : surface bicubique continue (`World.heightAt`, utilisée aussi par les habitants), lits de rivière creusés, côtes sinueuses, couleurs par pente/altitude, rochers, écume, AO peinte, chemins peints dans le sol.
+- **Urbanisme** (`sim/Layout.ts`) : 4 à 6 rues sinueuses radiales par ville, place centrale dégagée, quartiers, façades tournées vers la rue (`Building.rot`) — *mécanique réelle* (placement de la simulation).
+- **Architecture** : variantes de maisons/mairies/temples par époque et culture, détails (fenêtres, portes, cheminées), bâtiments historiques conservés.
+- **Habitants** : personnages articulés (tête, tronc, bras, jambes, cheveux), tenues par époque, animations marche/travail/repos/combat dans le vertex shader (variation par instance, coût GPU minimal).
+- **Végétation** : espèces variées, LOD lointain, culling, vent. **Eau** : normales de vagues, Fresnel. **Ciel** : cycle jour/nuit, brouillard, éclairage nocturne dépendant de l'ère (feux → torches → lampes → électricité).
+- **Particules** : feu, fumée (sprites doux). *Purement cosmétique* : éclairage, particules, accessoires (props), vent.
+- **Scène de référence** : `?ref` charge un village primitif, une cité médiévale et une ville moderne côte à côte.
+- **Perf (émulation, JS par frame, scène de référence ~1650 habitants / 459 bâtiments)** : desktop 2,2 ms, mobile 4,3 ms ; ~105–115 appels de dessin, 210–320 k triangles ; qualité adaptative (pixel ratio, ombres, repli 30 fps).
+- **Tests** : 63 (dont 15 graphiques : continuité du terrain, rivières, urbanisme, personnages, budgets). Captures avant/après : `docs/graphics/`.

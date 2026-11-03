@@ -4,10 +4,15 @@ import { hash2 } from "../sim/rng";
 import { findPath } from "../sim/path";
 import type { SimulationEngine } from "../sim/SimulationEngine";
 import { T } from "../sim/World";
-import { treeGeometry } from "./geo";
+import { Vegetation } from "./Vegetation";
 import { BuildingLayer } from "./BuildingLayer";
 import { CitizenLayer } from "./CitizenLayer";
 import { Infra } from "./Infra";
+import { Terrain } from "./Terrain";
+import { Water } from "./Water";
+import { Sky } from "./Sky";
+import { Props } from "./Props";
+import { Glow } from "./Glow";
 import { Fx } from "./Fx";
 
 const SOIL = new THREE.Color(0x6b5440), SOIL_DARK = new THREE.Color(0x3d2f25);
@@ -28,14 +33,22 @@ export class Renderer {
   private time = 0;
   fx: Fx;
 
-  private terrain!: THREE.Mesh;
+  private terr!: Terrain;
+  private waterObj!: Water;
   private skirt!: THREE.Mesh;
-  private water!: THREE.Mesh;
-  private trees!: THREE.InstancedMesh;
-  private flames!: THREE.InstancedMesh;
+  sky!: Sky;
+  private frustum = new THREE.Frustum();
+  private pv = new THREE.Matrix4();
+  private heightVer = -1;
+  private vegClock = -10;
+  private vegHeight = -1;
+  private pathVer = -1;
+  private veg!: Vegetation;
   private bld!: BuildingLayer;
   private cit!: CitizenLayer;
   private infra!: Infra;
+  private props!: Props;
+  private glow!: Glow;
   private borders!: THREE.Mesh;
   private ringTarget: THREE.Mesh;
   private ringTargetFill: THREE.Mesh;
@@ -82,11 +95,11 @@ export class Renderer {
     this.camera.position.set(52, 58, 52);
     this.controls = new OrbitControls(this.camera, this.three.domElement);
     this.controls.enableDamping = true;
-    this.controls.dampingFactor = 0.09;
+    this.controls.dampingFactor = 0.075;
     this.controls.screenSpacePanning = false;
-    this.controls.minDistance = 7;
+    this.controls.minDistance = 4;
     this.controls.maxDistance = 150;
-    this.controls.maxPolarAngle = Math.PI * 0.46;
+    this.controls.maxPolarAngle = Math.PI * 0.485;
     this.controls.minPolarAngle = 0.15;
     this.controls.target.set(0, 0.5, 0);
     this.controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
@@ -98,7 +111,8 @@ export class Renderer {
     this.controls.update();
 
     // lumières douces
-    this.scene.add(new THREE.HemisphereLight(0xdbeaff, 0x7a6650, 1.35));
+    const hemi = new THREE.HemisphereLight(0xdbeaff, 0x7a6650, 1.35);
+    this.scene.add(hemi);
     const sun = new THREE.DirectionalLight(0xfff0d6, 2.3);
     sun.position.set(-28, 52, 22);
     sun.castShadow = true;
@@ -109,7 +123,9 @@ export class Renderer {
     sun.shadow.bias = -0.0004;
     sun.shadow.normalBias = 0.03;
     this.scene.add(sun);
-    this.scene.add(new THREE.AmbientLight(0xffffff, 0.15));
+    const amb = new THREE.AmbientLight(0xffffff, 0.15);
+    this.scene.add(amb);
+    this.sky = new Sky(this.scene, sun, hemi, amb, this.three, this.mobile);
 
     // anneaux de ciblage
     const ringGeo = new THREE.RingGeometry(0.94, 1, 64);
@@ -142,6 +158,8 @@ export class Renderer {
     this.camera.aspect = w / h;
     this.camera.fov = w / h < 1 ? 46 : 32;
     this.camera.updateProjectionMatrix();
+    this.fx?.setScale(h * this.three.getPixelRatio(), this.camera.fov);
+    this.glow?.setScale(h * this.three.getPixelRatio(), this.camera.fov);
     this.applyInset(true);
   }
 
@@ -150,10 +168,12 @@ export class Renderer {
   setSim(sim: SimulationEngine): void {
     this.sim = sim;
     this.N = sim.world.size;
-    for (const c of [this.terrain, this.skirt, this.water, this.trees, this.flames, this.borders]) {
+    for (const c of [this.skirt, this.borders]) {
       if (c) { this.scene.remove(c); c.geometry.dispose(); }
     }
-    this.bld?.clear(); this.cit?.clear(); this.infra?.clear();
+    this.terr?.dispose(this.scene); this.waterObj?.dispose(this.scene);
+    this.heightVer = -1; this.pathVer = -1; this.vegHeight = -1;
+    this.bld?.clear(); this.cit?.clear(); this.infra?.clear(); this.props?.clear();
     for (const el of this.labels.values()) el.remove();
     this.labels.clear();
     this.fx.clear();
@@ -166,41 +186,22 @@ export class Renderer {
 
   private buildStatic(): void {
     const N = this.N;
-    // terrain
-    const tg = new THREE.BufferGeometry();
-    tg.setAttribute("position", new THREE.BufferAttribute(new Float32Array(N * N * 18), 3));
-    tg.setAttribute("color", new THREE.BufferAttribute(new Float32Array(N * N * 18), 3));
-    this.terrain = new THREE.Mesh(tg, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1, metalness: 0 }));
-    this.terrain.receiveShadow = true;
-    this.terrain.castShadow = true;
-    this.scene.add(this.terrain);
-    // jupe de la maquette
+    // terrain doux, eau, jupe de la maquette
+    this.terr = new Terrain(this.scene, N, this.mobile);
     const sg = new THREE.BufferGeometry();
-    sg.setAttribute("position", new THREE.BufferAttribute(new Float32Array(N * 4 * 18), 3));
-    sg.setAttribute("color", new THREE.BufferAttribute(new Float32Array(N * 4 * 18), 3));
     this.skirt = new THREE.Mesh(sg, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 }));
+    this.skirt.frustumCulled = false;
     this.scene.add(this.skirt);
-    // eau
-    const wg = new THREE.PlaneGeometry(N, N, this.mobile ? 12 : 28, this.mobile ? 12 : 28);
-    wg.rotateX(-Math.PI / 2);
-    this.water = new THREE.Mesh(wg, new THREE.MeshStandardMaterial({ color: 0x4fa9cc, transparent: true, opacity: 0.74, flatShading: true, roughness: 0.25, metalness: 0.05 }));
-    this.water.position.y = -0.03;
-    this.water.receiveShadow = true;
-    this.scene.add(this.water);
+    this.waterObj = new Water(this.scene, N, this.sky, this.mobile);
     // arbres
-    this.trees = new THREE.InstancedMesh(treeGeometry(), new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 }), 9000);
-    this.trees.castShadow = true; this.trees.receiveShadow = true; this.trees.frustumCulled = false;
-    this.scene.add(this.trees);
-    // flammes
-    const fg = new THREE.ConeGeometry(0.16, 0.5, 5);
-    fg.translate(0, 0.25, 0);
-    this.flames = new THREE.InstancedMesh(fg, new THREE.MeshBasicMaterial({ color: 0xff8a2a }), 900);
-    this.flames.frustumCulled = false; this.flames.count = 0;
-    this.scene.add(this.flames);
+    this.veg?.clear();
+    this.veg = this.veg ?? new Vegetation(this.scene, this.mobile, this.sky);
     // bâtiments, habitants, infrastructures : couches modulaires (géométries réutilisées, instanciation)
-    this.bld = new BuildingLayer(this.scene);
-    this.cit = new CitizenLayer(this.scene, this.mobile);
+    this.bld = new BuildingLayer(this.scene, this.sky);
+    this.cit = new CitizenLayer(this.scene, this.mobile, this.sky);
     this.infra = new Infra(this.scene, this.mobile);
+    this.props = new Props(this.scene);
+    this.glow = this.glow ?? new Glow(this.scene, this.sky, this.mobile ? 500 : 900);
     // frontières & routes
     this.borders = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.9, depthWrite: false }));
     this.borders.renderOrder = 5; this.borders.frustumCulled = false;
@@ -208,36 +209,6 @@ export class Renderer {
   }
 
   // ------------------------------------------------------------------ terrain
-
-  private tileColor(i: number, out: THREE.Color): void {
-    const w = this.sim.world;
-    const t = w.type[i], h = w.height[i];
-    const x = i % this.N, y = (i / this.N) | 0;
-    const n = (hash2(x, y, 9) - 0.5) * 0.06;
-    switch (t) {
-      case T.WATER: out.setHex(0x4fa6b8).lerp(this.tmpColor.setHex(0x1d4a66), Math.min(1, -h / 1.1)); break;
-      case T.SAND: out.setHex(0xdccb94); break;
-      case T.GRASS: out.setHex(0x95c76b).lerp(this.tmpColor.setHex(0x6ea155), Math.min(1, h / 1.8)).lerp(this.tmpColor.setHex(0xb8b36b), Math.max(0, 0.45 - w.fertility[i]) * 1.1); break;
-      case T.HILL: out.setHex(0xaba96e).lerp(this.tmpColor.setHex(0x938d64), Math.min(1, (h - w.hillH) / 1.2)); break;
-      case T.MOUNTAIN: out.setHex(0x938f8b).lerp(this.tmpColor.setHex(0xf2f2f4), Math.max(0, Math.min(1, (h - 2.9) / 0.6))); break;
-      default: out.setHex(0x66b3da);
-    }
-    if (t !== T.WATER && this.urban[i] > 0) {
-      // le sol se transforme autour des bâtiments : terre battue, pierre, pavés, suie, bitume, dalles lumineuses
-      const e = (this.urban[i] & 7) - 1, strong = (this.urban[i] & 8) !== 0;
-      out.lerp(this.tmpColor.setHex([0x8d7650, 0xc8bd9c, 0x9a948a, 0x5c5a58, 0x6e7176, 0xc3d9e6][e]), strong ? 0.6 : 0.3);
-    }
-    if (t !== T.WATER) {
-      if (w.scorch[i] > 0) out.lerp(this.tmpColor.setHex(0x3a332d), Math.min(0.9, w.scorch[i] * 0.9));
-      if (w.fire[i] > 0) out.lerp(this.tmpColor.setHex(0x6a2d10), 0.55);
-      const o = w.owner[i];
-      if (o >= 0) {
-        const civ = this.sim.civById.get(o);
-        if (civ) out.lerp(this.tmpColor.setHex(civ.color), 0.26);
-      }
-    }
-    out.r = Math.max(0, out.r + n); out.g = Math.max(0, out.g + n); out.b = Math.max(0, out.b + n);
-  }
 
   private computeUrban(): void {
     const w = this.sim.world, N = this.N;
@@ -257,90 +228,42 @@ export class Renderer {
 
   private rebuildTerrain(): void {
     this.computeUrban();
-    const w = this.sim.world, N = this.N, m = N + 1;
-    const pos = this.terrain.geometry.attributes.position as THREE.BufferAttribute;
-    const col = this.terrain.geometry.attributes.color as THREE.BufferAttribute;
-    const P = pos.array as Float32Array, C = col.array as Float32Array;
-    const c = new THREE.Color();
-    let k = 0;
-    for (let ty = 0; ty < N; ty++)
-      for (let tx = 0; tx < N; tx++) {
-        const i = ty * N + tx;
-        this.tileColor(i, c);
-        const h00 = w.corner[ty * m + tx], h10 = w.corner[ty * m + tx + 1], h01 = w.corner[(ty + 1) * m + tx], h11 = w.corner[(ty + 1) * m + tx + 1];
-        const x0 = tx - N / 2, x1 = x0 + 1, z0 = ty - N / 2, z1 = z0 + 1;
-        const v = (x: number, y: number, z: number) => { P[k] = x; P[k + 1] = y; P[k + 2] = z; C[k] = c.r; C[k + 1] = c.g; C[k + 2] = c.b; k += 3; };
-        if ((tx + ty) & 1) {
-          v(x0, h00, z0); v(x0, h01, z1); v(x1, h11, z1);
-          v(x0, h00, z0); v(x1, h11, z1); v(x1, h10, z0);
-        } else {
-          v(x0, h00, z0); v(x0, h01, z1); v(x1, h10, z0);
-          v(x1, h10, z0); v(x0, h01, z1); v(x1, h11, z1);
-        }
-      }
-    pos.needsUpdate = true; col.needsUpdate = true;
-    this.terrain.geometry.computeVertexNormals();
-    this.terrain.geometry.computeBoundingSphere();
-    this.terrain.geometry.computeBoundingBox();
+    const w = this.sim.world;
+    if (this.heightVer !== w.terrainV) { this.terr.rebuildHeights(w); this.rebuildSkirt(); this.heightVer = w.terrainV; }
+    const civ = this.sim.civById;
+    this.terr.rebuildColors(w, (i) => { const o = w.owner[i]; const c = o >= 0 ? civ.get(o) : undefined; return c ? c.color : -1; }, this.urban, this.infra.paths);
+    this.pathVer = this.infra.pathVer;
   }
 
+  /** Jupe de la maquette : coupe de terrain suivant exactement la surface lisse. */
   private rebuildSkirt(): void {
-    const w = this.sim.world, N = this.N, m = N + 1;
-    const g = this.skirt.geometry;
-    const P = (g.attributes.position as THREE.BufferAttribute).array as Float32Array;
-    const C = (g.attributes.color as THREE.BufferAttribute).array as Float32Array;
-    let k = 0;
-    const bottom = -2.2;
-    const quad = (ax: number, az: number, ah: number, bx: number, bz: number, bh: number, flip: boolean) => {
-      const water = (ah + bh) / 2 < 0;
-      const top = (h: number) => (water ? Math.min(0, h < 0 ? 0 : h) : h);
-      const ta = top(ah), tb = top(bh);
-      const cTop = water ? new THREE.Color(0x4a8fae) : SOIL, cBot = water ? new THREE.Color(0x22506b) : SOIL_DARK;
-      const verts: [number, number, number, THREE.Color][] = flip
-        ? [[ax, ta, az, cTop], [bx, bottom, bz, cBot], [bx, tb, bz, cTop], [ax, ta, az, cTop], [ax, bottom, az, cBot], [bx, bottom, bz, cBot]]
-        : [[ax, ta, az, cTop], [bx, tb, bz, cTop], [bx, bottom, bz, cBot], [ax, ta, az, cTop], [bx, bottom, bz, cBot], [ax, bottom, az, cBot]];
-      for (const [x, y, z, c] of verts) { P[k] = x; P[k + 1] = y; P[k + 2] = z; C[k] = c.r; C[k + 1] = c.g; C[k + 2] = c.b; k += 3; }
-    };
-    const h = N / 2;
-    for (let i = 0; i < N; i++) {
-      quad(i - h, -h, w.corner[i], i + 1 - h, -h, w.corner[i + 1], true);
-      quad(i - h, h, w.corner[N * m + i], i + 1 - h, h, w.corner[N * m + i + 1], false);
-      quad(-h, i - h, w.corner[i * m], -h, i + 1 - h, w.corner[(i + 1) * m], false);
-      quad(h, i - h, w.corner[i * m + N], h, i + 1 - h, w.corner[(i + 1) * m + N], true);
-    }
-    (g.attributes.position as THREE.BufferAttribute).needsUpdate = true;
-    (g.attributes.color as THREE.BufferAttribute).needsUpdate = true;
-    g.setDrawRange(0, k / 3);
-    g.computeVertexNormals();
-  }
-
-  private rebuildTrees(): void {
     const w = this.sim.world, N = this.N;
-    let n = 0;
-    const cap = this.trees.instanceMatrix.count;
-    for (let ty = 0; ty < N && n < cap; ty++)
-      for (let tx = 0; tx < N && n < cap; tx++) {
-        const i = ty * N + tx, cnt = w.trees[i];
-        if (!cnt || w.type[i] === T.WATER) continue;
-        const burning = w.fire[i] > 0;
-        for (let k = 0; k < Math.min(cnt, 4) && n < cap; k++) {
-          const ox = (hash2(tx, ty, k * 3 + 1) - 0.5) * 0.78, oz = (hash2(tx, ty, k * 3 + 2) - 0.5) * 0.78;
-          const px = tx + 0.5 + ox, pz = ty + 0.5 + oz;
-          const s = 0.75 + hash2(tx, ty, k * 3 + 3) * 0.6 + cnt * 0.05;
-          this.dummy.position.set(px - N / 2, w.heightAt(px, pz) - 0.01, pz - N / 2);
-          this.dummy.rotation.set(0, hash2(tx, ty, k) * 6.28, 0);
-          this.dummy.scale.set(s, s * (0.9 + hash2(tx, ty, k + 7) * 0.5), s);
-          this.dummy.updateMatrix();
-          this.trees.setMatrixAt(n, this.dummy.matrix);
-          const v = 0.8 + hash2(tx, ty, k + 11) * 0.4;
-          this.tmpColor.setRGB(burning ? 0.35 : v * 0.95, burning ? 0.2 : v, burning ? 0.15 : v * 0.9);
-          this.trees.setColorAt(n, this.tmpColor);
-          n++;
-        }
+    const SEG = 4;
+    const pos: number[] = [], col: number[] = [];
+    const bottom = -2.2;
+    const soil = SOIL, soilDark = SOIL_DARK, wTop = new THREE.Color(0x4a8fae), wBot = new THREE.Color(0x22506b);
+    const push = (x: number, y: number, z: number, c: THREE.Color) => { pos.push(x, y, z); col.push(c.r, c.g, c.b); };
+    const hN = N / 2;
+    const edge = (fx: (t: number) => [number, number], flip: boolean) => {
+      for (let i = 0; i < N * SEG; i++) {
+        const [ax, ay] = fx(i / SEG), [bx, by] = fx((i + 1) / SEG);
+        const ha = w.heightAt(ax, ay), hb = w.heightAt(bx, by);
+        const water = (ha + hb) / 2 < -0.02;
+        const ta = water ? 0 : ha, tb = water ? 0 : hb;
+        const cT = water ? wTop : soil, cB = water ? wBot : soilDark;
+        const A = [ax - hN, ta, ay - hN], B = [bx - hN, tb, by - hN];
+        const verts: [number[], THREE.Color][] = flip
+          ? [[A, cT], [[bx - hN, bottom, by - hN], cB], [B, cT], [A, cT], [[ax - hN, bottom, ay - hN], cB], [[bx - hN, bottom, by - hN], cB]]
+          : [[A, cT], [B, cT], [[bx - hN, bottom, by - hN], cB], [A, cT], [[bx - hN, bottom, by - hN], cB], [[ax - hN, bottom, ay - hN], cB]];
+        for (const [p, c] of verts) push(p[0], p[1], p[2], c);
       }
-    this.trees.count = n;
-    this.trees.instanceMatrix.needsUpdate = true;
-    if (this.trees.instanceColor) this.trees.instanceColor.needsUpdate = true;
+    };
+    edge((t) => [t, 0], true); edge((t) => [t, N], false); edge((t) => [0, t], false); edge((t) => [N, t], true);
+    const g = this.skirt.geometry;
+    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+    g.computeVertexNormals();
+    g.computeBoundingSphere();
   }
 
   private rebuildBorders(): void {
@@ -374,7 +297,7 @@ export class Renderer {
           if (no === o) continue;
           if (w.type[ny * N + nx] === T.WATER) continue;
           const rival = no >= 0;
-          addQuad(ax, ay, w.corner[ay * m + ax], bx, by, w.corner[by * m + bx], ix, iz, rival ? 0.16 : 0.08, rival ? civ.color : this.tmpColor.setHex(civ.color).lerp(new THREE.Color(0xffffff), 0.35).getHex());
+          addQuad(ax, ay, w.heightAt(ax, ay), bx, by, w.heightAt(bx, by), ix, iz, rival ? 0.16 : 0.08, rival ? civ.color : this.tmpColor.setHex(civ.color).lerp(new THREE.Color(0xffffff), 0.35).getHex());
         }
       }
     const g = this.borders.geometry;
@@ -395,36 +318,34 @@ export class Renderer {
     for (const [x, y, z] of src) if (Math.random() < rate * 0.1) this.fx.smoke(x, y, z);
   }
 
-  private updateFlames(): void {
+  /** Incendies et feux de camp : sprites de flammes, braises et fumée (la propagation vient du monde simulé). */
+  private updateFlames(dt: number): void {
     const w = this.sim.world, N = this.N;
     if (this.sim.tick % 4 === 0 || this.lastSlow === 0) {
       this.flameTiles.length = 0;
       for (let i = 0; i < w.fire.length && this.flameTiles.length < 400; i++) if (w.fire[i] > 0) this.flameTiles.push(i);
     }
-    let n = 0;
+    const near = this.camera.position.distanceTo(this.controls.target) < (this.mobile ? 85 : 120);
+    if (!near) return;
+    let budget = this.mobile ? 40 : 90;
+    const rate = dt * (this.mobile ? 9 : 14);
     for (const i of this.flameTiles) {
+      if (budget <= 0) break;
       const x = i % N, y = (i / N) | 0;
+      const intensity = w.trees[i] > 0 || w.bld[i] >= 0 ? 1 : 0.6;
       for (let k = 0; k < 2; k++) {
-        const px = x + 0.3 + k * 0.4, pz = y + 0.35 + k * 0.3;
-        const f = 0.7 + 0.5 * Math.abs(Math.sin(this.time * 9 + i * 1.7 + k * 3));
-        this.dummy.position.set(px - N / 2, w.heightAt(px, pz), pz - N / 2);
-        this.dummy.rotation.set(0, i + k, 0);
-        this.dummy.scale.set(f, f * 1.3, f);
-        this.dummy.updateMatrix();
-        this.flames.setMatrixAt(n++, this.dummy.matrix);
+        if (Math.random() < rate) {
+          const px = x + 0.25 + Math.random() * 0.5, pz = y + 0.25 + Math.random() * 0.5;
+          this.fx.flame(px - N / 2, w.heightAt(px, pz) + 0.05, pz - N / 2, intensity);
+          budget--;
+        }
       }
-      if (Math.random() < 0.04) this.fx.smoke(x + 0.5 - N / 2, w.heightAt(x + 0.5, y + 0.5) + 0.3, y + 0.5 - N / 2);
+      if (Math.random() < dt * 3) this.fx.smoke(x + 0.5 - N / 2, w.heightAt(x + 0.5, y + 0.5) + 0.35, y + 0.5 - N / 2);
     }
-    // feux de camp de la préhistoire (halls, temples et camps d'époque 0)
-    for (let k = 0; k < this.bld.fires.length && n < 890; k++) {
-      const [fx, fy, fz] = this.bld.fires[k];
-      const f = 0.45 + 0.3 * Math.abs(Math.sin(this.time * 10 + k * 2.1));
-      this.dummy.position.set(fx, fy, fz); this.dummy.rotation.set(0, k, 0); this.dummy.scale.set(f, f * 1.4, f); this.dummy.updateMatrix();
-      this.flames.setMatrixAt(n++, this.dummy.matrix);
-      if (Math.random() < 0.05) this.fx.smoke(fx, fy + 0.3, fz);
+    for (const [fx, fy, fz] of this.bld.fires) {
+      if (Math.random() < rate * 2) this.fx.flame(fx, fy, fz, 0.8);
+      if (Math.random() < dt * 1.2) this.fx.smoke(fx, fy + 0.25, fz);
     }
-    this.flames.count = n;
-    this.flames.instanceMatrix.needsUpdate = true;
   }
 
   private updateLabels(): void {
@@ -508,7 +429,7 @@ export class Renderer {
     }
     const portrait = this.camera.aspect < 1;
     this.controls.target.set(tx * 0.8, 0.5, tz * 0.8);
-    const dir = new THREE.Vector3(1, 1.08, 1).normalize();
+    const dir = new THREE.Vector3(1, 0.92, 1).normalize();
     this.camera.position.copy(this.controls.target).addScaledVector(dir, portrait ? 78 : 94);
   }
 
@@ -539,7 +460,9 @@ export class Renderer {
     this.three.setPixelRatio(pr);
     this.three.setSize(this.el.clientWidth || window.innerWidth, this.el.clientHeight || window.innerHeight);
     this.sun.castShadow = q < 3;
-    this.trees.castShadow = q < 2;
+    this.veg.setShadows(q < 2);
+    this.fx.setScale(this.el.clientHeight * this.three.getPixelRatio(), this.camera.fov);
+    this.glow.setScale(this.el.clientHeight * this.three.getPixelRatio(), this.camera.fov);
   }
   get qualityLevel(): number { return this.quality; }
   /** Intervalle minimal entre deux rendus (ms). */
@@ -551,6 +474,13 @@ export class Renderer {
     const off = this.camera.position.clone().sub(this.controls.target).setLength(dist);
     this.controls.target.copy(t);
     this.camera.position.copy(t).add(off);
+  }
+
+  /** Fixe l'heure (0 minuit, 0.5 midi) et suspend le cycle automatique ; `null` le relance. */
+  setTimeOfDay(t: number | null): void {
+    if (t === null) { this.sky.auto = true; return; }
+    this.sky.auto = false;
+    this.sky.setTime(t);
   }
 
   shake(a: number): void {
@@ -585,36 +515,37 @@ export class Renderer {
     const lv = this.lastVer;
     if (lv.terrain !== w.terrainV) { this.rebuildSkirt(); }
     const uv = sim.stats.buildingsBuilt * 7 + sim.stats.upgrades * 13 + sim.stats.buildingsLost;
-    if (lv.terrain !== w.terrainV || lv.owner !== w.ownerV || lv.fire !== w.fireV || (uv !== this.urbanVer && this.time - this.lastSlow > 1.2) || (this.time - this.lastSlow > (this.mobile ? 1.4 : 0.6) && (sim.tick % 6 === 0))) {
+    const pathDirty = this.infra.pathVer !== this.pathVer;
+    if (lv.terrain !== w.terrainV || lv.owner !== w.ownerV || lv.fire !== w.fireV || pathDirty || (uv !== this.urbanVer && this.time - this.lastSlow > 1.2) || (this.time - this.lastSlow > (this.mobile ? 1.4 : 0.6) && (sim.tick % 6 === 0))) {
       this.rebuildTerrain();
       this.urbanVer = uv;
       if (lv.terrain !== w.terrainV || lv.owner !== w.ownerV) this.rebuildBorders();
       lv.terrain = w.terrainV; lv.owner = w.ownerV; lv.fire = w.fireV;
       this.lastSlow = this.time;
     }
-    if (lv.tree !== w.treeV || (this.time - this.lastSlow > 0.5 && sim.tick % 8 === 0)) {
-      this.rebuildTrees();
-      lv.tree = w.treeV;
+    if ((lv.tree !== w.treeV && this.time - this.vegClock > (this.mobile ? 2.5 : 1.5)) || this.vegHeight !== w.terrainV) {
+      this.veg.rebuild(sim);
+      lv.tree = w.treeV; this.vegHeight = w.terrainV; this.vegClock = this.time;
     }
-    this.bld.update(sim);
-    const zs = Math.min(2.4, Math.max(1.25, this.camera.position.distanceTo(this.controls.target) / 38));
-    const far = this.camera.position.distanceTo(this.controls.target) > (this.mobile ? 55 : 80);
-    this.cit.update(sim, alpha, this.time, zs, this.fx, !far);
+    const dist = this.camera.position.distanceTo(this.controls.target);
+    this.camera.updateMatrixWorld();
+    this.pv.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
+    this.frustum.setFromProjectionMatrix(this.pv);
+    this.veg.update(this.camera, false);
+    this.bld.update(sim, this.frustum, this.camera.position, this.mobile ? 150 : 230);
+    const zs = Math.min(1.9, Math.max(1.0, dist / 55));
+    const far = dist > (this.mobile ? 55 : 85);
+    this.props.update(sim, this.frustum, this.camera.position, this.mobile ? 55 : 85);
+    this.cit.update(sim, alpha, this.time, zs, this.fx, !far, this.frustum, this.camera.position, this.sky.night);
     this.infra.update(sim, this.time, this.bld.lamps.map(([x, y, z]) => [x, y, z] as [number, number, number]));
-    this.updateFlames();
+    this.updateFlames(dt);
+    this.glow.update(this.bld.lights, this.bld.fires, this.bld.lamps, this.time);
     this.emitSmoke(dt);
     if (!this.mobile || this.frameNo % 3 === 0) this.updateLabels();
     this.syncWeather();
 
     // eau animée
-    if (!this.mobile || this.frameNo % 2 === 0) {
-      const wp = this.water.geometry.attributes.position as THREE.BufferAttribute;
-      for (let i = 0; i < wp.count; i++) {
-        const x = wp.getX(i), z = wp.getZ(i);
-        wp.setY(i, Math.sin(this.time * 1.2 + x * 0.6) * 0.025 + Math.cos(this.time * 0.9 + z * 0.5) * 0.02);
-      }
-      wp.needsUpdate = true;
-    }
+    this.sky.update(dt);
     if (this.mobile && this.time - this.shadowClock > 0.5) { this.shadowClock = this.time; this.three.shadowMap.needsUpdate = true; }
 
     // effets
@@ -657,7 +588,7 @@ export class Renderer {
     const rect = this.three.domElement.getBoundingClientRect();
     const ndc = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
     this.raycaster.setFromCamera(ndc, this.camera);
-    const hit = this.raycaster.intersectObject(this.terrain, false)[0];
+    const hit = this.raycaster.intersectObject(this.terr.mesh, false)[0];
     if (!hit) {
       // plan de l'eau
       const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);

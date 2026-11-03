@@ -358,7 +358,7 @@ export class DivinePowerSystem {
         const city = cap ?? sim.citiesOf(civ.id)[0];
         if (good && city) {
           const s = sim.civSys.findSite(sim, civ, city, "temple");
-          if (s) { sim.addBuilding("temple", civ.id, city.id, s.x, s.y, false); civ.stability = Math.min(100, civ.stability + 4); effect = "Chantier d'un temple ouvert (gratuit), stabilité +4."; }
+          if (s) { sim.addBuilding("temple", civ.id, city.id, s.x, s.y, false, civ.era, s.rot); civ.stability = Math.min(100, civ.stability + 4); effect = "Chantier d'un temple ouvert (gratuit), stabilité +4."; }
           else effect = "Pas d'emplacement convenable. Le temple restera spirituel.";
         } else { civ.wood = Math.max(0, civ.wood - 30); civ.gold = Math.max(0, civ.gold - 20); civ.stability = Math.min(100, civ.stability + 3); effect = "30 bois et 20 or dépensés pour une statue du dirigeant. Stabilité +3."; }
         break;

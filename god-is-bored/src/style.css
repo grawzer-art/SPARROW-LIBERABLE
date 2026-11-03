@@ -15,7 +15,7 @@
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font: 13px/1.4 var(--font); -webkit-font-smoothing: antialiased; }
-#app { position: fixed; inset: 0; background: radial-gradient(ellipse at 50% 38%, #9db5cf 0%, #6f86a8 36%, #3a4662 72%, #232b3f 100%); }
+#app { position: fixed; inset: 0; background: radial-gradient(ellipse at 50% 38%, var(--sky-a, #a9bdd6) 0%, var(--sky-a, #a9bdd6) 18%, var(--sky-b, #3a4662) 100%); }
 #stage { position: absolute; inset: 0; }
 #stage canvas { display: block; width: 100%; height: 100%; outline: none; }
 #labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }

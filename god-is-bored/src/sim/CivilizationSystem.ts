@@ -6,7 +6,8 @@ import type { SimulationEngine } from "./SimulationEngine";
 import type { Building, BuildingType, Citizen, City, Civ, CivMods, Job, Leader, PersonalityId } from "./types";
 import { ERA_GOLD, ERA_MIN_TECH, ERA_NAMES, ERA_POP, ERA_STAB, MAX_TECH_LEVEL, eraOfTech, isUnlocked, setTech, techGold, techPop, techThreshold as techThr } from "./TechTree";
 import { T } from "./World";
-import { RNG } from "./rng";
+import { RNG, hash2 } from "./rng";
+import { districtOf, faceStreet, preferredDistrict, streetInfo } from "./Layout";
 
 const TPY = TICKS_PER_YEAR;
 const PERSONALITIES: PersonalityId[] = ["pacifist", "expansionist", "fanatic", "opportunist", "arrogant", "paranoid", "stupid"];
@@ -94,7 +95,7 @@ export class CivilizationSystem {
     for (const [type, n] of [["house", 3], ["farm", 2]] as [BuildingType, number][]) {
       for (let k = 0; k < n; k++) {
         const s = this.findSite(sim, civ, city, type);
-        if (s) sim.addBuilding(type, civ.id, city.id, s.x, s.y, true);
+        if (s) sim.addBuilding(type, civ.id, city.id, s.x, s.y, true, 0, s.rot);
       }
     }
     // premiers habitants
@@ -222,10 +223,10 @@ export class CivilizationSystem {
     return adv;
   }
 
-  findSite(sim: SimulationEngine, civ: Civ, city: City, type: BuildingType): { x: number; y: number } | null {
+  findSite(sim: SimulationEngine, civ: Civ, city: City, type: BuildingType): { x: number; y: number; rot: number } | null {
     const w = sim.world;
     const R = type === "castle" || type === "temple" || type === "market" || type === "station" || type === "lab" ? 6 : 8;
-    let best: { x: number; y: number } | null = null, bs = Infinity;
+    let best: { x: number; y: number; rot: number } | null = null, bs = Infinity;
     for (let y = Math.max(0, city.y - R); y <= Math.min(w.size - 1, city.y + R); y++)
       for (let x = Math.max(0, city.x - R); x <= Math.min(w.size - 1, city.x + R); x++) {
         const i = y * w.size + x;
@@ -242,27 +243,31 @@ export class CivilizationSystem {
         if (type !== "lumber" && w.trees[i] > 0) continue;
         let s = d;
         const noise = ((x * 73 + y * 151 + sim.tick) % 11) * 0.12;
-        if (type === "farm") s = d * 0.5 - w.fertility[i] * 6 + (d > 6 ? 3 : 0);
+        // urbanisme : rues rayonnantes, place centrale, quartiers (habitat, artisans, culte)
+        const info = streetInfo(city, x + 0.5, y + 0.5);
+        const dist = preferredDistrict(type);
+        const mismatch = dist && districtOf(city, info.sector) !== dist ? 1.4 : 0;
+        let rot = faceStreet(x + 0.5, y + 0.5, info) + (hash2(x, y, 6) - 0.5) * 0.22;
+        if (type === "farm") { s = d * 0.5 - w.fertility[i] * 6 + (d > 6 ? 3 : 0) + (info.dStreet < 1.2 ? 2 : 0); rot = hash2(x, y, 7) * Math.PI; }
         else if (type === "lumber") {
           let tr = 0;
           for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) { const tx = x + dx, ty = y + dy; if (w.inb(tx, ty) && w.trees[ty * w.size + tx] > 0) tr++; }
           if (tr < 3) continue;
           s = d * 0.4 - tr * 0.5;
-        } else if (type === "quarry") s = d;
-        else if (type === "castle" || type === "temple") s = Math.abs(d - 3.2) + noise;
-        else if (type === "walls") s = Math.abs(d - 3.6) + noise;
-        else if (type === "market") s = Math.abs(d - 2.2) + noise;
-        else if (type === "mill") s = Math.abs(d - 4.2) - w.fertility[i] * 2 + noise;
-        else if (type === "forge" || type === "factory" || type === "power") s = Math.abs(d - 5.2) + noise;
-        else if (type === "station" || type === "lab") s = Math.abs(d - 3.6) + noise;
+        } else if (type === "quarry") { s = d; rot = hash2(x, y, 8) * Math.PI; }
+        else if (type === "castle" || type === "temple") s = Math.abs(d - 3.0) + Math.abs(info.dStreet - 0.9) * 0.8 + mismatch + noise;
+        else if (type === "walls") { s = Math.abs(d - 3.6) + noise; rot = Math.atan2(city.x + 0.5 - (x + 0.5), city.y + 0.5 - (y + 0.5)); }
+        else if (type === "market") s = Math.abs(d - 2.2) + Math.abs(info.dStreet - 0.9) * 0.9 + noise;
+        else if (type === "mill") s = Math.abs(d - 4.2) - w.fertility[i] * 2 + mismatch * 0.5 + noise;
+        else if (type === "forge" || type === "factory" || type === "power") s = Math.abs(d - 5.0) + Math.abs(info.dStreet - 1.1) * 0.8 + mismatch + noise;
+        else if (type === "station" || type === "lab") s = Math.abs(d - 3.6) + Math.abs(info.dStreet - 1.0) * 0.8 + mismatch + noise;
         else {
-          // maison : se serre autour des autres bâtiments
-          let adj = 0;
-          for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const tx = x + dx, ty = y + dy; if (w.inb(tx, ty) && w.bld[ty * w.size + tx] >= 0) adj++; }
-          s = d - Math.min(adj, 3) * 0.5;
+          // maison : en façade de rue, serrée vers la place, dans un quartier d'habitat
+          s = Math.abs(info.dStreet - 1.15) * 2.0 + (info.dStreet > 2.6 ? 3 : 0) + info.r * 0.5 + mismatch + (hash2(x, y, 12) - 0.5) * 0.5;
+          // les villages anciens sont plus aérés : on évite de coller les huttes
+          if (civ.era <= 1) { let adj = 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if ((dx || dy) && w.inb(x + dx, y + dy) && w.bld[(y + dy) * w.size + x + dx] >= 0) adj++; s += adj * (civ.era === 0 ? 0.55 : 0.3); }
         }
-        s += noise;
-        if (s < bs) { bs = s; best = { x, y }; }
+        if (s < bs) { bs = s; best = { x, y, rot }; }
       }
     return best;
   }
@@ -281,7 +286,7 @@ export class CivilizationSystem {
         const s = this.findSite(sim, civ, city, type);
         if (!s) continue;
         sim.econ.spend(civ, type);
-        sim.addBuilding(type, civ.id, city.id, s.x, s.y, false, civ.era);
+        sim.addBuilding(type, civ.id, city.id, s.x, s.y, false, civ.era, s.rot);
         placed = true;
         break;
       }

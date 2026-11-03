@@ -2,6 +2,7 @@ import "./style.css";
 import { Renderer } from "./render/Renderer";
 import { SaveManager } from "./sim/SaveManager";
 import { SimulationEngine } from "./sim/SimulationEngine";
+import { buildReferenceWorld } from "./sim/Reference";
 import { TICK_MS } from "./sim/config";
 import { UI, MOBILE_Q, type GameHost } from "./ui/UI";
 
@@ -21,7 +22,8 @@ class Game implements GameHost {
     this.renderer.resetCamera();
     this.ui = new UI(this);
     (window as unknown as { game: Game }).game = this;
-    this.intro();
+    if (new URLSearchParams(location.search).has("ref")) this.referenceScene();
+    else this.intro();
     requestAnimationFrame((t) => this.loop(t));
     document.addEventListener("visibilitychange", () => { if (document.hidden && this.started()) this.save(); });
     window.addEventListener("beforeunload", () => { if (this.started()) { try { SaveManager.save(this.sim); } catch { /* ignore */ } } });
@@ -47,6 +49,20 @@ class Game implements GameHost {
       intro.classList.add("hidden");
     });
     // démarrage direct possible : un clic ailleurs ne ferme rien, volontairement
+  }
+
+  /** Scène de référence graphique : trois villes à trois époques, jour, caméra sur la cité moderne. */
+  private referenceScene(): void {
+    document.getElementById("intro")!.classList.add("hidden");
+    const sim = SimulationEngine.create(42);
+    sim.paused = true;
+    const ids = buildReferenceWorld(sim);
+    this.swap(sim);
+    sim.paused = false;
+    const civ = sim.civById.get(ids.modern)!;
+    const c = sim.cityById.get(civ.capital) ?? sim.citiesOf(civ.id)[0];
+    if (c) this.renderer.focusOn(c.x + 0.5, c.y + 0.5, 20);
+    this.renderer.setTimeOfDay(0.45);
   }
 
   private swap(sim: SimulationEngine): void {

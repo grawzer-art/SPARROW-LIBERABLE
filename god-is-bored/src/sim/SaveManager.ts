@@ -56,7 +56,7 @@ export class SaveManager {
       c.mods ??= { farm: 1, wood: 1, stone: 1, gold: 1, tech: 1, army: 1 };
     }
     for (const c of sim.cities) c.walls ??= -1;
-    for (const b of sim.buildings) { b.era ??= 0; b.up ??= -1; b.upTo ??= b.era; }
+    for (const b of sim.buildings) { b.rot ??= 0; b.era ??= 0; b.up ??= -1; b.upTo ??= b.era; }
     for (const b of sim.buildings) w.bld[w.idx(b.x, b.y)] = b.id;
     sim.reindex();
     sim.citizenSys.census(sim);

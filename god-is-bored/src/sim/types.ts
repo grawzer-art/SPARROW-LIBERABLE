@@ -113,6 +113,7 @@ export interface Building {
   x: number; y: number; hp: number; maxHp: number; progress: number; workers: number;
   ruin: number; // >0 : années restantes en ruine
   era: number; // époque de construction (un bâtiment garde son style historique)
+  rot: number; // orientation (lacet, radians) : la façade regarde la rue
   up: number; // progression d'une modernisation (-1 : aucune)
   upTo: number; // époque visée
 }
