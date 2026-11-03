@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+  <meta name="theme-color" content="#1d2433" />
+  <title>GOD IS BORED</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%231d2433'/><path d='M17 4 9 18h6l-2 10 10-15h-6z' fill='%23e8c27a'/></svg>" />
+</head>
+<body>
+  <div id="app">
+    <div id="stage"></div>
+    <div id="labels"></div>
+
+    <header id="top">
+      <div class="brand"><b>GOD IS BORED</b><small>v0.1</small></div>
+      <div class="stat" title="Année courante"><span>An</span><b id="s-year">1</b></div>
+      <div class="stat" title="Population mondiale"><span>Habitants</span><b id="s-pop">0</b></div>
+      <div class="stat" title="Civilisations vivantes"><span>Civilisations</span><b id="s-civs">0</b></div>
+      <div class="stat" id="s-wars-wrap" title="Guerres actives"><span>Guerres</span><b id="s-wars">0</b></div>
+      <div class="stat boredom" title="L'ennui divin monte quand il ne se passe rien."><span>Ennui divin</span><div class="meter"><i id="s-bored"></i></div></div>
+      <div class="spacer"></div>
+      <div class="time" role="group" aria-label="Contrôle du temps">
+        <button id="t-pause" title="Suspendre le temps (Espace)">❚❚</button>
+        <button id="t-1" data-speed="1" title="Vitesse normale (1)">×1</button>
+        <button id="t-3" data-speed="3" title="Vitesse ×3 (2)">×3</button>
+        <button id="t-10" data-speed="10" title="Vitesse ×10 (3)">×10</button>
+      </div>
+      <button id="b-stats" class="ghost" title="Statistiques mondiales">Stats</button>
+      <button id="b-menu" class="ghost" title="Sauvegarde, nouveau monde">Menu</button>
+    </header>
+
+    <div id="mtoggles">
+      <button data-toggle="left">Pouvoirs</button>
+      <button data-toggle="right">Détails</button>
+      <button data-toggle="bottom">Chroniques</button>
+    </div>
+
+    <aside id="left" class="panel">
+      <h3>Pouvoirs divins</h3>
+      <div id="powers"></div>
+      <div id="target-info" class="infobox"></div>
+      <div id="prophecy-box" class="infobox hidden">
+        <label for="prophecy-sel">Message à transmettre</label>
+        <select id="prophecy-sel"></select>
+        <p id="prophecy-odds"></p>
+      </div>
+    </aside>
+
+    <aside id="right" class="panel">
+      <h3 id="right-title">Observation</h3>
+      <div id="details"></div>
+    </aside>
+
+    <section id="bottom" class="panel">
+      <div class="tabs">
+        <button class="tab active" data-tab="chron">Chroniques du monde</button>
+        <button class="tab" data-tab="notif">Notifications</button>
+        <select id="f-civ" title="Filtrer par civilisation"><option value="-2">Toutes les civilisations</option></select>
+        <div class="chips" id="chips"></div>
+      </div>
+      <div id="chron-list" class="list"></div>
+      <div id="notif-list" class="list hidden"></div>
+    </section>
+
+    <div id="toasts"></div>
+    <div id="hint"></div>
+    <div id="cam-tools">
+      <button id="c-rot-l" title="Pivoter (Q)">⟲</button>
+      <button id="c-rot-r" title="Pivoter (E)">⟳</button>
+      <button id="c-in" title="Zoom +">+</button>
+      <button id="c-out" title="Zoom −">−</button>
+      <button id="c-reset" title="Recentrer la vue">◎</button>
+    </div>
+
+    <div id="modal" class="hidden"><div class="card"><button class="x" id="modal-x">×</button><div id="modal-body"></div></div></div>
+
+    <div id="intro">
+      <div class="card">
+        <h1>GOD IS BORED</h1>
+        <p class="tag">« L'humanité était une erreur. Heureusement, elle est divertissante. »</p>
+        <p class="sub">Trois civilisations vivent sur une petite planète. Elles grandissent, se disputent, s'entretuent, et se persuadent d'avoir raison. Vous, vous vous ennuyez.</p>
+        <div class="row">
+          <button id="i-continue" class="primary hidden">Reprendre la partie</button>
+          <button id="i-new" class="primary">Nouveau monde</button>
+        </div>
+        <div class="row small"><label>Graine <input id="i-seed" type="text" inputmode="numeric" placeholder="aléatoire" /></label></div>
+        <p class="keys">Glisser : pivoter · Clic droit / 2 doigts : déplacer · Molette : zoom · WASD : se déplacer · Espace : pause</p>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
