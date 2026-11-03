@@ -96,7 +96,7 @@ export class SimulationEngine {
   soul = new SoulSystem();
   private _planet: Planet | null = null;
   /** Planète portant ce monde : la carte actuelle en est la région R1 (créée à la demande, déterministe). */
-  get planet(): Planet { return (this._planet ??= Planet.create(this.seed, this.world.size)); }
+  get planet(): Planet { return (this._planet ??= Planet.create(this.seed, this.world.size, 1)); }
   set planet(p: Planet) { this._planet = p; }
 
   constructor(world: World, seed: number) {

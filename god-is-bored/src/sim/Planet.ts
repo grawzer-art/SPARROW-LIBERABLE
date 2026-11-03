@@ -1,3 +1,4 @@
+import { LOCAL_SPAN_DEG } from "./scale";
 import type { SimulationEngine } from "./SimulationEngine";
 
 /**
@@ -53,6 +54,10 @@ export interface Region {
   seed?: number; // graine persistante du terrain local
   continent?: number; // continent d'appartenance (indice dans `continents()`, informatif)
   inhabited?: boolean; // une civilisation y est simulée dès le départ
+  /** Carte locale issue de la géographie continue (échelle 2) : son terrain est exactement celui du globe et des tuiles du continent. */
+  geo?: boolean;
+  /** Carte d'une ancienne partie, conservée telle quelle et incrustée à sa place (bords fondus dans la géographie continue). */
+  legacyMap?: boolean;
 }
 export interface Continent { id: number; name: string; kind: "continent" | "island"; cells: number; areaPct: number; lat: number; lon: number; }
 export interface Biome { id: number; name: string; color: [number, number, number]; }
@@ -91,6 +96,8 @@ export class Planet {
   readonly seed: number;
   /** Version du générateur : 1 = première planète (conservée pour les parties existantes), 2 = continents répartis, biomes lisibles. */
   readonly gen: number;
+  /** Échelle des régions : 1 = anciennes cartes de 26° (parties existantes) ; 2 = hiérarchie planète/continent/région/local (cartes locales de 1,7°). */
+  scale: number;
   regions: Region[];
   private blobs: Blob[] = [];
   private contCache: Continent[] | null = null;
@@ -98,16 +105,33 @@ export class Planet {
   static readonly GW = 144;
   static readonly GH = 72;
 
-  constructor(seed: number, regions?: Region[], gen = 2) {
+  constructor(seed: number, regions?: Region[], gen = 2, scale = 2) {
     this.seed = seed | 0;
     this.gen = gen;
+    this.scale = scale;
     this.makeBlobs();
-    this.regions = regions ?? [this.placeHomeRegion(64)];
+    this.regions = regions ?? (scale >= 2 ? [] : [this.placeHomeRegion(64)]);
+    if (!regions && scale >= 2) { const h = this.suggestStartRegions(1)[0]; if (h) this.regions.push({ id: 1, name: "Terre Première", lat: h.lat, lon: h.lon, spanDeg: this.cellSpanDeg, size: 64, geo: true, inhabited: true, seed: Math.imul(this.seed ^ 0x5bd1e995, 1) >>> 0 }); }
   }
 
-  static create(seed: number, mapSize = 64): Planet {
-    const p = new Planet(seed);
-    p.regions[0].size = mapSize;
+  /** Largeur angulaire (°) d'une carte locale selon l'échelle. */
+  get cellSpanDeg(): number { return this.scale >= 2 ? LOCAL_SPAN_DEG : 26; }
+
+  /**
+   * MIGRATION (échelle 1 → 2) : les anciennes cartes gardent leur centre, leurs habitants et leur terrain, mais ne couvrent plus que 1,7°
+   * au lieu de 26° : elles deviennent des villages incrustés dans une géographie continue bien plus vaste.
+   */
+  upgradeScale(): boolean {
+    if (this.scale >= 2) return false;
+    this.scale = 2;
+    for (const r of this.regions) { r.spanDeg = LOCAL_SPAN_DEG; r.legacyMap = true; }
+    return true;
+  }
+
+  /** Nouvelle planète. Échelle 2 (défaut) : cartes locales de 1,7° dans une géographie continue ; échelle 1 : anciennes cartes de 26°. */
+  static create(seed: number, mapSize = 64, scale = 2): Planet {
+    const p = new Planet(seed, undefined, 2, scale);
+    if (p.regions[0]) p.regions[0].size = mapSize;
     return p;
   }
 
@@ -234,13 +258,17 @@ export class Planet {
   /** Couleur stylisée d'un point (palette cohérente avec le terrain local). */
   colorAt(d: Vec3, h: number, out: [number, number, number]): number {
     const b = this.biomeOf(d, h);
+    this.paint(b, d, h, out);
+    return b;
+  }
+  /** Peint un biome déjà connu (évite de le recalculer). */
+  paint(b: number, d: Vec3, h: number, out: [number, number, number]): void {
     const PAL = this.gen >= 2 ? PALETTE_V2 : PALETTE_V1;
     const base = PAL[b];
     const n = (fbm3(d[0] * 14, d[1] * 14, d[2] * 14, this.seed + 33, 2) - 0.5) * 0.16;
     let r = base[0], g = base[1], bl = base[2];
     if (b === BIOME.ocean) { const k = sstep(-0.06, -0.5, h); r = lerp(PAL[1][0], this.gen >= 2 ? 0.06 : 0.07, k); g = lerp(PAL[1][1], this.gen >= 2 ? 0.25 : 0.27, k); bl = lerp(PAL[1][2], this.gen >= 2 ? 0.46 : 0.42, k); }
     out[0] = clamp(r * (1 + n)); out[1] = clamp(g * (1 + n)); out[2] = clamp(bl * (1 + n));
-    return b;
   }
 
   // ---------------------------------------------------------------- régions
@@ -291,13 +319,14 @@ export class Planet {
   }
   /** Cellule de grille (déterministe) contenant la direction : bandes de latitude de la largeur d'une carte, longitudes en nombre entier par bande. */
   gridCell(d: Vec3): { band: number; idx: number; lat: number; lon: number; id: number } {
-    const sr = (26 * Math.PI) / 180;
+    const sr = (this.cellSpanDeg * Math.PI) / 180, v2 = this.scale >= 2;
     const { lat, lon } = latLonOf(d);
-    const band = Math.max(-5, Math.min(5, Math.round(lat / sr)));
+    const maxBand = v2 ? Math.floor((Math.PI / 2) / sr) - 1 : 5;
+    const band = Math.max(-maxBand, Math.min(maxBand, Math.round(lat / sr)));
     const clat = band * sr;
     const n = Math.max(1, Math.round((TAU * Math.cos(clat)) / sr));
     const idx = ((Math.round(((lon + Math.PI) / TAU) * n) % n) + n) % n;
-    return { band, idx, lat: clat, lon: (idx / n) * TAU - Math.PI, id: 1000 + (band + 5) * 100 + idx };
+    return { band, idx, lat: clat, lon: (idx / n) * TAU - Math.PI, id: v2 ? 100000 + (band + 80) * 400 + idx : 1000 + (band + 5) * 100 + idx };
   }
   /** Région qu'un toucher en ce point ouvrirait (sans la créer) : existante, ou cellule de grille ; null en mer. */
   previewRegionAt(d: Vec3): Region | null {
@@ -306,9 +335,9 @@ export class Planet {
     if (this.height(d) < 0.005) return null;
     const c = this.gridCell(d), prior = this.regionById(c.id);
     if (prior) return prior;
-    const home = this.regions[0];
-    if (home && !home.derived && Math.acos(clamp(dot(dirOf(c.lat, c.lon), this.regionCenter(home)), -1, 1)) < this.spanRad(home) * 1.05) return home;
-    const r: Region = { id: c.id, name: "", lat: c.lat, lon: c.lon, spanDeg: 26, size: 64, derived: true };
+    const near = this.nearbyRegion(dirOf(c.lat, c.lon));
+    if (near) return near;
+    const r: Region = { id: c.id, name: "", lat: c.lat, lon: c.lon, spanDeg: this.cellSpanDeg, size: 64, derived: this.scale < 2, geo: this.scale >= 2 };
     r.name = this.describeRegion(r);
     return r;
   }
@@ -320,17 +349,21 @@ export class Planet {
     const c = this.gridCell(d);
     const prior = this.regionById(c.id);
     if (prior) return prior;
-    const home = this.regions[0];
-    const cc = dirOf(c.lat, c.lon);
-    if (home && !home.derived && Math.acos(clamp(dot(cc, this.regionCenter(home)), -1, 1)) < this.spanRad(home) * 1.05) return home; // trop proche de la carte d'origine
+    const near = this.nearbyRegion(dirOf(c.lat, c.lon));
+    if (near) return near; // trop proche d'une carte déjà jouée : on y retourne plutôt que d'en superposer une autre
     return this.createRegion(c.lat, c.lon, c.id);
+  }
+  /** Carte existante qui recouvrirait presque la cellule voisine (cartes d'anciennes parties non alignées sur la grille). */
+  private nearbyRegion(c: Vec3): Region | undefined {
+    for (const r of this.regions) if (!r.geo && Math.acos(clamp(dot(c, this.regionCenter(r)), -1, 1)) < this.spanRad(r) * (this.scale >= 2 ? 0.9 : 1.05)) return r;
+    return undefined;
   }
   /** Crée (une seule fois) la région dérivée centrée en (lat, lon). */
   createRegion(lat: number, lon: number, id: number, inhabited = false): Region {
     const ex = this.regionById(id);
     if (ex) return ex;
     const center = dirOf(lat, lon), cont = this.continentAt(center);
-    const r: Region = { id, name: "", lat, lon, spanDeg: 26, size: 64, derived: true, seed: Math.imul(this.seed ^ 0x5bd1e995, id) >>> 0, continent: cont?.id, inhabited };
+    const r: Region = { id, name: "", lat, lon, spanDeg: this.cellSpanDeg, size: 64, derived: this.scale < 2, geo: this.scale >= 2, seed: Math.imul(this.seed ^ 0x5bd1e995, id) >>> 0, continent: cont?.id, inhabited };
     r.name = this.describeRegion(r);
     this.regions.push(r);
     return r;
@@ -338,8 +371,9 @@ export class Planet {
   /** Nom lisible : biome dominant de l'emprise + continent (« Forêts de Torath »). */
   describeRegion(r: Region): string {
     const counts = new Map<number, number>(), sr = this.spanRad(r);
+    const wide: Region = { ...r, spanDeg: Math.max(r.spanDeg, 6) };
     for (let i = 0; i < 5; i++) for (let j = 0; j < 5; j++) {
-      const d = this.localToDir({ ...r, derived: true }, ((i + 0.5) / 5) * r.size, ((j + 0.5) / 5) * r.size), h = this.height(d);
+      const d = this.localToDir(wide, ((i + 0.5) / 5) * r.size, ((j + 0.5) / 5) * r.size), h = this.height(d);
       if (h > 0) { const b = this.biomeOf(d, h); counts.set(b, (counts.get(b) ?? 0) + 1); }
     }
     void sr;
@@ -353,7 +387,7 @@ export class Planet {
   }
   /** Proportion (0..1) de terres émergées et de terres fertiles dans l'emprise d'une région potentielle. */
   footprintStats(lat: number, lon: number): { land: number; fertile: number; cold: number } {
-    const r: Region = { id: 0, name: "", lat, lon, spanDeg: 26, size: 64, derived: true };
+    const r: Region = { id: 0, name: "", lat, lon, spanDeg: this.scale >= 2 ? 4 : 26, size: 64, derived: true };
     let land = 0, fertile = 0, cold = 0, tot = 0;
     for (let i = 0; i < 9; i++) for (let j = 0; j < 9; j++) {
       const d = this.localToDir(r, ((i + 0.5) / 9) * 64, ((j + 0.5) / 9) * 64), h = this.height(d); tot++;
@@ -370,6 +404,7 @@ export class Planet {
    * (terres, fertilité), triées par qualité. Déterministe.
    */
   suggestStartRegions(count: number): { lat: number; lon: number; id: number; continent: number }[] {
+    if (this.scale >= 2) return this.suggestStartCells(count);
     const home = this.regions[0] ? this.regionCenter(this.regions[0]) : null;
     const best = new Map<number, { score: number; lat: number; lon: number; id: number }>();
     const sr = (26 * Math.PI) / 180;
@@ -388,6 +423,35 @@ export class Planet {
       }
     }
     return [...best.entries()].sort((a, b) => b[1].score - a[1].score).slice(0, count).map(([continent, v]) => ({ lat: v.lat, lon: v.lon, id: v.id, continent }));
+  }
+
+  /**
+   * Échelle 2 : sites de départ = cellules locales (1,7°) bien terrestres et fertiles, une par continent, loin de la carte d'origine.
+   * On balaie le voisinage de chaque continent ; le terrain exact est ensuite vérifié par la génération de la carte.
+   */
+  private suggestStartCells(count: number): { lat: number; lon: number; id: number; continent: number }[] {
+    const home = this.regions[0] ? this.regionCenter(this.regions[0]) : null;
+    const out: { score: number; lat: number; lon: number; id: number; continent: number }[] = [];
+    for (const c of this.continents()) {
+      if (c.areaPct < 2.5) continue;
+      const cd = dirOf(c.lat, c.lon), fr = frameAt(cd);
+      let best: { score: number; lat: number; lon: number; id: number } | null = null;
+      for (let u = -5; u <= 5; u++) for (let v = -5; v <= 5; v++) {
+        const o = 0.07;
+        const d = norm([cd[0] + (fr.e[0] * u + fr.s[0] * v) * o, cd[1] + (fr.e[1] * u + fr.s[1] * v) * o, cd[2] + (fr.e[2] * u + fr.s[2] * v) * o]);
+        const lat = latLonOf(d).lat;
+        if (Math.abs(lat) > 1.05 || this.height(d) < 0.08) continue;
+        if (home && Math.acos(clamp(dot(d, home), -1, 1)) < 0.9) continue;
+        const cell = this.gridCell(d), cc = dirOf(cell.lat, cell.lon);
+        const st = this.footprintStats(cell.lat, cell.lon);
+        if (st.land < 0.95 || st.fertile < 0.55 || st.cold > 0.1) continue;
+        const score = st.fertile * 1.2 + (1 - Math.abs(lat) / 1.6) * 0.3 + h3(cell.band + 90, cell.idx, 5, this.seed) * 0.08 - Math.hypot(u, v) * 0.01;
+        if (!best || score > best.score) best = { score, lat: cell.lat, lon: cell.lon, id: cell.id };
+        void cc;
+      }
+      if (best) out.push({ ...best, continent: c.id });
+    }
+    return out.sort((a, b) => b.score - a.score).slice(0, count).map(({ lat, lon, id, continent }) => ({ lat, lon, id, continent }));
   }
 
   regionById(id: number): Region | undefined { return this.regions.find((r) => r.id === id); }
@@ -506,10 +570,10 @@ export class Planet {
     };
   }
 
-  serialize(): { seed: number; gen: number; regions: Region[] } { return { seed: this.seed, gen: this.gen, regions: this.regions.map((r) => ({ ...r })) }; }
+  serialize(): { seed: number; gen: number; scale: number; regions: Region[] } { return { seed: this.seed, gen: this.gen, scale: this.scale, regions: this.regions.map((r) => ({ ...r })) }; }
   /** Restaure une planète. Une planète sauvegardée sans version est de génération 1 (jamais régénérée) ; sans planète du tout : génération actuelle. */
-  static restore(data: { seed: number; gen?: number; regions: Region[] } | undefined | null, fallbackSeed: number): Planet {
-    return data && Array.isArray(data.regions) && data.regions.length ? new Planet(data.seed, data.regions.map((r) => ({ ...r })), data.gen ?? 1) : Planet.create(fallbackSeed);
+  static restore(data: { seed: number; gen?: number; scale?: number; regions: Region[] } | undefined | null, fallbackSeed: number): Planet {
+    return data && Array.isArray(data.regions) && data.regions.length ? new Planet(data.seed, data.regions.map((r) => ({ ...r })), data.gen ?? 1, data.scale ?? 1) : Planet.create(fallbackSeed, 64, 1);
   }
 }
 

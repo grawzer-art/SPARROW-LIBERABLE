@@ -331,3 +331,8 @@ body.m-planet #toasts, body.m-region #toasts { top: calc(env(safe-area-inset-top
 .toast.compact { font-size: 12px; line-height: 1.3; padding: 7px 11px; max-height: 3.4em; overflow: hidden; display: block; border-radius: 12px; max-width: 100%; pointer-events: auto; }
 .toast.compact b { color: var(--gold); }
 @media (min-width: 761px) { body.m-planet #toasts, body.m-region #toasts { top: 100px; left: 12px; } }
+
+/* nom du lieu survolé par la caméra (vue continue) */
+#place { position: absolute; left: 50%; transform: translateX(-50%); top: calc(env(safe-area-inset-top, 0px) + 96px); z-index: 6; max-width: 70vw; font-size: 12px; letter-spacing: .06em; color: var(--text); text-shadow: 0 1px 4px #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; display: none; }
+body.m-planet #place, body.m-region #place { display: block; }
+@media (max-width: 760px), (pointer: coarse) and (max-width: 940px) { #place { left: calc(12px + env(safe-area-inset-left, 0px)); transform: none; top: calc(env(safe-area-inset-top, 0px) + 92px); } }

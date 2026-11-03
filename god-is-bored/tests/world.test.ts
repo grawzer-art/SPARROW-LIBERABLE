@@ -46,20 +46,20 @@ describe("Planète v2 : un monde complet", () => {
       7: { lat: 0.55337, lon: 2.25416, h: [0.09186, -0.42897, -0.24531, -0.42325, -0.28259, 0.54247, -0.40968, -0.11744, -0.59597, 0.03828, -0.43164, -0.16825], land: 0.2335 },
     };
     for (const seed of [42, 7]) {
-      const p = new Planet(seed, undefined, 1);
+      const p = new Planet(seed, undefined, 1, 1);
       expect(p.gen).toBe(1);
       expect(p.regions[0].lat).toBeCloseTo(gold[seed].lat, 4); expect(p.regions[0].lon).toBeCloseTo(gold[seed].lon, 4);
       gold[seed].h.forEach((v, i) => expect(p.height(dirOf(Math.sin(i * 1.7) * 1.2, i * 0.9))).toBeCloseTo(v, 4));
       expect(p.landFraction()).toBeCloseTo(gold[seed].land, 3);
     }
     // une planète sauvegardée sans version est de génération 1 ; sans planète du tout : génération actuelle
-    expect(Planet.restore({ seed: 42, regions: new Planet(42, undefined, 1).regions }, 42).gen).toBe(1);
+    expect(Planet.restore({ seed: 42, regions: new Planet(42, undefined, 1, 1).regions }, 42).gen).toBe(1);
     expect(Planet.restore(undefined, 42).gen).toBe(2);
   });
 });
 
-describe("Régions dérivées du relief du globe", () => {
-  const p = Planet.create(42);
+describe("Régions dérivées du relief du globe (échelle 1, parties existantes)", () => {
+  const p = Planet.create(42, 64, 1);
   const land = (() => { for (let i = 0; i < 4000; i++) { const lat = Math.asin(1 - (2 * (i + 0.5)) / 4000), d = dirOf(lat, i * 2.399); if (p.height(d) > 0.05 && !p.regionAt(d, 20) && Math.abs(lat) < 1.0) return d; } return dirOf(0, 0); })();
   it("toute terre émergée appartient à une région explorable, stable et persistante ; la mer n'en a pas", () => {
     const r1 = p.ensureRegionAt(land)!, r2 = p.ensureRegionAt(land)!;
@@ -168,7 +168,7 @@ describe("Planète vivante : plusieurs régions, une simulation par région", ()
   });
   it("une ancienne sauvegarde (une seule région, planète de génération 1) se charge intacte", () => {
     const legacy = SimulationEngine.create(42);
-    legacy.planet = new Planet(42, undefined, 1);
+    legacy.planet = new Planet(42, undefined, 1, 1);
     legacy.runYears(15);
     const json = JSON.parse(SaveManager.serialize(legacy));
     delete json.planet.gen; // sauvegarde de la version précédente : pas de numéro de génération

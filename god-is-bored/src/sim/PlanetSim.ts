@@ -24,14 +24,29 @@ export class PlanetSim {
 
   constructor(public planet: Planet, public seed: number) {}
 
-  /** Nouvelle partie : R1 (carte d'origine, inchangée) + régions habitées sur d'autres continents. */
+  /**
+   * Nouvelle partie (échelle 2) : R1 « Terre Première » (3 civilisations) sur un premier continent, et d'autres peuples sur d'autres continents.
+   * Toutes les cartes locales sont des tranches de la même géographie continue que le globe et les tuiles de terrain.
+   */
   static create(seed: number, inhabited = START_INHABITED_REGIONS): PlanetSim {
-    const home = SimulationEngine.create(seed);
-    const ps = new PlanetSim(home.planet, seed);
-    ps.attach(home, 1);
+    const planet = Planet.create(seed);
+    const ps = new PlanetSim(planet, seed);
+    // R1 : si la carte de départ ne permet pas de fonder trois peuples, on essaie le site suivant (même identifiant R1)
+    const cands = [planet.regions[0], ...planet.suggestStartRegions(6).map((c) => ({ lat: c.lat, lon: c.lon }))].filter(Boolean);
+    for (const c of cands) {
+      const r = planet.regions[0];
+      if (c !== r) { r.lat = c.lat; r.lon = c.lon; }
+      const eng = ps.makeEngine(r, 3);
+      if (eng.civs.length >= 2) break;
+      ps.engines.delete(r.id);
+    }
+    if (!ps.engines.has(1)) throw new Error("Aucun site habitable trouvé pour la carte de départ");
     ps.addInhabitedRegions(inhabited - 1);
     return ps;
   }
+
+  /** Migration explicite d'une ancienne partie (cartes de 26°) vers la hiérarchie d'échelles ; renvoie true si elle a eu lieu. */
+  migrateScale(): boolean { return this.planet.upgradeScale(); }
 
   /** Enveloppe une partie existante (ancienne sauvegarde : une seule région) ; les régions peuvent être ajoutées ensuite. */
   static fromEngine(engine: SimulationEngine): PlanetSim {

@@ -1,6 +1,6 @@
 import "./style.css";
 import { Renderer } from "./render/Renderer";
-import { PlanetView, type LocalPose, type PlanetCard } from "./render/PlanetView";
+import { PlanetView, type LocalPose, type PlanetCard, type ScaleLevel } from "./render/PlanetView";
 import { PlanetSim, START_INHABITED_REGIONS } from "./sim/PlanetSim";
 import { SimulationEngine } from "./sim/SimulationEngine";
 import type { ChronicleEntry } from "./sim/types";
@@ -17,6 +17,7 @@ class Game implements GameHost {
   planetView: PlanetView;
   ui!: UI;
   mode: GameMode = "local";
+  level: ScaleLevel = "local";
   private busy = false;
   private startLocal = false;
   private last = performance.now();
@@ -33,7 +34,9 @@ class Game implements GameHost {
     this.planetView = new PlanetView(this.renderer, document.getElementById("app")!, window.matchMedia(MOBILE_Q).matches, {
       card: (c) => this.showCard(c),
       enterLocal: (p) => this.goLocal(p),
-      modeChanged: (m) => { this.mode = m; this.syncChrome(); },
+      modeChanged: (m) => { if (this.mode !== "local") { this.mode = m; this.syncChrome(); } },
+      levelChanged: (l) => { this.level = l; this.syncChrome(); },
+      place: (t) => { const el = document.getElementById("place"); if (el && el.textContent !== t) el.textContent = t; },
     });
     this.planetView.setPlanetSim(this.ps);
     this.bindRemote();
@@ -66,8 +69,9 @@ class Game implements GameHost {
     } else {
       this.renderer.setControlsEnabled(false);
       this.planetView.activate(true);
-      if (m === "region") this.planetView.dive(this.ps.activeId, undefined, instant); else { this.mode = "planet"; this.planetView.setView({ mode: "planet" }); }
-      this.mode = m;
+      if (m === "region") { const r = this.ps.planet.regionById(this.ps.activeId); if (r) this.planetView.setView({ P: this.ps.planet.localToDir(r, r.size / 2, r.size / 2), d: 0.3, el: 0.8, region: r.id }); }
+      else this.planetView.setView({ mode: "planet" });
+      this.mode = m; this.level = this.planetView.state.level;
     }
     this.syncChrome();
   }
@@ -76,7 +80,7 @@ class Game implements GameHost {
     const b = document.body.classList;
     b.remove("m-planet", "m-region", "m-local");
     b.add("m-" + this.mode);
-    document.querySelectorAll<HTMLButtonElement>("#crumbs button").forEach((e) => e.classList.toggle("on", e.dataset.lvl === this.mode));
+    document.querySelectorAll<HTMLButtonElement>("#crumbs button").forEach((e) => e.classList.toggle("on", e.dataset.lvl === (this.mode === "local" ? "local" : this.level)));
     if (this.mode === "local") this.showCard(null);
   }
 
@@ -95,7 +99,7 @@ class Game implements GameHost {
     this.renderer.setControlsEnabled(true);
     if (p.region !== this.ps.activeId) this.activateRegion(p.region); // la scène locale de la région visée remplace l'ancienne (ressources graphiques libérées)
     this.renderer.setPose(p.x, p.y, p.dist, p.el, p.az);
-    this.mode = "local";
+    this.mode = "local"; this.level = "local";
     this.syncChrome();
     await new Promise((r) => requestAnimationFrame(() => r(null)));
     await this.veil(false);
@@ -111,20 +115,18 @@ class Game implements GameHost {
     this.renderer.setControlsEnabled(false);
     this.planetView.activate(true);
     this.planetView.enterRegionFromLocal({ ...pose, region: this.ps.activeId });
-    this.mode = "region";
+    this.mode = "region"; this.level = "region";
     this.syncChrome();
     await new Promise((r) => requestAnimationFrame(() => r(null)));
     await this.veil(false);
     this.busy = false;
   }
 
-  /** Navigation par les « fils d'Ariane » : remonte ou descend d'une ou deux échelles. */
-  async goLevel(l: GameMode): Promise<void> {
-    if (this.busy || l === this.mode) return;
-    if (l === "local") { if (this.mode === "region") this.planetView.action("enter"); else { this.planetView.dive(); } return; }
-    if (l === "region") { if (this.mode === "local") await this.goRegion(); else this.planetView.dive(); return; }
-    if (this.mode === "local") await this.goRegion();
-    this.planetView.ascend();
+  /** Raccourcis (fils d'Ariane) : un zoom animé, jamais un changement brusque de scène ; depuis le local, retour fondu puis zoom arrière. */
+  async goLevel(l: ScaleLevel): Promise<void> {
+    if (this.busy) return;
+    if (this.mode === "local") { if (l === "local") return; await this.goRegion(); }
+    this.planetView.goLevel(l);
   }
 
   private showCard(c: PlanetCard | null): void {
@@ -140,7 +142,7 @@ class Game implements GameHost {
   }
 
   private bindPlanetUi(): void {
-    document.querySelectorAll<HTMLButtonElement>("#crumbs button").forEach((b) => b.addEventListener("click", () => { void this.goLevel(b.dataset.lvl as GameMode); }));
+    document.querySelectorAll<HTMLButtonElement>("#crumbs button").forEach((b) => b.addEventListener("click", () => { void this.goLevel(b.dataset.lvl as ScaleLevel); }));
     document.querySelector("#planet-card .pc-x")!.addEventListener("click", () => this.showCard(null));
     document.getElementById("p-in")!.addEventListener("click", () => this.planetView.zoomBy(0.72));
     document.getElementById("p-out")!.addEventListener("click", () => this.planetView.zoomBy(1.4));
@@ -265,10 +267,11 @@ class Game implements GameHost {
     const ps = PlanetSim.load();
     if (!ps) { this.ui.toast("Aucune sauvegarde exploitable.", "", false); return false; }
     let note = "";
+    if (ps.migrateScale()) note += " Géographie mise à l'échelle : vos lieux et peuples n'ont pas bougé.";
     // migration explicite d'une ancienne partie à région unique : Terre Première et sa planète restent intactes, un nouveau peuple est ajouté
     if (ps.engines.size === 1) {
       const added = ps.addInhabitedRegions(START_INHABITED_REGIONS - 1);
-      if (added.length) note = ` Un nouveau peuple a été découvert : ${added[0].name}.`;
+      if (added.length) note += ` Un nouveau peuple a été découvert : ${added[0].name}.`;
     }
     this.swap(ps);
     this.arrive();

@@ -47,7 +47,7 @@ describe("Planète : génération reproductible", () => {
 });
 
 describe("Planète : région d'origine et coordonnées", () => {
-  const p = Planet.create(42), r = p.regions[0];
+  const p = Planet.create(42, 64, 1), r = p.regions[0];
   it("la carte d'origine est la région R1, au large d'une côte", () => {
     expect(r.id).toBe(1);
     expect(r.size).toBe(64);
