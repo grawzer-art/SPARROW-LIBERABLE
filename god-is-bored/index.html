@@ -2,7 +2,12 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="God Is Bored" />
+  <meta name="format-detection" content="telephone=no" />
   <meta name="theme-color" content="#1d2433" />
   <title>GOD IS BORED</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%231d2433'/><path d='M17 4 9 18h6l-2 10 10-15h-6z' fill='%23e8c27a'/></svg>" />
@@ -30,29 +35,28 @@
       <button id="b-menu" class="ghost" title="Sauvegarde, nouveau monde">Menu</button>
     </header>
 
-    <div id="mtoggles">
-      <button data-toggle="left">Pouvoirs</button>
-      <button data-toggle="right">Détails</button>
-      <button data-toggle="bottom">Chroniques</button>
-    </div>
-
-    <aside id="left" class="panel">
+    <aside id="left" class="panel sheet">
+      <div class="grab"><i></i><span class="gt">Pouvoirs divins</span><button class="sx" aria-label="Fermer">×</button></div>
       <h3>Pouvoirs divins</h3>
       <div id="powers"></div>
       <div id="target-info" class="infobox"></div>
       <div id="prophecy-box" class="infobox hidden">
+        <b class="mob-only">Quel message envoyer ?</b>
         <label for="prophecy-sel">Message à transmettre</label>
         <select id="prophecy-sel"></select>
         <p id="prophecy-odds"></p>
+        <button id="prophecy-go" class="primary mob-only">Armer la prophétie</button>
       </div>
     </aside>
 
-    <aside id="right" class="panel">
+    <aside id="right" class="panel sheet">
+      <div class="grab"><i></i><span class="gt">Monde</span><button class="sx" aria-label="Fermer">×</button></div>
       <h3 id="right-title">Observation</h3>
       <div id="details"></div>
     </aside>
 
-    <section id="bottom" class="panel">
+    <section id="bottom" class="panel sheet">
+      <div class="grab"><i></i><span class="gt">Chroniques du monde</span><button class="sx" aria-label="Fermer">×</button></div>
       <div class="tabs">
         <button class="tab active" data-tab="chron">Chroniques du monde</button>
         <button class="tab" data-tab="notif">Notifications</button>
@@ -64,7 +68,14 @@
     </section>
 
     <div id="toasts"></div>
+    <div id="actionbar"><div class="ab-info"><b id="ab-name"></b><span id="ab-hint"></span></div><button id="ab-msg" class="secondary hidden">Message</button><button id="ab-cancel" class="cancel">Annuler</button></div>
     <div id="hint"></div>
+    <nav id="tabbar" aria-label="Navigation">
+      <button data-sheet="powers"><svg viewBox="0 0 24 24"><path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H12.5z"/></svg><span>Pouvoirs</span></button>
+      <button data-sheet="world"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg><span>Monde</span></button>
+      <button data-sheet="chron"><svg viewBox="0 0 24 24"><path d="M6 3h11a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6zM6 3v18M10 8h6M10 12h6M10 16h4"/></svg><span>Chroniques</span><i class="badge"></i></button>
+    </nav>
+
     <div id="cam-tools">
       <button id="c-rot-l" title="Pivoter (Q)">⟲</button>
       <button id="c-rot-r" title="Pivoter (E)">⟳</button>
@@ -73,7 +84,7 @@
       <button id="c-reset" title="Recentrer la vue">◎</button>
     </div>
 
-    <div id="modal" class="hidden"><div class="card"><button class="x" id="modal-x">×</button><div id="modal-body"></div></div></div>
+    <div id="modal" class="hidden"><div class="card"><div class="grab"><i></i></div><button class="x" id="modal-x">×</button><div id="modal-body"></div></div></div>
 
     <div id="intro">
       <div class="card">
@@ -85,7 +96,8 @@
           <button id="i-new" class="primary">Nouveau monde</button>
         </div>
         <div class="row small"><label>Graine <input id="i-seed" type="text" inputmode="numeric" placeholder="aléatoire" /></label></div>
-        <p class="keys">Glisser : pivoter · Clic droit / 2 doigts : déplacer · Molette : zoom · WASD : se déplacer · Espace : pause</p>
+        <p class="keys desk-only">Glisser : pivoter · Clic droit / 2 doigts : déplacer · Molette : zoom · WASD : se déplacer · Espace : pause</p>
+        <p class="keys mob-only">1 doigt : déplacer · 2 doigts : zoom et pivoter · toucher : sélectionner</p>
       </div>
     </div>
   </div>

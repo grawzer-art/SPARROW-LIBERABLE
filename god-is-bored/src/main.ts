@@ -3,7 +3,7 @@ import { Renderer } from "./render/Renderer";
 import { SaveManager } from "./sim/SaveManager";
 import { SimulationEngine } from "./sim/SimulationEngine";
 import { TICK_MS } from "./sim/config";
-import { UI, type GameHost } from "./ui/UI";
+import { UI, MOBILE_Q, type GameHost } from "./ui/UI";
 
 class Game implements GameHost {
   sim!: SimulationEngine;
@@ -11,11 +11,14 @@ class Game implements GameHost {
   ui!: UI;
   private last = performance.now();
   private lastSave = performance.now();
+  private lastRender = 0;
+  private accDt = 0;
 
   constructor() {
-    this.renderer = new Renderer(document.getElementById("stage")!, document.getElementById("labels")!);
+    this.renderer = new Renderer(document.getElementById("stage")!, document.getElementById("labels")!, { mobile: window.matchMedia(MOBILE_Q).matches });
     this.sim = SimulationEngine.create(this.randomSeed());
     this.renderer.setSim(this.sim);
+    this.renderer.resetCamera();
     this.ui = new UI(this);
     (window as unknown as { game: Game }).game = this;
     this.intro();
@@ -50,6 +53,7 @@ class Game implements GameHost {
     sim.speed = this.sim?.speed || 1;
     this.sim = sim;
     this.renderer.setSim(sim);
+    this.renderer.resetCamera();
     this.ui.rebind();
     sim.paused = false;
     const c = sim.cities.find((k) => k.id === sim.civs[0]?.capital);
@@ -93,9 +97,15 @@ class Game implements GameHost {
     this.last = now;
     try {
       this.sim.advance(dt * 1000);
-      const alpha = this.sim.paused ? 1 : Math.min(1, this.sim.acc / TICK_MS);
-      this.renderer.frame(dt, alpha);
-      this.ui.frame();
+      this.accDt += dt;
+      // plafonne le rendu (60 i/s, 30 en dernier recours) : Safari ProMotion tourne à 120 Hz
+      if (now - this.lastRender >= this.renderer.frameInterval) {
+        const alpha = this.sim.paused ? 1 : Math.min(1, this.sim.acc / TICK_MS);
+        this.renderer.frame(Math.min(0.25, this.accDt), alpha);
+        this.accDt = 0;
+        this.lastRender = now;
+        this.ui.frame();
+      }
       if (now - this.lastSave > 45000 && this.started()) this.save();
     } catch (e) {
       console.error(e);

@@ -14,6 +14,19 @@ npm run dev        # → http://localhost:5173
 
 Autres commandes : `npm test` (tests de simulation), `npm run build` (typecheck + build de production dans `dist/`), `npm run preview`.
 
+## Mobile (iPhone d'abord)
+
+Sur téléphone (≤ 760 px, ou écran tactile ≤ 940 px) l'interface est entièrement repensée : la carte 3D occupe tout l'écran, aucun panneau permanent.
+
+- **Barre du haut** : année, habitants, civilisations, pause/×1/×3/×10, et « ⋯ » pour les statistiques détaillées et le menu (sauvegarde, nouveau monde).
+- **Barre d'onglets du bas** : *Pouvoirs*, *Monde*, *Chroniques*. Chaque onglet ouvre un bottom sheet refermable en glissant vers le bas, avec le bouton ×, ou en retouchant l'onglet. Fermés, ils ne masquent rien. Quand un tiroir est ouvert, la scène est recentrée dans la partie visible.
+- **Gestes** : 1 doigt = déplacer la caméra ; 2 doigts = zoom (et pivoter en les faisant glisser) ; toucher un habitant, une ville ou un bâtiment = sa fiche ; bouton ◎ = recentrer.
+- **Pouvoirs** : toucher un pouvoir (le tiroir se referme), puis toucher la carte pour l'appliquer. Une barre d'action avec un grand bouton **Annuler** reste visible tant qu'un pouvoir est armé. Prophétie : choisir le message puis « Armer la prophétie ».
+- **Notifications** : petits bandeaux de 2 lignes max sous la barre du haut, jamais cliquables (la carte reste manipulable) ; tout est conservé dans *Chroniques* (pastille de non-lus sur l'onglet).
+- **Zones de sécurité** : `viewport-fit=cover` + `env(safe-area-inset-*)` (Dynamic Island, barre d'accueil, encoche latérale en paysage).
+- **Performance Safari iOS** : résolution plafonnée à 2×, ombres 1024 px recalculées 2×/s, eau et étiquettes mises à jour à fréquence réduite, rendu plafonné à 60 i/s (ProMotion 120 Hz), nombre de particules réduit, et **qualité adaptative** : si les images dépassent ~24 ms, la résolution baisse par paliers (1.5×, 1.2×, 1×), puis les ombres, puis le rendu passe à 30 i/s ; la qualité remonte si l'appareil respire.
+- Captures : `docs/mobile/`.
+
 ## Commandes en jeu
 
 | Action | Commande |

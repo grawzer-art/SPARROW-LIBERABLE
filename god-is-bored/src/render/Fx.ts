@@ -6,19 +6,19 @@ import type { Renderer } from "./Renderer";
 
 interface Anim { t: number; dur: number; step: (p: number, dt: number) => void; end?: () => void; }
 
-const CAP = 3200;
 
 /** Effets visuels purs : particules, éclairs, anneaux, météo. Aucune logique de jeu ici. */
 export class Fx {
   private scene: THREE.Scene;
+  private cap: number;
   private mesh: THREE.InstancedMesh;
   private n = 0;
-  private P = new Float32Array(CAP * 3);
-  private V = new Float32Array(CAP * 3);
-  private L = new Float32Array(CAP * 2); // life, max
-  private S = new Float32Array(CAP * 2); // size, grow
-  private C = new Float32Array(CAP * 3);
-  private G = new Float32Array(CAP);
+  private P!: Float32Array;
+  private V!: Float32Array;
+  private L!: Float32Array;
+  private S!: Float32Array;
+  private C!: Float32Array;
+  private G!: Float32Array;
   private dummy = new THREE.Object3D();
   private anims: Anim[] = [];
   private flash: THREE.PointLight;
@@ -27,10 +27,13 @@ export class Fx {
   private boltMat = new THREE.MeshBasicMaterial({ color: 0xdff0ff, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false });
   private glowMat = new THREE.MeshBasicMaterial({ color: 0x8fb8ff, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false });
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Scene, cap = 3200) {
     this.scene = scene;
+    this.cap = cap;
+    this.P = new Float32Array(cap * 3); this.V = new Float32Array(cap * 3); this.L = new Float32Array(cap * 2);
+    this.S = new Float32Array(cap * 2); this.C = new Float32Array(cap * 3); this.G = new Float32Array(cap);
     const g = new THREE.BoxGeometry(1, 1, 1);
-    this.mesh = new THREE.InstancedMesh(g, new THREE.MeshBasicMaterial({}), CAP);
+    this.mesh = new THREE.InstancedMesh(g, new THREE.MeshBasicMaterial({}), cap);
     this.mesh.frustumCulled = false;
     this.mesh.count = 0;
     scene.add(this.mesh);
@@ -45,7 +48,7 @@ export class Fx {
   }
 
   emit(x: number, y: number, z: number, vx: number, vy: number, vz: number, life: number, size: number, color: number, grav = 0, grow = 0): void {
-    if (this.n >= CAP) return;
+    if (this.n >= this.cap) return;
     const i = this.n++;
     this.P[i * 3] = x; this.P[i * 3 + 1] = y; this.P[i * 3 + 2] = z;
     this.V[i * 3] = vx; this.V[i * 3 + 1] = vy; this.V[i * 3 + 2] = vz;

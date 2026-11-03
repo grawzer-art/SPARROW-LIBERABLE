@@ -19,6 +19,7 @@ export interface GameHost {
   exportSave(): void;
 }
 
+export const MOBILE_Q = "(max-width: 760px), (pointer: coarse) and (max-width: 940px)";
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
 const hex = (n: number) => "#" + n.toString(16).padStart(6, "0");
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -57,6 +58,13 @@ export class UI {
   private down: { x: number; y: number; t: number } | null = null;
   private lastHud = 0;
   private lastBoredPulse = 0;
+  private sheet: "powers" | "world" | "chron" | null = null;
+  private unread = 0;
+  private multi = false;
+  private ptrs = new Set<number>();
+  private lastPtr: string = "mouse";
+
+  get mobile(): boolean { return window.matchMedia(MOBILE_Q).matches; }
 
   constructor(private game: GameHost) {
     this.buildPowers();
@@ -77,6 +85,9 @@ export class UI {
     this.notifs = [];
     this.lastDetails = "";
     this.setPower(null);
+    this.closeSheet();
+    this.unread = 0;
+    this.updateBadge();
     this.updateCivSelect(true);
     this.updateSpeedButtons();
   }
@@ -87,7 +98,12 @@ export class UI {
     const root = $("powers");
     root.innerHTML = POWERS.map((p) => `<button class="power" data-p="${p.id}" title="${esc(p.detail)}">
       <span class="g">${p.glyph}</span><span><div class="n">${p.name}</div><div class="d">${esc(p.blurb)}</div></span><i class="cd" style="width:0"></i></button>`).join("");
-    root.querySelectorAll<HTMLButtonElement>(".power").forEach((b) => b.addEventListener("click", () => this.setPower(this.power === b.dataset.p ? null : (b.dataset.p as PowerId))));
+    root.querySelectorAll<HTMLButtonElement>(".power").forEach((b) => b.addEventListener("click", () => {
+      const id = b.dataset.p as PowerId;
+      if (!this.mobile) { this.setPower(this.power === id ? null : id); return; }
+      if (id === "prophecy") { $("prophecy-box").classList.remove("hidden"); this.refreshProphecyOdds(); $("prophecy-box").scrollIntoView({ block: "nearest" }); return; }
+      this.armPower(id);
+    }));
     const sel = $<HTMLSelectElement>("prophecy-sel");
     sel.innerHTML = PROPHECIES.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join("");
     sel.addEventListener("change", () => { this.prophecyId = sel.value; this.refreshTargetInfo(true); });
@@ -125,16 +141,20 @@ export class UI {
     $("c-in").addEventListener("click", () => r.zoom(0.8));
     $("c-out").addEventListener("click", () => r.zoom(1.25));
     $("c-reset").addEventListener("click", () => r.resetCamera());
-    // panneaux mobiles
-    document.querySelectorAll<HTMLButtonElement>("#mtoggles button").forEach((b) => b.addEventListener("click", () => {
-      const t = b.dataset.toggle!;
-      const panel = $(t);
-      panel.classList.toggle("collapsed");
-      b.classList.toggle("on", !panel.classList.contains("collapsed"));
+    // navigation mobile : barre d'onglets + bottom sheets
+    document.querySelectorAll<HTMLButtonElement>("#tabbar [data-sheet]").forEach((b) => b.addEventListener("click", () => {
+      const n = b.dataset.sheet as "powers" | "world" | "chron";
+      if (this.sheet === n) this.closeSheet(); else { this.setPower(null); this.openSheet(n); }
     }));
-    if (window.matchMedia("(max-width: 720px)").matches) {
-      $("left").classList.add("collapsed"); $("right").classList.add("collapsed"); $("bottom").classList.add("collapsed");
-    }
+    document.querySelectorAll<HTMLButtonElement>(".sheet .sx").forEach((b) => b.addEventListener("click", () => this.closeSheet()));
+    for (const id of ["left", "right", "bottom"]) this.bindSheetDrag($(id), () => this.closeSheet());
+    this.bindSheetDrag(document.querySelector("#modal .card") as HTMLElement, () => $("modal").classList.add("hidden"));
+    $("ab-cancel").addEventListener("click", () => this.setPower(null));
+    $("ab-msg").addEventListener("click", () => { this.openSheet("powers"); $("prophecy-box").classList.remove("hidden"); });
+    $("prophecy-go").addEventListener("click", () => { this.prophecyId = $<HTMLSelectElement>("prophecy-sel").value; this.armPower("prophecy"); });
+    // Safari iOS : pas de zoom de page ni de menu contextuel sur la carte
+    for (const ev of ["gesturestart", "gesturechange", "gestureend"]) document.addEventListener(ev, (e) => e.preventDefault());
+    el.addEventListener("touchmove", (e) => e.preventDefault(), { passive: false });
     // menus
     $("b-stats").addEventListener("click", () => this.showStats());
     $("b-menu").addEventListener("click", () => this.showMenu());
@@ -142,16 +162,32 @@ export class UI {
     $("modal").addEventListener("pointerdown", (e) => { if (e.target === $("modal")) $("modal").classList.add("hidden"); });
     // carte
     el.addEventListener("contextmenu", (e) => e.preventDefault());
-    el.addEventListener("pointerdown", (e) => { this.down = { x: e.clientX, y: e.clientY, t: performance.now() }; });
-    el.addEventListener("pointerup", (e) => {
-      const d = this.down; this.down = null;
-      if (!d || e.button !== 0) return;
-      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6 || performance.now() - d.t > 450) return;
-      const g = r.pickGround(e.clientX, e.clientY);
-      if (g) this.onMapClick(g.x, g.y);
+    el.addEventListener("pointerdown", (e) => {
+      this.ptrs.add(e.pointerId);
+      if (this.ptrs.size > 1) this.multi = true;
+      this.lastPtr = e.pointerType;
+      this.down = { x: e.clientX, y: e.clientY, t: performance.now() };
+      if (e.pointerType !== "mouse" && this.power && this.ptrs.size === 1) {
+        const g = r.pickGround(e.clientX, e.clientY);
+        if (g) { this.cursor = g; this.updateCursor(); }
+      }
     });
+    const release = (e: PointerEvent, click: boolean) => {
+      this.ptrs.delete(e.pointerId);
+      const d = this.down;
+      if (this.ptrs.size > 0) return;
+      const wasMulti = this.multi;
+      this.multi = false; this.down = null;
+      if (!click || !d || wasMulti || e.button > 0) return;
+      const slop = e.pointerType === "mouse" ? 6 : 12;
+      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > slop || performance.now() - d.t > 500) { if (this.mobile && this.power) r.setCursor(0, 0, 0, null); return; }
+      const g = r.pickGround(e.clientX, e.clientY);
+      if (g) this.onMapClick(g.x, g.y, e.pointerType);
+    };
+    el.addEventListener("pointerup", (e) => release(e, true));
+    el.addEventListener("pointercancel", (e) => release(e, false));
     el.addEventListener("pointermove", (e) => {
-      if (e.pointerType === "touch") return;
+      if (e.pointerType === "touch" || e.pointerType === "pen" && this.mobile) return;
       const g = r.pickGround(e.clientX, e.clientY);
       this.cursor = g;
       this.updateCursor();
@@ -159,7 +195,7 @@ export class UI {
     el.addEventListener("pointerleave", () => { this.cursor = null; r.setCursor(0, 0, 0, null); });
     window.addEventListener("keydown", (e) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
-      if (e.key === "Escape") { this.setPower(null); $("modal").classList.add("hidden"); }
+      if (e.key === "Escape") { this.setPower(null); $("modal").classList.add("hidden"); this.closeSheet(); }
       else if (e.key === " ") { e.preventDefault(); this.togglePause(); }
       else if (e.key === "1") { this.sim.speed = 1; this.sim.paused = false; this.updateSpeedButtons(); }
       else if (e.key === "2") { this.sim.speed = 3; this.sim.paused = false; this.updateSpeedButtons(); }
@@ -180,17 +216,108 @@ export class UI {
 
   // ------------------------------------------------------------ pouvoirs
 
+  /** Mobile : arme un pouvoir, referme le tiroir et affiche la barre d'action avec le bouton Annuler. */
+  armPower(p: PowerId): void {
+    this.closeSheet();
+    this.setPower(p);
+  }
+
+  private refreshProphecyOdds(): void {
+    const sim = this.sim;
+    const civ = sim.aliveCivs().sort((a, b) => b.pop - a.pop)[0];
+    if (!civ) return;
+    $("prophecy-odds").textContent = "Comprise selon l'intelligence, la foi et le dirigeant de la civilisation visée.";
+  }
+
   setPower(p: PowerId | null): void {
     this.power = p;
     document.querySelectorAll<HTMLButtonElement>(".power").forEach((b) => b.classList.toggle("sel", b.dataset.p === p));
-    $("prophecy-box").classList.toggle("hidden", p !== "prophecy");
+    $("prophecy-box").classList.toggle("hidden", p !== "prophecy" && !(this.mobile && this.sheet === "powers" && false));
     $("hint").classList.toggle("on", !!p);
+    $("app").classList.toggle("armed", !!p);
     if (p) {
       const info = POWER_BY_ID[p];
       $("hint").textContent = info.target === "civ" ? `${info.name} : cliquez sur un territoire (Échap pour renoncer)` : `${info.name} : cliquez sur la carte (Échap pour renoncer)`;
+      $("ab-name").textContent = `${info.glyph} ${info.name}`;
+      const msg = PROPHECIES.find((m) => m.id === this.prophecyId)?.name ?? "";
+      $("ab-hint").textContent = p === "prophecy" ? `« ${msg} » : touchez un territoire` : info.target === "civ" ? "Touchez un territoire" : "Touchez la carte pour l'appliquer ici";
+      $("ab-msg").classList.toggle("hidden", p !== "prophecy");
     } else this.game.renderer.setCursor(0, 0, 0, null);
     this.refreshTargetInfo(true);
     this.updateCursor();
+    this.syncInset();
+  }
+
+  // ------------------------------------------------------------ bottom sheets (mobile)
+
+  private sheetEl(n: "powers" | "world" | "chron"): HTMLElement {
+    return $(n === "powers" ? "left" : n === "world" ? "right" : "bottom");
+  }
+
+  openSheet(n: "powers" | "world" | "chron"): void {
+    if (!this.mobile) return;
+    for (const k of ["powers", "world", "chron"] as const) { const el = this.sheetEl(k); el.classList.toggle("open", k === n); el.style.transform = ""; el.style.transition = ""; }
+    this.sheet = n;
+    $("app").classList.add("sheet-open");
+    document.querySelectorAll<HTMLButtonElement>("#tabbar [data-sheet]").forEach((b) => b.classList.toggle("on", b.dataset.sheet === n));
+    if (n === "powers") { $("prophecy-box").classList.add("hidden"); }
+    if (n === "chron") { this.unread = 0; this.updateBadge(); this.chronDirty = true; }
+    if (n === "world") { this.lastDetails = ""; this.renderDetails(); }
+    setTimeout(() => this.syncInset(), 30);
+    setTimeout(() => this.syncInset(), 320);
+  }
+
+  closeSheet(): void {
+    for (const k of ["powers", "world", "chron"] as const) { const el = this.sheetEl(k); el.classList.remove("open"); el.style.transform = ""; el.style.transition = ""; }
+    this.sheet = null;
+    $("app").classList.remove("sheet-open");
+    document.querySelectorAll("#tabbar [data-sheet]").forEach((b) => b.classList.remove("on"));
+    this.syncInset();
+  }
+
+  /** Recentre la scène dans la zone visible au-dessus du tiroir. */
+  private syncInset(): void {
+    const r = this.game.renderer;
+    if (!this.mobile) { r.setBottomInset(0); return; }
+    let px = 0;
+    if (this.sheet) { const rect = this.sheetEl(this.sheet).getBoundingClientRect(); px = Math.max(0, window.innerHeight - rect.top - ($("tabbar").offsetHeight || 0)); }
+    else if (this.power) px = 70;
+    r.setBottomInset(px);
+  }
+
+  private updateBadge(): void {
+    const b = document.querySelector<HTMLElement>('#tabbar [data-sheet="chron"] .badge');
+    if (b) { b.style.display = this.unread > 0 && this.sheet !== "chron" ? "block" : "none"; b.textContent = this.unread > 9 ? "9+" : String(this.unread); }
+  }
+
+  /** Glisser vers le bas pour refermer (touch). Ne démarre que si le contenu est tout en haut. */
+  private bindSheetDrag(el: HTMLElement, onClose: () => void): void {
+    let y0 = 0, drag = false, dy = 0, scroller: HTMLElement | null = null, t0 = 0;
+    const findScroller = (t: EventTarget | null): HTMLElement | null => {
+      let n = t as HTMLElement | null;
+      while (n && n !== el.parentElement) {
+        if (n.scrollHeight > n.clientHeight + 2) { const o = getComputedStyle(n).overflowY; if (o === "auto" || o === "scroll") return n; }
+        if (n === el) break;
+        n = n.parentElement;
+      }
+      return null;
+    };
+    el.addEventListener("touchstart", (e) => { y0 = e.touches[0].clientY; t0 = performance.now(); drag = false; dy = 0; scroller = findScroller(e.target); }, { passive: true });
+    el.addEventListener("touchmove", (e) => {
+      const d = e.touches[0].clientY - y0;
+      if (!drag && d > 10 && (!scroller || scroller.scrollTop <= 0)) { drag = true; el.style.transition = "none"; }
+      if (drag) { e.preventDefault(); dy = Math.max(0, d - 10); el.style.transform = `translateY(${dy}px)`; }
+    }, { passive: false });
+    const end = () => {
+      if (!drag) return;
+      drag = false;
+      const v = dy / Math.max(1, performance.now() - t0);
+      el.style.transition = "";
+      if (dy > Math.min(110, el.offsetHeight * 0.25) || v > 0.6) { onClose(); el.style.transform = ""; }
+      else el.style.transform = "";
+    };
+    el.addEventListener("touchend", end);
+    el.addEventListener("touchcancel", end);
   }
 
   private updateCursor(): void {
@@ -244,8 +371,9 @@ export class UI {
     box.innerHTML = html;
   }
 
-  private onMapClick(x: number, y: number): void {
+  private onMapClick(x: number, y: number, pointer = "mouse"): void {
     const sim = this.sim;
+    const touch = pointer !== "mouse";
     if (this.power) {
       const p = this.power;
       if (this.pending.has(p)) return;
@@ -255,6 +383,7 @@ export class UI {
         this.pending.delete(p);
         const res = sim.divine.cast(sim, p, x, y, { prophecy: this.prophecyId });
         this.toast(res.msg, "", false);
+        if (touch) this.game.renderer.setCursor(0, 0, 0, null);
         this.notifs.unshift({ year: sim.year, text: res.msg });
         this.lastDetails = "";
       };
@@ -264,22 +393,23 @@ export class UI {
       } else run();
       return;
     }
-    this.selectAt(x, y);
+    this.selectAt(x, y, touch);
   }
 
   // ------------------------------------------------------------ sélection
 
-  private selectAt(x: number, y: number): void {
+  private selectAt(x: number, y: number, touch = false): void {
     const sim = this.sim;
+    const k = touch ? 1.5 : 1;
     let best: { d: number; kind: "citizen" | "building" | "city"; id: number } | null = null;
     for (const c of sim.citizens) {
       const d = Math.hypot(c.x - x, c.y - y);
-      if (d < 0.85 && (!best || d < best.d)) best = { d, kind: "citizen", id: c.id };
+      if (d < 0.85 * k && (!best || d < best.d)) best = { d, kind: "citizen", id: c.id };
     }
     if (!best) {
       for (const c of sim.cities) {
         const d = Math.hypot(c.x + 0.5 - x, c.y + 0.5 - y);
-        if (d < 1.3 && (!best || d < best.d)) best = { d, kind: "city", id: c.id };
+        if (d < 1.3 * k + (touch ? 0.6 : 0) && (!best || d < best.d)) best = { d, kind: "city", id: c.id };
       }
     }
     if (!best) {
@@ -290,7 +420,7 @@ export class UI {
     else {
       const civ = sim.divine.civAt(sim, x, y);
       if (civ && sim.world.owner[sim.world.tileAt(x, y)] === civ.id) this.select("civ", civ.id);
-      else this.select("none", -1);
+      else { this.select("none", -1); if (this.mobile) this.closeSheet(); }
     }
   }
 
@@ -300,7 +430,7 @@ export class UI {
     this.lastDetails = "";
     if (kind === "none") this.game.renderer.clearSelection();
     this.renderDetails();
-    if (kind !== "none") { $("right").classList.remove("collapsed"); document.querySelector('#mtoggles [data-toggle="right"]')?.classList.add("on"); }
+    if (kind !== "none" && this.mobile) this.openSheet("world");
   }
 
   /** Appelé à chaque frame : l'anneau de sélection suit sa cible. */
@@ -436,7 +566,9 @@ export class UI {
         civs.map((c) => `<button class="civcard ${c.alive ? "" : "dead"}" data-go="civ:${c.id}"><span class="sw" style="background:${hex(c.color)}"></span>
         <span><b>${esc(c.name)}</b>${c.alive ? "" : " †"}<small>${c.alive ? `${c.pop} hab. · ${PERSONALITY_LABEL[c.personality]} · ${TECH_NAMES[c.tech]}` : `Disparue en l'an ${c.extinctYear}`}</small></span></button>`).join("");
     }
+    if (this.sel.kind !== "none") html = `<p><button class="link back" data-go="none:-1">← Toutes les civilisations</button></p>` + html;
     $("right-title").textContent = title;
+    document.querySelectorAll<HTMLElement>("#right .gt").forEach((g) => (g.textContent = title === "Observation" ? "Monde" : title));
     if (html !== this.lastDetails) {
       const el = $("details");
       const top = $("right").scrollTop;
@@ -445,7 +577,8 @@ export class UI {
       this.lastDetails = html;
       el.querySelectorAll<HTMLButtonElement>("[data-go]").forEach((b) => b.addEventListener("click", () => {
         const [k, id] = b.dataset.go!.split(":");
-        this.select(k as "civ", Number(id));
+        this.select(k as "civ" | "none", Number(id));
+        if (k === "none") return;
         const civ = this.sim.civById.get(Number(id));
         const cap = civ ? this.sim.cityById.get(civ.capital) : null;
         if (cap) this.game.renderer.focusOn(cap.x + 0.5, cap.y + 0.5, 38);
@@ -510,6 +643,7 @@ export class UI {
 
   private onEvent(e: ChronicleEntry): void {
     this.chronDirty = true;
+    if (e.importance >= 2 && this.sheet !== "chron") { this.unread++; this.updateBadge(); }
     if (e.importance >= 2) {
       const civ = this.sim.civById.get(e.civ);
       const fast = this.sim.speed >= 3 && !this.sim.paused;
@@ -549,33 +683,37 @@ export class UI {
 
   toast(text: string, sub = "", war = false, big = false, _type?: string): void {
     const box = $("toasts");
+    const mob = this.mobile;
     const t = document.createElement("div");
-    t.className = `toast ${war ? "war" : ""} ${big ? "big" : ""}`;
-    t.innerHTML = `${esc(text)}${sub ? `<small>${esc(sub)}</small>` : ""}`;
+    t.className = `toast ${war ? "war" : ""} ${big && !mob ? "big" : ""}`;
+    t.innerHTML = `${esc(text)}${sub && !mob ? `<small>${esc(sub)}</small>` : ""}`;
     box.appendChild(t);
-    while (box.children.length > 3) box.firstElementChild?.remove();
-    setTimeout(() => { t.classList.add("out"); setTimeout(() => t.remove(), 600); }, big ? 7000 : 4500);
+    while (box.children.length > (mob ? 2 : 3)) box.firstElementChild?.remove();
+    setTimeout(() => { t.classList.add("out"); setTimeout(() => t.remove(), 600); }, mob ? (big ? 4200 : 3000) : big ? 7000 : 4500);
     t.addEventListener("click", () => t.remove());
   }
 
   // ------------------------------------------------------------ modales
 
-  private showMenu(): void {
-    const body = $("modal-body");
-    body.innerHTML = `<h2>Menu divin</h2>
+  private menuHtml(withTitle: boolean): string {
+    return `${withTitle ? "<h2>Menu divin</h2>" : '<div class="sec">Partie</div>'}
       <div class="row" style="justify-content:flex-start">
         <button class="secondary" id="m-save">Sauvegarder</button>
-        <button class="secondary" id="m-load" ${this.game.hasSave() ? "" : "disabled"}>Charger la sauvegarde</button>
-        <button class="secondary" id="m-export">Exporter (.json)</button>
+        <button class="secondary" id="m-load" ${this.game.hasSave() ? "" : "disabled"}>Charger</button>
+        <button class="secondary desk-only" id="m-export">Exporter (.json)</button>
       </div>
-      <p class="quote">Sauvegarde automatique toutes les 45 secondes dans ce navigateur (LocalStorage).</p>
+      <p class="quote">Sauvegarde automatique toutes les 45 secondes dans ce navigateur.</p>
       <div class="sec">Nouveau monde</div>
-      <div class="row" style="justify-content:flex-start"><label>Graine <input id="m-seed" type="text" inputmode="numeric" placeholder="aléatoire" style="width:140px" /></label>
+      <div class="row" style="justify-content:flex-start"><label>Graine <input id="m-seed" type="text" inputmode="numeric" placeholder="aléatoire" style="width:120px" /></label>
       <button class="primary" id="m-new">Recommencer l'humanité</button></div>
-      <p class="quote">Même graine, même carte. Pas la même histoire — vous y êtes pour quelque chose.</p>
-      <div class="sec">Commandes</div>
-      <p class="law">Clic gauche glissé : pivoter · Clic droit / 2 doigts : déplacer · Molette / pincement : zoom · WASD/flèches : déplacer · Q/E : pivoter · Espace : pause · 1/2/3 : vitesses · Échap : annuler le pouvoir.</p>`;
-    $("modal").classList.remove("hidden");
+      <p class="quote">Même graine, même carte. Pas la même histoire : vous y êtes pour quelque chose.</p>
+      <div class="sec desk-only">Commandes</div>
+      <p class="law desk-only">Clic gauche glissé : pivoter · Clic droit / 2 doigts : déplacer · Molette / pincement : zoom · WASD/flèches : déplacer · Q/E : pivoter · Espace : pause · 1/2/3 : vitesses · Échap : annuler le pouvoir.</p>
+      <div class="sec mob-only">Commandes tactiles</div>
+      <p class="law mob-only">1 doigt : déplacer la vue · 2 doigts : zoom (et pivoter en les faisant glisser) · toucher un habitant ou une ville : sa fiche · glisser une fenêtre vers le bas : la fermer.</p>`;
+  }
+
+  private bindMenu(): void {
     $("m-save").addEventListener("click", () => { this.toast(this.game.save(), "", false); });
     $("m-load").addEventListener("click", () => { if (this.game.load()) $("modal").classList.add("hidden"); });
     $("m-export").addEventListener("click", () => this.game.exportSave());
@@ -584,6 +722,12 @@ export class UI {
       this.game.newWorld(v ? Number(v.replace(/\D/g, "")) || undefined : undefined);
       $("modal").classList.add("hidden");
     });
+  }
+
+  private showMenu(): void {
+    $("modal-body").innerHTML = this.menuHtml(true);
+    $("modal").classList.remove("hidden");
+    this.bindMenu();
   }
 
   private showStats(): void {
@@ -599,9 +743,11 @@ export class UI {
       <span>Guerres actives / total</span><b>${sim.activeWars().length} / ${st.warsStarted}</b><span>Naissances</span><b>${st.births}</b><span>Décès (total)</span><b>${st.deaths}</b>
       <span>— de vieillesse</span><b>${st.oldAgeDeaths}</b><span>— de faim</span><b>${st.famineDeaths}</b><span>— de guerre</span><b>${st.warDeaths}</b>
       <span>— de peste</span><b>${st.plagueDeaths}</b><span>— de votre fait</span><b>${st.godDeaths}</b><span>Villes fondées</span><b>${st.citiesFounded}</b></div>
-      <div class="sec">Population par civilisation</div><canvas id="chart" class="chart"></canvas><div class="legend" id="legend"></div>`;
+      <div class="sec">Population par civilisation</div><canvas id="chart" class="chart"></canvas><div class="legend" id="legend"></div>
+      ${this.mobile ? this.menuHtml(false) : ""}`;
     $("modal").classList.remove("hidden");
     this.drawChart();
+    if (this.mobile) this.bindMenu();
   }
 
   private drawChart(): void {

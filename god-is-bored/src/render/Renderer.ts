@@ -53,12 +53,28 @@ export class Renderer {
   private bgeo = buildingGeometries();
   selection: { kind: "none" | "civ" | "citizen" | "city" | "building"; id: number } = { kind: "none", id: -1 };
 
-  constructor(container: HTMLElement, labelsEl: HTMLElement) {
+  readonly mobile: boolean;
+  private quality = 0;
+  private basePR = 1;
+  private qEma = 16;
+  private qClock = 0;
+  private qGood = 0;
+  private frameNo = 0;
+  private shadowClock = 0;
+  private inset = 0;
+  private insetTarget = 0;
+  private sun!: THREE.DirectionalLight;
+
+  constructor(container: HTMLElement, labelsEl: HTMLElement, opts: { mobile?: boolean } = {}) {
+    this.mobile = !!opts.mobile;
     this.el = container;
     this.labelsEl = labelsEl;
-    this.three = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
-    this.three.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    const dpr = window.devicePixelRatio || 1;
+    this.three = new THREE.WebGLRenderer({ antialias: !this.mobile || dpr < 2, alpha: true, powerPreference: this.mobile ? "default" : "high-performance" });
+    this.basePR = Math.min(dpr, this.mobile ? 2 : 2);
+    this.three.setPixelRatio(this.basePR);
     this.three.shadowMap.enabled = true;
+    if (this.mobile) this.three.shadowMap.autoUpdate = false;
     this.three.shadowMap.type = THREE.PCFSoftShadowMap;
     this.three.setClearColor(0x000000, 0);
     container.appendChild(this.three.domElement);
@@ -70,12 +86,15 @@ export class Renderer {
     this.controls.dampingFactor = 0.09;
     this.controls.screenSpacePanning = false;
     this.controls.minDistance = 7;
-    this.controls.maxDistance = 120;
+    this.controls.maxDistance = 150;
     this.controls.maxPolarAngle = Math.PI * 0.46;
     this.controls.minPolarAngle = 0.15;
     this.controls.target.set(0, 0.5, 0);
     this.controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
-    this.controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+    // tactile : 1 doigt = déplacer, 2 doigts = zoom (+ pivoter) ; bureau : 1 doigt = pivoter
+    this.controls.touches = this.mobile ? { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE } : { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+    this.controls.panSpeed = 1.15;
+    this.controls.rotateSpeed = 0.7;
     this.controls.zoomSpeed = 0.9;
     this.controls.update();
 
@@ -84,7 +103,8 @@ export class Renderer {
     const sun = new THREE.DirectionalLight(0xfff0d6, 2.3);
     sun.position.set(-28, 52, 22);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.mapSize.set(this.mobile ? 1024 : 2048, this.mobile ? 1024 : 2048);
+    this.sun = sun;
     const sc = sun.shadow.camera;
     sc.left = -48; sc.right = 48; sc.top = 48; sc.bottom = -48; sc.near = 10; sc.far = 140;
     sun.shadow.bias = -0.0004;
@@ -106,8 +126,11 @@ export class Renderer {
     this.ringSelect.renderOrder = 21; this.ringSelect.visible = false;
     this.scene.add(this.ringTarget, this.ringTargetFill, this.ringSelect);
 
-    this.fx = new Fx(this.scene);
+    this.fx = new Fx(this.scene, this.mobile ? 1400 : 3200);
     window.addEventListener("resize", () => this.resize());
+    window.addEventListener("orientationchange", () => setTimeout(() => this.resize(), 250));
+    this.three.domElement.addEventListener("webglcontextlost", (e) => e.preventDefault());
+    this.three.domElement.addEventListener("webglcontextrestored", () => { if (this.sim) this.setSim(this.sim); });
     window.addEventListener("keydown", (e) => { if (!(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLSelectElement)) this.keys.add(e.key.toLowerCase()); });
     window.addEventListener("keyup", (e) => this.keys.delete(e.key.toLowerCase()));
     window.addEventListener("blur", () => this.keys.clear());
@@ -118,7 +141,9 @@ export class Renderer {
     const w = this.el.clientWidth || window.innerWidth, h = this.el.clientHeight || window.innerHeight;
     this.three.setSize(w, h);
     this.camera.aspect = w / h;
+    this.camera.fov = w / h < 1 ? 46 : 32;
     this.camera.updateProjectionMatrix();
+    this.applyInset(true);
   }
 
   // ------------------------------------------------------------------ construction de la scène
@@ -162,7 +187,7 @@ export class Renderer {
     this.skirt = new THREE.Mesh(sg, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 }));
     this.scene.add(this.skirt);
     // eau
-    const wg = new THREE.PlaneGeometry(N, N, 28, 28);
+    const wg = new THREE.PlaneGeometry(N, N, this.mobile ? 12 : 28, this.mobile ? 12 : 28);
     wg.rotateX(-Math.PI / 2);
     this.water = new THREE.Mesh(wg, new THREE.MeshStandardMaterial({ color: 0x4fa9cc, transparent: true, opacity: 0.74, flatShading: true, roughness: 0.25, metalness: 0.05 }));
     this.water.position.y = -0.03;
@@ -601,8 +626,50 @@ export class Renderer {
     this.camera.position.copy(this.controls.target).add(off);
   }
   resetCamera(): void {
-    this.controls.target.set(0, 0.5, 0);
-    this.camera.position.set(52, 58, 52);
+    let tx = 0, tz = 0;
+    if (this.sim && this.sim.cities.length) {
+      for (const c of this.sim.cities) { tx += c.x + 0.5 - this.N / 2; tz += c.y + 0.5 - this.N / 2; }
+      tx /= this.sim.cities.length; tz /= this.sim.cities.length;
+    }
+    const portrait = this.camera.aspect < 1;
+    this.controls.target.set(tx * 0.8, 0.5, tz * 0.8);
+    const dir = new THREE.Vector3(1, 1.08, 1).normalize();
+    this.camera.position.copy(this.controls.target).addScaledVector(dir, portrait ? 78 : 94);
+  }
+
+  /** Décale la scène vers le haut quand un bottom sheet masque le bas de l'écran. */
+  setBottomInset(px: number): void {
+    this.insetTarget = Math.max(0, px);
+  }
+  private applyInset(force = false): void {
+    const w = this.el.clientWidth || window.innerWidth, h = this.el.clientHeight || window.innerHeight;
+    if (this.inset > 0.5) this.camera.setViewOffset(w, h, 0, this.inset / 2, w, h);
+    else if (force || this.camera.view?.enabled) this.camera.clearViewOffset();
+  }
+
+  /** Qualité adaptative : on dégrade la résolution puis les ombres si l'appareil peine. */
+  private adaptQuality(dtMs: number): void {
+    if (!this.mobile) return;
+    this.qEma += (Math.min(dtMs, 100) - this.qEma) * 0.05;
+    this.qClock += dtMs;
+    if (this.qClock < 2500) return;
+    this.qClock = 0;
+    if (this.qEma > 24 && this.quality < 3) { this.setQuality(this.quality + 1); this.qGood = 0; }
+    else if (this.qEma < 15.5 && this.quality > 0 && ++this.qGood >= 6) { this.setQuality(this.quality - 1); this.qGood = 0; }
+    else if (this.qEma >= 15.5) this.qGood = 0;
+  }
+  setQuality(q: number): void {
+    this.quality = q;
+    const pr = [this.basePR, Math.min(this.basePR, 1.5), Math.min(this.basePR, 1.2), 1][q];
+    this.three.setPixelRatio(pr);
+    this.three.setSize(this.el.clientWidth || window.innerWidth, this.el.clientHeight || window.innerHeight);
+    this.sun.castShadow = q < 3;
+    this.trees.castShadow = q < 2;
+  }
+  get qualityLevel(): number { return this.quality; }
+  /** Intervalle minimal entre deux rendus (ms). */
+  get frameInterval(): number {
+    return this.mobile ? (this.quality >= 3 ? 33 : 15) : 0;
   }
   focusOn(x: number, y: number, dist = 26): void {
     const t = new THREE.Vector3(x - this.N / 2, this.sim.world.heightAt(x, y), y - this.N / 2);
@@ -619,8 +686,11 @@ export class Renderer {
 
   frame(dt: number, alpha: number): void {
     this.time += dt;
+    this.frameNo++;
+    this.adaptQuality(dt * 1000);
     const sim = this.sim;
     if (!sim) return;
+    if (Math.abs(this.insetTarget - this.inset) > 0.3) { this.inset += (this.insetTarget - this.inset) * Math.min(1, dt * 9); this.applyInset(); }
     const w = sim.world;
     this.keyboardPan(dt);
     // limites de la caméra
@@ -639,7 +709,7 @@ export class Renderer {
     // données changeantes
     const lv = this.lastVer;
     if (lv.terrain !== w.terrainV) { this.rebuildSkirt(); }
-    if (lv.terrain !== w.terrainV || lv.owner !== w.ownerV || lv.fire !== w.fireV || (this.time - this.lastSlow > 0.6 && (sim.tick % 6 === 0))) {
+    if (lv.terrain !== w.terrainV || lv.owner !== w.ownerV || lv.fire !== w.fireV || (this.time - this.lastSlow > (this.mobile ? 1.4 : 0.6) && (sim.tick % 6 === 0))) {
       this.rebuildTerrain();
       if (lv.terrain !== w.terrainV || lv.owner !== w.ownerV) this.rebuildBorders();
       lv.terrain = w.terrainV; lv.owner = w.ownerV; lv.fire = w.fireV;
@@ -655,16 +725,19 @@ export class Renderer {
     this.updateBuildings();
     this.updateCitizens(alpha);
     this.updateFlames();
-    this.updateLabels();
+    if (!this.mobile || this.frameNo % 3 === 0) this.updateLabels();
     this.syncWeather();
 
     // eau animée
-    const wp = this.water.geometry.attributes.position as THREE.BufferAttribute;
-    for (let i = 0; i < wp.count; i++) {
-      const x = wp.getX(i), z = wp.getZ(i);
-      wp.setY(i, Math.sin(this.time * 1.2 + x * 0.6) * 0.025 + Math.cos(this.time * 0.9 + z * 0.5) * 0.02);
+    if (!this.mobile || this.frameNo % 2 === 0) {
+      const wp = this.water.geometry.attributes.position as THREE.BufferAttribute;
+      for (let i = 0; i < wp.count; i++) {
+        const x = wp.getX(i), z = wp.getZ(i);
+        wp.setY(i, Math.sin(this.time * 1.2 + x * 0.6) * 0.025 + Math.cos(this.time * 0.9 + z * 0.5) * 0.02);
+      }
+      wp.needsUpdate = true;
     }
-    wp.needsUpdate = true;
+    if (this.mobile && this.time - this.shadowClock > 0.5) { this.shadowClock = this.time; this.three.shadowMap.needsUpdate = true; }
 
     // effets
     while (sim.fx.length) this.fx.handle(sim.fx.shift()!, sim, this);
