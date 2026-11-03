@@ -137,7 +137,7 @@ export class Terrain {
         }
     }
     const tc = this.tileCol, nrm = this.geo.attributes.normal.array as Float32Array;
-    const rock = new THREE.Color(0x8a847b), shoreWet = new THREE.Color(0xb7ab80), foam = new THREE.Color(0xe9efe6), teal = new THREE.Color(0x3f8fa0), deep = new THREE.Color(0x1c4a66), sandy = new THREE.Color(0xc4ba92);
+    const rock = new THREE.Color(0x9a9286), shoreWet = new THREE.Color(0xb7ab80), foam = new THREE.Color(0xe9efe6), teal = new THREE.Color(0x3f8fa0), deep = new THREE.Color(0x1c4a66), sandy = new THREE.Color(0xc4ba92);
     const col = new THREE.Color();
     for (let j = 0; j < W; j++)
       for (let i = 0; i < W; i++) {
@@ -162,7 +162,7 @@ export class Terrain {
         const ny = nrm[o * 3 + 1];
         if (h > -0.02) {
           const slope = smooth(0.9, 0.66, ny);
-          if (slope > 0) col.lerp(rock, slope * (0.75 + n2 * 0.4));
+          if (slope > 0) col.lerp(rock, slope * (0.62 + n2 * 0.4));
         }
         // sol dénudé sous les arbres
         const ox = Math.max(0, Math.min(N - 1.001, x - 0.5)), oy = Math.max(0, Math.min(N - 1.001, y - 0.5));

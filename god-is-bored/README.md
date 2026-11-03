@@ -129,3 +129,17 @@ Rendu semi-réaliste stylisé (sans voxel ni damier) ; la simulation reste pure 
 - **Scène de référence** : `?ref` charge un village primitif, une cité médiévale et une ville moderne côte à côte.
 - **Perf (émulation, JS par frame, scène de référence ~1650 habitants / 459 bâtiments)** : desktop 2,2 ms, mobile 4,3 ms ; ~105–115 appels de dessin, 210–320 k triangles ; qualité adaptative (pixel ratio, ombres, repli 30 fps).
 - **Tests** : 63 (dont 15 graphiques : continuité du terrain, rivières, urbanisme, personnages, budgets). Captures avant/après : `docs/graphics/`.
+
+## Correction graphique V3 (fusion des meilleures versions)
+
+Diagnostic : la V2 avait de beaux personnages mais des campements clairsemés et peu lisibles, une caméra trop rasante (beaucoup de ciel), des habitants à l'orientation aléatoire et un décor vide. La V3 garde les personnages et le terrain de la V2 et rétablit la lisibilité/densité de la version précédente. Le moteur de simulation n'est pas modifié (voir l'exception ci-dessous).
+
+- **Camp préhistorique** : huttes à l'échelle d'origine (0,9), regroupées autour du foyer, foyer commun avec sièges en rondins, séchoirs à peaux, piles de bois, paniers, pots, billot + hache près des bûcherons, tas de pierres aux carrières, paniers dans les champs. Chaque accessoire est attaché à un bâtiment réel (test dédié) ; rien n'est ajouté « pour décorer ».
+- **Sentiers** : chaque bâtiment réel est relié à la rue ou au foyer par un chemin de terre peint dans le sol (lignes de désir sinueuses).
+- **Personnages** : cap lissé (plus de pivotement brusque), orientation vers la tâche réelle (arbre, roche, chantier, champ) ou vers le foyer au repos, fondu de 0,22 s entre animations, nouvelles poses (frappe, bêche/cueillette, lecture, assis, combat) et outils attachés à la main : hache (bûcheron), pioche (mineur), houe/panier (cultivateur), marteau (bâtisseur), tablette (érudit). Mode et outil sont déduits de l'état et du métier **réels** (`animFor`, testé). Variantes (bandeau, barbe, châle), largeur et teintes de vêtements variables.
+- **Environnement** : forêts plus fournies (arbres plus grands, silhouettes lointaines plus lisibles), prairies fleuries par plaques, fougères en lisière, souches là où le bois peut repousser, rochers moins sombres. Les clairières restent celles de la simulation.
+- **Caméra** : cadrage automatique de l'ensemble des villes (centre + distance selon l'écran), inclinaison maximale réduite avec le zoom (moins de ciel de loin, vue rasante possible de près), cible qui suit le relief, caméra jamais sous le terrain, ciblage en glissement fluide avec inclinaison ramenée dans une plage lisible. Gestes tactiles inchangés.
+- **Lumière/matières** : ombres du soleil qui suivent la cible et le zoom (plus nettes de près, calées sur la grille de texels), grain de matière fin sur les bâtiments (bois, pierre, enduit) estompé avec la distance.
+- **Exception « simulation »** : `CivilizationSystem.findSite` (pondération du choix d'emplacement des huttes de l'ère 0/1 : rapprochées du foyer, adjacences moins pénalisées). Aucune règle, aucun compteur ni aucune sauvegarde n'est modifié ; les anciennes sauvegardes se chargent (vérifié avec une sauvegarde du commit précédent).
+- **Mesures** (émulation, JS par image, scène de référence ~1660 habitants / 453 bâtiments) : desktop 2,2 ms, mobile 3,5 ms ; ~114 / 106 appels de dessin ; 323 k / 219 k triangles. Aucun test sur un vrai iPhone.
+- **Tests** : 68 (dont 20 graphiques). Captures avant/après : `docs/graphics-v3/`.

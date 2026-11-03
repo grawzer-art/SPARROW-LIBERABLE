@@ -28,13 +28,13 @@ const arms = (era: number): G[] => {
 };
 const head = (): G[] => [tag(blob(0.056, 0.004, 0.37, 0, W), PART.body, REGION.skin), tag(box(0.012, 0.014, 0.014, 0.054, 0.37, 0.02, 0x1d1a18), PART.body, REGION.fixed), tag(box(0.012, 0.014, 0.014, 0.054, 0.37, -0.02, 0x1d1a18), PART.body, REGION.fixed)];
 
-function outfit(era: number, female: boolean): G[] {
+function outfit(era: number, female: boolean, v = 0): G[] {
   const out: G[] = [...legs(era), ...arms(era), ...head()];
   const B = (g: G, r: number = REGION.cloth) => out.push(tag(g, PART.body, r));
   switch (era) {
     case 0: // peaux de bêtes
       B(box(0.085, 0.15, 0.135, 0, 0.15, 0, W)); B(cone(0.1, 0.1, 6, 0, 0.07, 0, W));
-      out.push(tag(box(0.07, 0.04, 0.07, 0.0, 0.28, 0.075, 0xb09a78), PART.body, REGION.fixed), tag(box(0.07, 0.04, 0.07, 0.0, 0.28, -0.075, 0xb09a78), PART.body, REGION.fixed));
+      out.push(tag(box(0.055, 0.032, 0.055, 0.0, 0.285, 0.083, 0xb09a78), PART.body, REGION.fixed), tag(box(0.055, 0.032, 0.055, 0.0, 0.285, -0.083, 0xb09a78), PART.body, REGION.fixed));
       out.push(tag(blob(0.062, -0.012, 0.395, 0, W), PART.body, REGION.hair), tag(box(0.05, 0.03, 0.05, 0.02, 0.42, 0.03, W), PART.body, REGION.hair));
       if (female) out.push(tag(box(0.03, 0.12, 0.08, -0.05, 0.27, 0, W), PART.body, REGION.hair));
       break;
@@ -67,14 +67,20 @@ function outfit(era: number, female: boolean): G[] {
       out.push(tag(blob(0.058, -0.006, 0.385, 0, W), PART.body, REGION.hair), tag(box(0.04, 0.026, 0.11, 0.035, 0.375, 0, 0x62e4ff), PART.body, REGION.fixed));
       if (female) out.push(tag(box(0.03, 0.09, 0.08, -0.05, 0.28, 0, W), PART.body, REGION.hair));
   }
+  if (v === 1) {
+    // variante d'allure : bandeau, barbe ou châle selon l'âge et le genre (accent = couleur de la civilisation)
+    if (female) out.push(tag(box(0.1, 0.03, 0.14, 0.0, 0.27, 0, W), PART.body, REGION.accent));
+    else if (era <= 3) out.push(tag(box(0.032, 0.05, 0.07, 0.05, 0.31, 0, W), PART.body, REGION.hair));
+    if (!female || era >= 4) out.push(tag(cyl(0.063, 0.063, 0.016, 7, 0, 0.39, 0, W), PART.body, REGION.accent));
+  }
   return out;
 }
 
 const cache = new Map<string, G>();
-export function characterGeometry(era: number, female: boolean): G {
-  const key = `c${era}${female ? "f" : "m"}`;
+export function characterGeometry(era: number, female: boolean, v = 0): G {
+  const key = `c${era}${female ? "f" : "m"}${v}`;
   let g = cache.get(key);
-  if (!g) { g = merge(outfit(era, female)); cache.set(key, g); }
+  if (!g) { g = merge(outfit(era, female, v)); cache.set(key, g); }
   return g;
 }
 
@@ -100,13 +106,30 @@ export function gearGeometry(era: number): G {
   return g;
 }
 
-/** Outil de travail civil (hache / pioche / marteau) : suit le bras droit ; couleur propre à l'époque. */
-export function toolGeometry(era: number): G {
-  const key = "t" + era;
+/**
+ * Outil civil tenu par le bras droit, dans le repère du bras au repos (main vers y≈0.16) : le manche prolonge le bras vers le bas,
+ * la tête de l'outil est à l'extrémité, donc elle frappe devant le personnage quand le bras se balance.
+ * kind : 0 hache (bûcheron), 1 pioche (mineur), 2 houe (cultivateur), 3 marteau (bâtisseur), 4 panier (cueillette), 5 tablette (érudit).
+ */
+export const TOOL = { axe: 0, pick: 1, hoe: 2, hammer: 3, basket: 4, tablet: 5 } as const;
+export function toolGeometry(era: number, kind = 0): G {
+  const key = `t${era}k${kind}`;
   let g = cache.get(key);
   if (g) return g;
   const head = [0x8a8a80, 0xb87a3a, 0x8f969c, 0xb0b8c0, 0xff9a2a, 0x5ff0ff][era];
-  g = merge([tag(cyl(0.01, 0.01, 0.25, 4, 0.045, 0.0, -0.083, 0x7b5a3a), PART.hand, REGION.fixed), tag(box(0.07, 0.04, 0.016, 0.045, 0.24, -0.083, head), PART.hand, REGION.fixed)]);
+  const wood = era >= 5 ? 0x62e4ff : 0x7b5a3a, Z = -0.083;
+  const R = (g2: G) => tag(g2, PART.hand, REGION.fixed);
+  const shaft = (len: number) => R(cyl(0.009, 0.009, len, 4, 0.0, 0.17 - len, Z, wood));
+  let parts: G[];
+  switch (kind) {
+    case 0: parts = [shaft(0.18), R(box(0.065, 0.05, 0.014, 0.035, -0.05, Z, head)), R(box(0.014, 0.05, 0.02, -0.005, -0.05, Z, 0x5a4330))]; break;
+    case 1: parts = [shaft(0.18), R(box(0.016, 0.022, 0.14, 0.0, -0.06, Z, head)), R(box(0.016, 0.03, 0.02, 0.0, -0.085, Z + 0.07, head))]; break;
+    case 2: parts = [shaft(0.2), R(box(0.075, 0.014, 0.05, 0.03, -0.065, Z, head))]; break;
+    case 3: parts = [shaft(0.17), R(box(0.05, 0.04, 0.05, 0.0, -0.06, Z, head)), R(box(0.05, 0.012, 0.05, 0.0, -0.02, Z, 0x5a4330))]; break;
+    case 4: parts = [R(cyl(0.05, 0.036, 0.055, 7, 0.045, 0.0, Z, 0xb89455)), R(cyl(0.046, 0.046, 0.012, 7, 0.045, 0.05, Z, 0xd8c36a)), R(blob(0.026, 0.045, 0.07, Z + 0.01, 0x7a9a3c))]; break;
+    default: parts = [R(box(0.012, 0.075, 0.05, 0.04, 0.09, Z, era >= 4 ? 0x2a2f36 : 0xe8dcc0)), R(box(0.014, 0.05, 0.034, 0.047, 0.1, Z, era >= 4 ? 0x62e4ff : 0x8a6a47))];
+  }
+  g = merge(parts);
   cache.set(key, g);
   return g;
 }
@@ -132,29 +155,29 @@ uniform float uTime;
 attribute float aPart; attribute float aRegion;
 attribute vec4 aAnim; attribute vec3 aCloth; attribute vec3 aSkin; attribute vec3 aHair; attribute vec3 aAccent;
 vec2 gPiv; float gAng; float gYoff;
+// pose (angle, décalage vertical) d'un membre pour un mode : 0 repos, 1 marche, 2 frappe (hache/marteau/pioche), 3 combat, 4 assis, 5 bêche/cueillette, 6 lecture
+vec2 pose(float m, float part){
+  float ph = aAnim.y, sp = aAnim.z;
+  float wk = sin(uTime*9.0*sp + ph), wr = uTime*5.0*sp + ph, wf = uTime*7.0*sp + ph, ws = uTime*3.2*sp + ph;
+  float s = part < 1.5 ? 1.0 : -1.0;
+  float a = 0.0, y = 0.0;
+  bool leg = part > 0.5 && part < 2.5, aL = part > 2.5 && part < 3.5, aR = part > 3.5;
+  if (m < 0.5) { y = sin(uTime*1.6+ph)*0.003; if (aL) a = sin(uTime*1.3+ph)*0.07; else if (aR) a = -sin(uTime*1.3+ph)*0.07; }
+  else if (m < 1.5) { y = abs(wk)*0.014; if (leg) a = s*wk*0.75; else if (aL) a = -wk*0.6; else if (aR) a = wk*0.6; }
+  else if (m < 2.5) { y = -0.004 - 0.006*sin(wr); if (aL) a = 0.95 + sin(wr-0.3)*0.75; else if (aR) a = 1.4 + sin(wr)*0.85; }
+  else if (m < 3.5) { if (leg) a = s*sin(wf*0.5)*0.35; else if (aL) a = 0.6 + sin(wf+1.5)*0.3; else if (aR) a = 1.0 + sin(wf)*0.9; }
+  else if (m < 4.5) { y = -0.075; if (leg) a = 1.45; else if (part > 2.5) a = 0.55; }
+  else if (m < 5.5) { y = -0.012 - 0.008*sin(ws); if (aL) a = 0.85 + sin(ws+0.5)*0.4; else if (aR) a = 0.9 + sin(ws)*0.45; }
+  else { if (aL) a = 0.95 + sin(uTime*0.9+ph)*0.04; else if (aR) a = 1.05 + sin(uTime*0.8+ph)*0.05; y = sin(uTime*1.6+ph)*0.003; }
+  return vec2(a, y);
+}
 void limb(){
-  float m = aAnim.x, ph = aAnim.y, sp = aAnim.z;
-  gAng = 0.0; gPiv = vec2(0.0); gYoff = 0.0;
-  float wk = sin(uTime*9.0*sp + ph);
-  float wr = uTime*5.0*sp + ph;
-  float wf = uTime*7.0*sp + ph;
-  if (m > 0.5 && m < 1.5) gYoff = abs(wk)*0.014;
-  else if (m > 3.5) gYoff = -0.075;
-  else if (m < 0.5) gYoff = sin(uTime*1.6+ph)*0.003;
-  if (aPart > 0.5) {
-    if (aPart < 2.5) {
-      gPiv = vec2(0.0, 0.15);
-      float s = aPart < 1.5 ? 1.0 : -1.0;
-      if (m < 0.5) gAng = 0.0; else if (m < 1.5) gAng = s*wk*0.75; else if (m < 2.5) gAng = 0.0; else if (m < 3.5) gAng = s*sin(wf*0.5)*0.35; else gAng = 1.45;
-    } else {
-      gPiv = vec2(0.0, 0.30);
-      if (aPart < 3.5) { // bras gauche
-        if (m < 0.5) gAng = sin(uTime*1.3+ph)*0.07; else if (m < 1.5) gAng = -wk*0.6; else if (m < 2.5) gAng = sin(wr+1.0)*0.3; else if (m < 3.5) gAng = -0.4+sin(wf+1.5)*0.4; else gAng = -0.3;
-      } else { // bras droit + objet tenu
-        if (m < 0.5) gAng = -sin(uTime*1.3+ph)*0.07; else if (m < 1.5) gAng = wk*0.6; else if (m < 2.5) gAng = -0.7+sin(wr)*1.05; else if (m < 3.5) gAng = -1.3+sin(wf)*0.7; else gAng = -0.2;
-      }
-    }
-  }
+  gAng = 0.0; gYoff = 0.0; gPiv = vec2(0.0);
+  float w = aAnim.w, pm = floor(w + 0.001), t = clamp(fract(w + 0.001) / 0.95, 0.0, 1.0);
+  vec2 r = pose(aAnim.x, aPart);
+  if (t > 0.001 && abs(pm - aAnim.x) > 0.5) r = mix(r, pose(pm, aPart), t);
+  gAng = (aPart > 0.5) ? r.x : 0.0; gYoff = r.y;
+  if (aPart > 0.5) gPiv = aPart < 2.5 ? vec2(0.0, 0.15) : vec2(0.0, 0.30);
 }`)
       .replace("#include <beginnormal_vertex>", `limb();
 float cA = cos(gAng), sA = sin(gAng);
@@ -196,11 +219,11 @@ export class CharSet {
     g.setAttribute("aAnim", this.anim); g.setAttribute("aCloth", this.cloth); g.setAttribute("aSkin", this.skin); g.setAttribute("aHair", this.hair); g.setAttribute("aAccent", this.acc);
   }
   begin(): void { this.n = 0; }
-  push(m: THREE.Matrix4, mode: number, phase: number, speed: number, cloth: THREE.Color, skin: THREE.Color, hair: THREE.Color, accent: THREE.Color): void {
+  push(m: THREE.Matrix4, mode: number, phase: number, speed: number, prev: number, cloth: THREE.Color, skin: THREE.Color, hair: THREE.Color, accent: THREE.Color): void {
     if (this.n >= this.cap) this.grow();
     const i = this.n++;
     this.mesh.setMatrixAt(i, m);
-    this.anim.setXYZW(i, mode, phase, speed, 0);
+    this.anim.setXYZW(i, mode, phase, speed, prev);
     this.cloth.setXYZ(i, cloth.r, cloth.g, cloth.b); this.skin.setXYZ(i, skin.r, skin.g, skin.b); this.hair.setXYZ(i, hair.r, hair.g, hair.b); this.acc.setXYZ(i, accent.r, accent.g, accent.b);
   }
   private grow(): void {

@@ -5,10 +5,12 @@ import { buildReferenceWorld } from "../src/sim/Reference";
 import { streetInfo, streetPolyline, streetCount, faceStreet } from "../src/sim/Layout";
 import { T } from "../src/sim/World";
 import { buildingModel, geometryFingerprint, variantCount, vertexCount } from "../src/render/models";
-import { characterGeometry, gearGeometry, toolGeometry, farPersonGeometry, PART } from "../src/render/Characters";
+import { characterGeometry, gearGeometry, toolGeometry, farPersonGeometry, PART, TOOL } from "../src/render/Characters";
+import { Props } from "../src/render/Props";
+import { Infra } from "../src/render/Infra";
 import { Sky } from "../src/render/Sky";
 import { lightStyle } from "../src/render/Glow";
-import { visualEra } from "../src/render/CitizenLayer";
+import { visualEra, animFor } from "../src/render/CitizenLayer";
 
 const mk = (seed = 42) => SimulationEngine.create(seed);
 
@@ -199,5 +201,66 @@ describe("Budget de rendu (iPhone)", () => {
     const keys = new Set<string>();
     for (const b of sim.buildings) { const civ = sim.civById.get(b.civ); keys.add(`${b.type}:${b.era}:${civ ? civ.style : 0}:${Math.floor((b.id * 7919) % 3)}`); }
     expect(keys.size).toBeLessThan(150);
+  });
+});
+
+describe("Correction graphique V3 : camps, accessoires, animations liées à la simulation", () => {
+  it("les campements préhistoriques sont compacts : huttes serrées autour du foyer, sans superposition", () => {
+    const sim = mk(42);
+    sim.runYears(45);
+    let tested = 0;
+    for (const city of sim.cities) {
+      const civ = sim.civById.get(city.civ);
+      if (!civ || civ.era > 0) continue;
+      const houses = sim.buildings.filter((b) => b.city === city.id && b.type === "house" && b.progress >= 1);
+      if (houses.length < 5) continue;
+      tested++;
+      const tiles = new Set(houses.map((b) => b.x + "," + b.y));
+      expect(tiles.size, `${city.name} : une hutte par case`).toBe(houses.length);
+      const mean = houses.reduce((s, b) => s + Math.hypot(b.x - city.x, b.y - city.y), 0) / houses.length;
+      expect(mean, `${city.name} : distance moyenne au foyer`).toBeLessThan(3.6);
+    }
+    expect(tested).toBeGreaterThan(0);
+  });
+  it("les accessoires sont attachés à des bâtiments réels (aucun décor orphelin)", () => {
+    const sim = mk(42);
+    sim.runYears(60);
+    const props = new Props(new THREE.Scene());
+    props.update(sim, { containsPoint: () => true } as unknown as THREE.Frustum, new THREE.Vector3(0, 10, 0), 1e6);
+    const N = sim.world.size;
+    expect(props.placed.length).toBeGreaterThan(5);
+    for (const p of props.placed) {
+      const near = sim.buildings.some((b) => b.progress >= 1 && Math.hypot(b.x + 0.5 - N / 2 - p.x, b.y + 0.5 - N / 2 - p.z) < 1.3);
+      expect(near, `${p.k} @${p.x.toFixed(1)},${p.z.toFixed(1)}`).toBe(true);
+      expect(sim.world.heightAt(p.x + N / 2, p.z + N / 2)).toBeGreaterThan(-0.1);
+    }
+  });
+  it("les sentiers peints relient des bâtiments réels", () => {
+    const sim = mk(42);
+    sim.runYears(60);
+    const infra = new Infra(new THREE.Scene(), false);
+    infra.update(sim, 0, []);
+    expect(infra.paths.length).toBeGreaterThan(10);
+    for (const s of infra.paths) { expect(Number.isFinite(s.ax + s.ay + s.bx + s.by)).toBe(true); expect(s.w).toBeGreaterThan(0); }
+  });
+  it("l'animation et l'outil d'un habitant viennent de son métier et de son état réels", () => {
+    const base = { sick: 0 } as const;
+    expect(animFor({ ...base, state: "work", job: "lumberjack" }, false, 0)).toMatchObject({ mode: 2, tool: TOOL.axe });
+    expect(animFor({ ...base, state: "work", job: "miner" }, false, 0)).toMatchObject({ mode: 2, tool: TOOL.pick });
+    expect(animFor({ ...base, state: "work", job: "farmer" }, false, 0)).toMatchObject({ mode: 5, tool: TOOL.hoe });
+    expect(animFor({ ...base, state: "forage", job: "farmer" }, false, 0)).toMatchObject({ mode: 5, tool: TOOL.basket });
+    expect(animFor({ ...base, state: "build", job: "builder" }, false, 0)).toMatchObject({ mode: 2, tool: TOOL.hammer });
+    expect(animFor({ ...base, state: "work", job: "scholar" }, false, 0)).toMatchObject({ mode: 6, tool: TOOL.tablet });
+    // en déplacement : on marche, sans outil ; un enfant ne manie pas d'outil ; au combat : mode combat
+    expect(animFor({ ...base, state: "work", job: "lumberjack" }, true, 0)).toMatchObject({ mode: 1, tool: -1 });
+    expect(animFor({ ...base, state: "work", job: "child" }, false, 0)).toMatchObject({ mode: 0, tool: -1 });
+    expect(animFor({ ...base, state: "fight", job: "soldier" }, false, 0).mode).toBe(3);
+    expect(animFor({ sick: 5, state: "idle", job: "farmer" }, false, 0).mode).toBe(4);
+  });
+  it("les outils et les variantes de personnages sont distincts et légers", () => {
+    const prints = new Set<string>();
+    for (let k = 0; k <= 5; k++) { const g = toolGeometry(2, k); prints.add(geometryFingerprint(g)); expect(vertexCount(g)).toBeLessThan(260); }
+    expect(prints.size).toBe(6);
+    for (let e = 0; e <= 5; e++) for (const f of [false, true]) expect(geometryFingerprint(characterGeometry(e, f, 1))).not.toBe(geometryFingerprint(characterGeometry(e, f, 0)));
   });
 });

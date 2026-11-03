@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { SimulationEngine } from "../sim/SimulationEngine";
 import type { Army, Citizen, Civ } from "../sim/types";
-import { CharSet, characterGeometry, characterMaterial, farPersonGeometry, gearGeometry, toolGeometry } from "./Characters";
+import { CharSet, TOOL, characterGeometry, characterMaterial, farPersonGeometry, gearGeometry, toolGeometry } from "./Characters";
 import type { Fx } from "./Fx";
 import { GrowMesh } from "./grow";
 import type { Sky } from "./Sky";
@@ -12,6 +12,31 @@ export function visualEra(c: Pick<Citizen, "id">, civ: Pick<Civ, "era" | "eraSin
   if (civ.era <= 0) return 0;
   const since = year - civ.eraSince;
   return since < (c.id % 6) ? civ.era - 1 : civ.era;
+}
+
+/**
+ * Animation d'un habitant déduite de son état et de son métier RÉELS dans la simulation :
+ * bûcheron → hache, mineur → pioche, cultivateur → houe (panier à la cueillette), bâtisseur → marteau, érudit → tablette.
+ * Modes : 0 repos, 1 marche, 2 frappe, 3 combat, 4 assis, 5 bêche/cueillette, 6 lecture.
+ */
+export function animFor(c: Pick<Citizen, "state" | "job" | "sick">, moving: boolean, night: number): { mode: number; tool: number; speed: number } {
+  const adult = c.job !== "child";
+  switch (c.state) {
+    case "work": case "build": case "forage": {
+      if (moving) return { mode: 1, tool: -1, speed: 1 };
+      if (!adult) return { mode: 0, tool: -1, speed: 1 };
+      if (c.job === "farmer") return { mode: 5, tool: c.state === "forage" ? TOOL.basket : TOOL.hoe, speed: 1 };
+      if (c.job === "lumberjack") return { mode: 2, tool: TOOL.axe, speed: 1 };
+      if (c.job === "miner") return { mode: 2, tool: TOOL.pick, speed: 1 };
+      if (c.job === "builder") return { mode: 2, tool: TOOL.hammer, speed: 1 };
+      if (c.job === "scholar") return { mode: 6, tool: TOOL.tablet, speed: 1 };
+      return { mode: c.state === "forage" ? 5 : 0, tool: -1, speed: 1 };
+    }
+    case "fight": return { mode: 3, tool: -1, speed: 1.1 };
+    case "flee": return { mode: 1, tool: -1, speed: 1.8 };
+    case "march": return { mode: 1, tool: -1, speed: 1.15 };
+    default: return { mode: moving ? 1 : (c.sick > 0 || (night > 0.65 && c.state === "idle" && adult) ? 4 : 0), tool: -1, speed: 1 };
+  }
 }
 
 const SKIN = [0xf2c9a8, 0xe3ab82, 0xc98f66, 0x9d6c49, 0x72492f].map((h) => new THREE.Color(h));
@@ -36,6 +61,9 @@ export class CitizenLayer {
   private variants = new Map<string, THREE.Color[]>();
   private lastPos = new Map<number, { x: number; y: number; h: number }>();
   private v3 = new THREE.Vector3();
+  /** État d'animation par habitant : cap lissé, mode courant/précédent (fondu), vitesse lissée. */
+  private cs = new Map<number, { yaw: number; mode: number; prev: number; blend: number; v: number }>();
+  private lastT = 0;
   stats = { citizens: 0, soldiers: 0, props: 0, drawn: 0, far: 0 };
 
   constructor(private scene: THREE.Scene, private mobile: boolean, sky: Sky) {
@@ -56,6 +84,7 @@ export class CitizenLayer {
     for (const p of this.props.values()) p.dispose();
     this.props.clear();
     this.lastPos.clear();
+    this.cs.clear();
   }
 
   private set(key: string, make: () => THREE.BufferGeometry): CharSet {
@@ -72,7 +101,7 @@ export class CitizenLayer {
       v = [];
       for (let k = 0; k < 8; k++) {
         const c = new THREE.Color(ERA_CLOTH[era]).lerp(this.tmp.setHex(civ.color), 0.5 + (k % 3) * 0.1);
-        c.offsetHSL(((k * 37) % 11 - 5) * 0.004, ((k * 17) % 7 - 3) * 0.03, ((k * 13) % 9 - 4) * 0.018);
+        c.offsetHSL(((k * 37) % 11 - 5) * 0.009, ((k * 17) % 7 - 3) * 0.04, ((k * 13) % 9 - 4) * 0.032);
         v.push(c);
       }
       this.variants.set(key, v);
@@ -89,6 +118,8 @@ export class CitizenLayer {
     const cap = this.mobile ? 2600 : 3500;
     const maxD = this.mobile ? 95 : 150;
     const spBoost = sim.speed >= 3 ? 1.35 : 1;
+    const dtc = Math.min(0.1, Math.max(0.001, time - this.lastT)); this.lastT = time;
+    if (this.cs.size > 9000) this.cs.clear();
     const v3 = this.v3;
     for (const c of sim.citizens) {
       if (c.dead) continue;
@@ -105,13 +136,35 @@ export class CitizenLayer {
       const era = visualEra(c, civ, sim.year);
       const soldier = c.job === "soldier";
       const moved = Math.abs(c.x - c.px) + Math.abs(c.y - c.py);
-      const moving = moved > 0.004;
-      const yaw = moving ? Math.atan2(-(c.y - c.py), c.x - c.px) : c.id * 0.7;
+      let st = this.cs.get(c.id);
+      if (!st) { st = { yaw: ((c.id * 0.7) % 6.283), mode: 0, prev: 0, blend: 0, v: 0 }; this.cs.set(c.id, st); }
+      st.v += (moved - st.v) * Math.min(1, dtc * 7);
+      const moving = st.v > 0.0035;
+      const working = c.state === "work" || c.state === "build" || c.state === "forage";
+      // cap : dans le sens du déplacement, sinon face à la tâche réelle (arbre, roche, chantier, champ), sinon on garde l'orientation
+      let goal = NaN;
+      if (moving && moved > 0.0005) goal = Math.atan2(-(c.y - c.py), c.x - c.px);
+      else if (working || c.state === "fight") {
+        let tx = -1, ty = -1;
+        if (c.wx >= 0 && (c.job === "lumberjack" || c.job === "miner")) { tx = c.wx; ty = c.wy; }
+        else if (c.work >= 0) { const b = sim.buildingById.get(c.work); if (b) { tx = b.x + 0.5; ty = b.y + 0.5; } }
+        if (tx < 0 && c.wx >= 0) { tx = c.wx; ty = c.wy; }
+        if (tx >= 0 && Math.hypot(tx - x, ty - y) > 0.05) goal = Math.atan2(-(ty - y), tx - x);
+      }
+      else if (c.state === "idle" || c.state === "wander") {
+        // au repos près du foyer du village : on se tourne vers lui (petits groupes qui se regardent, pas des poses aléatoires)
+        const city = sim.cityById.get(c.city);
+        if (city) { const hx = city.x + 0.5, hz = city.y + 0.5; const dd = Math.hypot(hx - x, hz - y); if (dd < 3.2 && dd > 0.4) goal = Math.atan2(-(hz - y), hx - x); }
+      }
+      if (goal === goal) { let dy = goal - st.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); st.yaw += dy * Math.min(1, dtc * (moving ? 9 : 5)); }
+      const yaw = st.yaw;
       const adult = c.job !== "child";
+      const vr = (c.id >> 3) % 7;
       const sc = (adult ? 0.95 + (c.id % 9) * 0.014 : 0.6 + Math.min(0.22, c.age * 0.016)) * zoomScale * (c.female && adult ? 0.96 : 1);
-      d.position.set(x - N / 2, hy - (c.hp < 100 && c.sick > 0 ? 0 : 0), y - N / 2);
+      const sw = sc * (0.94 + vr * 0.02);
+      d.position.set(x - N / 2, hy, y - N / 2);
       d.rotation.set(0, yaw, 0);
-      d.scale.set(sc, sc, sc);
+      d.scale.set(sw, sc, sw);
       d.updateMatrix();
       const cl = this.cloth(civ, era, c.id, soldier);
       if (!detail) {
@@ -119,26 +172,26 @@ export class CitizenLayer {
         nfar++;
         continue;
       }
-      // comportement -> animation (réelle : l'état vient de la simulation)
-      let mode = 0, sp = 1;
-      switch (c.state) {
-        case "work": case "build": case "forage": mode = moving ? 1 : 2; break;
-        case "fight": mode = 3; sp = 1.1; break;
-        case "flee": mode = 1; sp = 1.8; break;
-        case "march": mode = 1; sp = 1.15; break;
-        default: mode = moving ? 1 : (c.sick > 0 || (night > 0.65 && c.state === "idle" && adult) ? 4 : 0);
-      }
+      // comportement -> animation (réelle : l'état et le métier viennent de la simulation)
+      const an = animFor(c, moving, night);
+      const want = an.mode, tool = an.tool;
+      let sp = an.speed;
       sp *= spBoost;
+      // fondu entre deux animations (~0.22 s) : plus de saccade à l'arrêt ou au départ
+      if (want !== st.mode) { st.prev = st.mode; st.mode = want; st.blend = 1; }
+      else if (st.blend > 0) st.blend = Math.max(0, st.blend - dtc / 0.22);
+      const mode = st.mode, prevCode = st.prev + st.blend * 0.95;
       const phase = (c.id % 97) * 0.9;
       const skin = c.sick > 0 ? this.skinTmp.copy(SKIN[c.id % 5]).lerp(SICK, 0.6) : SKIN[c.id % 5];
       const hair = c.age > 55 ? GRAY : HAIR[(c.id * 7) % 6];
       const acc = this.accTmp.setHex(civ.color);
-      const S = this.set(`c${era}${c.female ? "f" : "m"}`, () => characterGeometry(era, c.female));
-      S.push(d.matrix, mode, phase, sp, cl, skin, hair, acc);
-      if (soldier) { this.set(`g${era}`, () => gearGeometry(era)).push(d.matrix, mode, phase, sp, cl, skin, hair, acc); ns++; }
-      else if (mode === 2 && adult) this.set(`t${era}`, () => toolGeometry(era)).push(d.matrix, mode, phase, sp, cl, skin, hair, acc);
+      const variant = (c.id * 7 + 3) % 5 < 2 ? 1 : 0;
+      const S = this.set(`c${era}${c.female ? "f" : "m"}${variant}`, () => characterGeometry(era, c.female, variant));
+      S.push(d.matrix, mode, phase, sp, prevCode, cl, skin, hair, acc);
+      if (soldier) { this.set(`g${era}`, () => gearGeometry(era)).push(d.matrix, mode, phase, sp, prevCode, cl, skin, hair, acc); ns++; }
+      else if (tool >= 0 && (mode === 2 || mode === 5 || mode === 6) && adult) { const tk = tool; this.set(`t${era}k${tk}`, () => toolGeometry(era, tk)).push(d.matrix, mode, phase, sp, prevCode, cl, skin, hair, acc); }
       // ombre portée simplifiée : disque sombre au sol
-      d.position.y = hy + 0.012; d.scale.set(sc, 1, sc); d.rotation.set(0, 0, 0); d.updateMatrix();
+      d.position.y = hy + 0.012; d.scale.set(sw, 1, sw); d.rotation.set(0, 0, 0); d.updateMatrix();
       this.blobs.push(d.matrix);
     }
     for (const s of this.sets.values()) s.end();

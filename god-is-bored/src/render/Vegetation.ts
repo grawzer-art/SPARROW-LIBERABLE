@@ -17,6 +17,9 @@ const SPECIES: { name: string; near: number; shadow: boolean; far?: number }[] =
   { name: "bush", near: 55, shadow: false },
   { name: "rock", near: 75, shadow: false },
   { name: "tuft", near: 34, shadow: false },
+  { name: "flowers", near: 30, shadow: false },
+  { name: "fern", near: 30, shadow: false },
+  { name: "stump", near: 36, shadow: false },
 ];
 
 function geometries(): G[] {
@@ -29,10 +32,13 @@ function geometries(): G[] {
   const bush = merge([blob(0.1, 0, 0.07, 0, 0x3f7a35), blob(0.075, 0.09, 0.05, 0.03, 0x4a8a3c), blob(0.07, -0.07, 0.05, -0.05, 0x39702f)]);
   const rock = merge([blob(0.13, 0, 0.06, 0, 0x8b8780), blob(0.08, 0.1, 0.03, 0.04, 0x7a766f)]);
   const tuft = merge([cone(0.014, 0.12, 3, -0.03, 0, 0, 0x6ea04a), cone(0.014, 0.15, 3, 0.02, 0, 0.01, 0x7bb04f), cone(0.014, 0.1, 3, 0.0, 0, -0.03, 0x628f42), cone(0.012, 0.09, 3, 0.04, 0, -0.02, 0x86b855)]);
-  return [pineTall, pineShort, oak, birch, bush, rock, tuft];
+  const flowers = merge([cyl(0.006, 0.006, 0.1, 3, -0.04, 0, 0, 0x5f9a3e), blob(0.022, -0.04, 0.11, 0, 0xf2d24a), cyl(0.006, 0.006, 0.13, 3, 0.03, 0, 0.02, 0x5f9a3e), blob(0.024, 0.03, 0.14, 0.02, 0xf4f0e6), cyl(0.006, 0.006, 0.09, 3, 0.0, 0, -0.04, 0x5f9a3e), blob(0.02, 0.0, 0.1, -0.04, 0xe0707a), cone(0.03, 0.05, 4, 0.06, 0, -0.03, 0x6ea04a)]);
+  const fern = merge([cone(0.02, 0.16, 3, -0.04, 0, 0, 0x4e8a3a).rotateZ(0.0), cone(0.02, 0.18, 3, 0.03, 0, 0.02, 0x5a9744), cone(0.018, 0.14, 3, 0.0, 0, -0.04, 0x437a33), cone(0.018, 0.12, 3, 0.05, 0, -0.03, 0x5d9a46)]);
+  const stump = merge([cyl(0.045, 0.06, 0.07, 6, 0, 0, 0, 0x6b4e34), cyl(0.04, 0.04, 0.008, 6, 0, 0.07, 0, 0xc8a56c), cyl(0.012, 0.014, 0.1, 4, 0.08, 0, 0.03, 0x7a5a3a).rotateZ(1.3)]);
+  return [pineTall, pineShort, oak, birch, bush, rock, tuft, flowers, fern, stump];
 }
 function farGeometries(): { cone: G; blob: G } {
-  return { cone: merge([cone(0.2, 0.62, 5, 0, 0.04, 0, 0x37693f)]), blob: merge([cyl(0.03, 0.04, 0.2, 4, 0, 0, 0, 0x5d4632), blob(0.2, 0, 0.36, 0, 0x55903f)]) };
+  return { cone: merge([cone(0.27, 0.78, 5, 0, 0.04, 0, 0x30603a)]), blob: merge([cyl(0.035, 0.045, 0.22, 4, 0, 0, 0, 0x5d4632), blob(0.26, 0, 0.4, 0, 0x4f8a3c)]) };
 }
 
 /**
@@ -109,7 +115,7 @@ transformed.z += cos(uTime*1.05 + instanceMatrix[3].z*1.1)*0.009*position.y;
           if (h > 1.1 || t === T.HILL) sp = r < 0.55 ? 0 : r < 0.85 ? 1 : 3;
           else sp = r < 0.34 ? 2 : r < 0.56 ? 3 : r < 0.8 ? 0 : 1;
           const big = hash2(tx, ty, k + 90) > 0.93 ? 1.45 : 1;
-          push(sp, px, py, (0.72 + hash2(tx, ty, k * 5 + 4) * 0.62) * big, 0.85 + hash2(tx, ty, k + 40) * 0.5, seed);
+          push(sp, px, py, (0.86 + hash2(tx, ty, k * 5 + 4) * 0.66) * big * (1 + Math.min(cnt, 4) * 0.04), 0.85 + hash2(tx, ty, k + 40) * 0.5, seed);
         }
         if (urb || t === T.MOUNTAIN) {
           if (t === T.MOUNTAIN && hash2(tx, ty, 8) < 0.5) push(5, tx + 0.5, ty + 0.5, 1.4 + hash2(tx, ty, 9) * 1.6, 0.7 + hash2(tx, ty, 10) * 0.8, tx * 5 + ty, 0.3);
@@ -119,6 +125,14 @@ transformed.z += cos(uTime*1.05 + instanceMatrix[3].z*1.1)*0.009*position.y;
         if (hash2(tx, ty, 21) < (t === T.GRASS ? 0.1 : 0.05)) push(4, tx + 0.15 + hash2(tx, ty, 22) * 0.7, ty + 0.15 + hash2(tx, ty, 23) * 0.7, 0.8 + hash2(tx, ty, 24) * 0.7, 0.8 + hash2(tx, ty, 25) * 0.4, tx * 3 + ty * 7);
         const rockP = t === T.HILL ? 0.16 : t === T.SAND ? 0.04 : 0.012;
         if (hash2(tx, ty, 31) < rockP) push(5, tx + 0.2 + hash2(tx, ty, 32) * 0.6, ty + 0.2 + hash2(tx, ty, 33) * 0.6, 0.6 + hash2(tx, ty, 34) * 0.9, 0.6 + hash2(tx, ty, 35) * 0.8, tx * 9 + ty * 2, 0.4);
+        // prairies fleuries (par plaques), fougères en lisière de forêt, souches là où l'on a abattu
+        if (t === T.GRASS && cnt === 0) {
+          const patch = hash2((tx / 3) | 0, (ty / 3) | 0, 99);
+          if (patch > 0.6 && hash2(tx, ty, 101) < 0.8) { const nf = 1 + ((hash2(tx, ty, 102) * 2.5) | 0); for (let k = 0; k < nf; k++) push(7, tx + hash2(tx, ty, 103 + k), ty + hash2(tx, ty, 113 + k), 0.9 + hash2(tx, ty, 123 + k) * 0.7, 0.9 + hash2(tx, ty, 133 + k) * 0.5, tx * 13 + ty * 5 + k, 0.25); }
+          let near = 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (w.inb(tx + dx, ty + dy) && w.trees[(ty + dy) * N + tx + dx] > 1) near++;
+          if (near > 0 && hash2(tx, ty, 141) < 0.4) push(8, tx + 0.2 + hash2(tx, ty, 142) * 0.6, ty + 0.2 + hash2(tx, ty, 143) * 0.6, 0.9 + hash2(tx, ty, 144) * 0.8, 0.9 + hash2(tx, ty, 145) * 0.4, tx * 17 + ty, 0.3);
+          if (w.maxTrees[i] > 0 && hash2(tx, ty, 151) < 0.35) push(9, tx + 0.2 + hash2(tx, ty, 152) * 0.6, ty + 0.2 + hash2(tx, ty, 153) * 0.6, 1, 1, tx * 19 + ty * 3, 0.1);
+        }
         if (t === T.GRASS && cnt === 0) {
           const nT = Math.floor(w.fertility[i] * 2.4 * hash2(tx, ty, 41) * (this.mobile ? 1.1 : 1.7));
           for (let k = 0; k < nT; k++) push(6, tx + hash2(tx, ty, 50 + k) , ty + hash2(tx, ty, 60 + k), 0.9 + hash2(tx, ty, 70 + k) * 0.8, 0.8 + hash2(tx, ty, 80 + k) * 0.7, tx * 11 + ty * 3 + k, 0.2);

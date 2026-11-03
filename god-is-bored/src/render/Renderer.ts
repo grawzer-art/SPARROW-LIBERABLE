@@ -60,6 +60,10 @@ export class Renderer {
   private keys = new Set<string>();
   private shakeAmp = 0;
   private lastShake = new THREE.Vector3();
+  /** Glissement fluide vers une cible (ciblage d'un village ou d'un habitant). */
+  private tween: { t: THREE.Vector3; d: number } | null = null;
+  private sph = new THREE.Spherical();
+  private off = new THREE.Vector3();
   private flameTiles: number[] = [];
   private urbanVer = -1;
   private urban = new Uint8Array(0);
@@ -97,10 +101,11 @@ export class Renderer {
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.075;
     this.controls.screenSpacePanning = false;
-    this.controls.minDistance = 4;
-    this.controls.maxDistance = 150;
-    this.controls.maxPolarAngle = Math.PI * 0.485;
-    this.controls.minPolarAngle = 0.15;
+    this.controls.minDistance = 3;
+    this.controls.maxDistance = 135;
+    this.controls.maxPolarAngle = Math.PI * 0.43;
+    this.controls.minPolarAngle = 0.2;
+    this.controls.addEventListener("start", () => { this.tween = null; });
     this.controls.target.set(0, 0.5, 0);
     this.controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
     // tactile : 1 doigt = déplacer, 2 doigts = zoom (+ pivoter) ; bureau : 1 doigt = pivoter
@@ -122,7 +127,7 @@ export class Renderer {
     sc.left = -48; sc.right = 48; sc.top = 48; sc.bottom = -48; sc.near = 10; sc.far = 140;
     sun.shadow.bias = -0.0004;
     sun.shadow.normalBias = 0.03;
-    this.scene.add(sun);
+    this.scene.add(sun, sun.target);
     const amb = new THREE.AmbientLight(0xffffff, 0.15);
     this.scene.add(amb);
     this.sky = new Sky(this.scene, sun, hemi, amb, this.three, this.mobile);
@@ -410,6 +415,27 @@ export class Renderer {
     }
   }
 
+  private shHalf = 48;
+  /**
+   * Ombres nettes de près : la caméra d'ombre du soleil suit la cible et sa taille suit le zoom (résolution ~3x meilleure en vue rapprochée) ;
+   * la position est calée sur la grille de texels pour éviter le scintillement.
+   */
+  private followShadow(): void {
+    const tg = this.controls.target, dist = this.camera.position.distanceTo(tg);
+    const half = Math.max(14, Math.min(52, dist * 0.8));
+    const sc = this.sun.shadow.camera;
+    if (Math.abs(half - this.shHalf) > this.shHalf * 0.06) {
+      this.shHalf = half;
+      sc.left = -half; sc.right = half; sc.top = half; sc.bottom = -half; sc.near = 5; sc.far = 190;
+      sc.updateProjectionMatrix();
+    }
+    const texel = (2 * this.shHalf) / this.sun.shadow.mapSize.x;
+    const sx = Math.round(tg.x / texel) * texel, sz = Math.round(tg.z / texel) * texel;
+    this.sun.target.position.set(sx, tg.y, sz);
+    this.sun.position.set(sx + this.sky.sunOffset.x, tg.y + this.sky.sunOffset.y, sz + this.sky.sunOffset.z);
+    this.sun.target.updateMatrixWorld();
+  }
+
   zoom(f: number): void {
     const off = this.camera.position.clone().sub(this.controls.target);
     const d = Math.max(this.controls.minDistance, Math.min(this.controls.maxDistance, off.length() * f));
@@ -421,16 +447,26 @@ export class Renderer {
     off.applyAxisAngle(new THREE.Vector3(0, 1, 0), a);
     this.camera.position.copy(this.controls.target).add(off);
   }
+  /** Cadre l'ensemble des villes : centre de leur emprise, distance déduite de l'étendue et du format de l'écran, ~50° d'élévation. */
   resetCamera(): void {
-    let tx = 0, tz = 0;
-    if (this.sim && this.sim.cities.length) {
-      for (const c of this.sim.cities) { tx += c.x + 0.5 - this.N / 2; tz += c.y + 0.5 - this.N / 2; }
-      tx /= this.sim.cities.length; tz /= this.sim.cities.length;
-    }
     const portrait = this.camera.aspect < 1;
-    this.controls.target.set(tx * 0.8, 0.5, tz * 0.8);
-    const dir = new THREE.Vector3(1, 0.92, 1).normalize();
-    this.camera.position.copy(this.controls.target).addScaledVector(dir, portrait ? 78 : 94);
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    if (this.sim) for (const c of this.sim.cities) {
+      const x = c.x + 0.5 - this.N / 2, z = c.y + 0.5 - this.N / 2;
+      minX = Math.min(minX, x); maxX = Math.max(maxX, x); minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z);
+    }
+    let tx = 0, tz = 0, d = portrait ? 80 : 88;
+    if (isFinite(minX)) {
+      tx = (minX + maxX) / 2; tz = (minZ + maxZ) / 2;
+      const extent = Math.max(maxX - minX, maxZ - minZ, 12) + 16;
+      const half = Math.tan((this.camera.fov * Math.PI) / 360) * Math.min(this.camera.aspect, 1.6);
+      d = Math.max(30, Math.min(100, (extent * 0.62) / half));
+    }
+    const ty = this.sim ? Math.max(0, this.sim.world.heightAt(tx + this.N / 2, tz + this.N / 2)) : 0;
+    this.tween = null;
+    this.controls.target.set(tx, ty, tz);
+    const el = (50 * Math.PI) / 180;
+    this.camera.position.set(tx + d * Math.cos(el) * 0.7071, ty + d * Math.sin(el), tz + d * Math.cos(el) * 0.7071);
   }
 
   /** Décale la scène vers le haut quand un bottom sheet masque le bas de l'écran. */
@@ -469,11 +505,24 @@ export class Renderer {
   get frameInterval(): number {
     return this.mobile ? (this.quality >= 3 ? 33 : 15) : 0;
   }
-  focusOn(x: number, y: number, dist = 26): void {
-    const t = new THREE.Vector3(x - this.N / 2, this.sim.world.heightAt(x, y), y - this.N / 2);
-    const off = this.camera.position.clone().sub(this.controls.target).setLength(dist);
-    this.controls.target.copy(t);
-    this.camera.position.copy(t).add(off);
+  /** Se rapproche en douceur d'un point : l'inclinaison est ramenée dans une plage lisible (jamais rasante, jamais verticale). */
+  focusOn(x: number, y: number, dist = 26, instant = false): void {
+    const t = new THREE.Vector3(x - this.N / 2, Math.max(0, this.sim.world.heightAt(x, y)) + 0.2, y - this.N / 2);
+    this.tween = { t, d: Math.max(this.controls.minDistance, Math.min(this.controls.maxDistance, dist)) };
+    if (instant) { this.stepTween(1); this.tween = null; }
+  }
+  private stepTween(k: number): void {
+    const tw = this.tween;
+    if (!tw) return;
+    this.off.copy(this.camera.position).sub(this.controls.target);
+    this.sph.setFromVector3(this.off);
+    this.controls.target.lerp(tw.t, k);
+    this.sph.radius += (tw.d - this.sph.radius) * k;
+    const phiGoal = Math.max(0.55, Math.min(1.0, this.sph.phi));
+    this.sph.phi += (phiGoal - this.sph.phi) * k;
+    this.off.setFromSpherical(this.sph);
+    this.camera.position.copy(this.controls.target).add(this.off);
+    if (this.controls.target.distanceToSquared(tw.t) < 0.0004 && Math.abs(this.sph.radius - tw.d) < 0.02) this.tween = null;
   }
 
   /** Fixe l'heure (0 minuit, 0.5 midi) et suspend le cycle automatique ; `null` le relance. */
@@ -503,7 +552,25 @@ export class Renderer {
     this.controls.target.x = Math.max(-lim, Math.min(lim, this.controls.target.x));
     this.controls.target.z = Math.max(-lim, Math.min(lim, this.controls.target.z));
     this.camera.position.sub(this.lastShake);
+    if (this.tween) this.stepTween(Math.min(1, dt * 5));
+    // la cible suit le relief : on survole les collines sans que la vue plonge dans le sol
+    {
+      const tg = this.controls.target;
+      const th = Math.max(0, w.heightAt(tg.x + this.N / 2, tg.z + this.N / 2)) + 0.2;
+      if (!this.tween) { const dy = (th - tg.y) * Math.min(1, dt * 4); tg.y += dy; this.camera.position.y += dy; }
+      // inclinaison maximale selon le zoom : de près on peut raser le sol, de loin on garde la vue d'ensemble (peu de ciel)
+      const dd = this.camera.position.distanceTo(tg);
+      const k = Math.max(0, Math.min(1, (dd - 6) / 40));
+      this.controls.maxPolarAngle = Math.PI * (0.43 - 0.1 * k * k * (3 - 2 * k));
+    }
     this.controls.update();
+    if (!this.mobile) this.followShadow();
+    {
+      // jamais sous le terrain
+      const cp = this.camera.position;
+      const gh = Math.max(0, w.heightAt(cp.x + this.N / 2, cp.z + this.N / 2)) + 0.45;
+      if (cp.y < gh) cp.y = gh;
+    }
     this.lastShake.set(0, 0, 0);
     if (this.shakeAmp > 0.003) {
       this.lastShake.set((Math.random() - 0.5) * this.shakeAmp, (Math.random() - 0.5) * this.shakeAmp, (Math.random() - 0.5) * this.shakeAmp);
@@ -546,7 +613,7 @@ export class Renderer {
 
     // eau animée
     this.sky.update(dt);
-    if (this.mobile && this.time - this.shadowClock > 0.5) { this.shadowClock = this.time; this.three.shadowMap.needsUpdate = true; }
+    if (this.mobile && this.time - this.shadowClock > 0.5) { this.shadowClock = this.time; this.followShadow(); this.three.shadowMap.needsUpdate = true; }
 
     // effets
     while (sim.fx.length) this.fx.handle(sim.fx.shift()!, sim, this);

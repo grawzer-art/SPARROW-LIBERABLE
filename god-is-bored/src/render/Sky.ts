@@ -10,6 +10,8 @@ export class Sky {
   readonly uniforms = { uTime: { value: 0 }, uNight: { value: 0 } };
   time = 0.4; // 0 minuit · 0.25 aube · 0.5 midi · 0.75 crépuscule
   auto = true;
+  /** Décalage soleil → cible (le rendu y recentre la caméra d'ombre). */
+  readonly sunOffset = new THREE.Vector3(-28, 52, 22);
   night = 0;
   private fog: THREE.FogExp2;
   private c1 = new THREE.Color();
@@ -47,7 +49,8 @@ export class Sky {
     const az = (t - 0.5) * Math.PI * 1.1 - 0.7;
     const el = Math.max(0.2, elev * 1.0 + 0.1) * 1.0 + 0.12;
     const L = 80;
-    this.sun.position.set(Math.sin(az) * L * Math.cos(el * 0.9), L * Math.sin(Math.min(1.35, el * 1.15)), Math.cos(az) * L * Math.cos(el * 0.9) + 8);
+    this.sunOffset.set(Math.sin(az) * L * Math.cos(el * 0.9), L * Math.sin(Math.min(1.35, el * 1.15)), Math.cos(az) * L * Math.cos(el * 0.9) + 8);
+    this.sun.position.copy(this.sunOffset);
     // couleur du soleil : blanc chaud le jour, orange à l'horizon, bleu lunaire la nuit
     const warm = 1 - Math.min(1, Math.max(0, elev - 0.05) / 0.45);
     lerp3(0xfff0d8, 0xff9a55, warm * (1 - this.night), this.sun.color);

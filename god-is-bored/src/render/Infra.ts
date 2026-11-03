@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { findPath } from "../sim/path";
-import { streetCount, streetPolyline } from "../sim/Layout";
+import { streetCount, streetInfo, streetPolyline } from "../sim/Layout";
+import { hash2 } from "../sim/rng";
 import type { SimulationEngine } from "../sim/SimulationEngine";
 import type { City } from "../sim/types";
 import { T } from "../sim/World";
@@ -132,6 +133,26 @@ export class Infra {
       for (let k = 0; k < 10; k++) {
         const a0 = (k / 10) * Math.PI * 2, a1 = ((k + 1) / 10) * Math.PI * 2;
         paths.push({ ax: cx + Math.cos(a0) * 0.85, ay: cy + Math.sin(a0) * 0.85, bx: cx + Math.cos(a1) * 0.85, by: cy + Math.sin(a1) * 0.85, w: 0.5, col: [0x9a7f58, 0xc4b88e, 0xa39c8e, 0x7a736a, 0x6a6e73, 0xbcd0dc][era] });
+      }
+    }
+    // sentiers : chaque bâtiment réel est relié à la rue ou au foyer (lignes de désir, légèrement sinueuses)
+    {
+      const trailCol = [0x9a7f58, 0xb3a47c, 0x8c867b, 0x6f695f];
+      let nTrail = 0;
+      for (const b of sim.buildings) {
+        if (b.civ < 0 || b.progress < 1 || b.hp <= 0 || b.type === "walls" || b.era > 3) continue;
+        const city = sim.cityById.get(b.city);
+        if (!city) continue;
+        const bx = b.x + 0.5, by = b.y + 0.5;
+        let tx = city.x + 0.5, ty = city.y + 0.5;
+        if (b.type === "house" || b.type === "temple" || b.type === "market") { const info = streetInfo(city, bx, by); tx = info.px; ty = info.py; }
+        const L = Math.hypot(tx - bx, ty - by);
+        if (L < 0.45) continue;
+        const nx = -(ty - by) / L, ny = (tx - bx) / L, off = (hash2(b.id, 3, 3) - 0.5) * 0.55 * Math.min(1, L / 3);
+        const mx = (bx + tx) / 2 + nx * off, my = (by + ty) / 2 + ny * off;
+        const col = trailCol[b.era] ?? trailCol[3];
+        paths.push({ ax: bx, ay: by, bx: mx, by: my, w: 0.1, col }, { ax: mx, ay: my, bx: tx, by: ty, w: 0.1, col });
+        if (++nTrail > 260) break;
       }
     }
     for (const e of edges) {

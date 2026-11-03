@@ -35,8 +35,24 @@ export class BuildingLayer {
     // fenêtres et bandes lumineuses allumées la nuit (couleurs « lumière » des modèles : jaune chaud, cyan)
     this.bodyMat.onBeforeCompile = (sh) => {
       sh.uniforms.uNight = sky.uniforms.uNight;
+      // grain de matière (bois, pierre, enduit) : bruit fin en espace monde, estompé avec la distance (pas de moiré au loin)
+      sh.vertexShader = sh.vertexShader
+        .replace("#include <common>", "#include <common>\nvarying vec3 vWP;")
+        .replace("#include <begin_vertex>", `#include <begin_vertex>
+#ifdef USE_INSTANCING
+vWP = (instanceMatrix * vec4(transformed, 1.0)).xyz;
+#else
+vWP = transformed;
+#endif`);
       sh.fragmentShader = sh.fragmentShader
-        .replace("#include <common>", "#include <common>\nuniform float uNight;")
+        .replace("#include <common>", "#include <common>\nuniform float uNight;\nvarying vec3 vWP;")
+        .replace("#include <color_fragment>", `#include <color_fragment>
+{
+  float gr = fract(sin(dot(floor(vWP * vec3(30.0, 60.0, 30.0)), vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+  float st = fract(vWP.y * 11.0);
+  float fd = smoothstep(26.0, 7.0, length(vViewPosition));
+  diffuseColor.rgb *= 1.0 + fd * ((gr - 0.5) * 0.16 - 0.035 * smoothstep(0.85, 1.0, st));
+}`)
         .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
 #ifdef USE_COLOR
 float gy = step(0.82, vColor.r) * step(0.6, vColor.g) * step(vColor.b, 0.5);
