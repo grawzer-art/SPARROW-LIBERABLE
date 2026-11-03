@@ -6,7 +6,7 @@ import type { Army, Citizen, City, Civ, War } from "./types";
 const TPY = TICKS_PER_YEAR;
 
 export function techAttack(tech: number): number {
-  return 1 + (tech >= 3 ? 0.25 : 0) + (tech >= 5 ? 0.25 : 0) + (tech >= 7 ? 0.4 : 0) + tech * 0.02;
+  return 1 + (tech >= 3 ? 0.25 : 0) + (tech >= 5 ? 0.25 : 0) + (tech >= 7 ? 0.4 : 0) + (tech >= 10 ? 0.3 : 0) + tech * 0.02;
 }
 
 interface BattleAcc { lostA: number; lostB: number; x: number; y: number; last: number; a: number; b: number; w: number; }
@@ -30,7 +30,7 @@ export class WarSystem {
   soldierPower(sim: SimulationEngine, c: Citizen, a: Army, civ: Civ, defending: boolean): number {
     const barracks = Math.min(3, sim.econ.countBuilt(sim, civ.id, "barracks"));
     return techAttack(civ.tech) * (0.6 + 0.4 * (c.hp / 100)) * (0.8 + 0.4 * c.courage) * (0.5 + a.morale / 200)
-      * (defending ? 1.15 : 1) * (1 + 0.1 * barracks) * (civ.blessed > 0 ? 1.1 : 1);
+      * (defending ? 1.15 : 1) * (1 + 0.1 * barracks) * civ.mods.army * (civ.blessed > 0 ? 1.1 : 1);
   }
 
   // ------------------------------------------------------------ mobilisation
@@ -319,7 +319,7 @@ export class WarSystem {
         if (c.civ === city.civ && c.job === "soldier" && c.army < 0) garrison.push(c);
       });
       const castle = sim.buildings.some((b) => b.city === city.id && b.type === "castle" && b.progress >= 1);
-      const wall = castle ? 1.6 : 1.15;
+      const wall = (castle ? 1.6 : 1.15) + (city.walls >= 0 ? 0.2 + 0.05 * city.walls : 0);
       if (garrison.length) {
         let pg = 0;
         const fake: Army = { ...a, morale: 70 };

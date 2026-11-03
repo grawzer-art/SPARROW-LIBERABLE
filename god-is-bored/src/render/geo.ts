@@ -27,8 +27,39 @@ export const cyl = (rt: number, rb: number, h: number, seg: number, x: number, y
   g.translate(x, y + h / 2, z);
   return colored(g, color);
 };
+/** Sphère très légère (icosaèdre) pour les habitants : 60 sommets au lieu de ~180. */
+export const blob = (r: number, x: number, y: number, z: number, color: number): THREE.BufferGeometry => {
+  const g = new THREE.IcosahedronGeometry(r, 0);
+  g.translate(x, y, z);
+  return colored(g, color);
+};
 export const ball = (r: number, x: number, y: number, z: number, color: number, w = 8, h = 6): THREE.BufferGeometry => {
   const g = new THREE.SphereGeometry(r, w, h);
+  g.translate(x, y, z);
+  return colored(g, color);
+};
+/** Prisme triangulaire (toit à deux pans, faîte le long de l'axe z). */
+export const prism = (w: number, h: number, d: number, x: number, y: number, z: number, color: number, ry = 0): THREE.BufferGeometry => {
+  const hw = w / 2, hd = d / 2;
+  const v = [
+    -hw, 0, -hd, hw, 0, -hd, 0, h, -hd, // pignon arrière
+    -hw, 0, hd, 0, h, hd, hw, 0, hd, // pignon avant
+    -hw, 0, -hd, 0, h, -hd, 0, h, hd, -hw, 0, -hd, 0, h, hd, -hw, 0, hd, // pan gauche
+    hw, 0, -hd, hw, 0, hd, 0, h, hd, hw, 0, -hd, 0, h, hd, 0, h, -hd, // pan droit
+    -hw, 0, -hd, -hw, 0, hd, hw, 0, hd, -hw, 0, -hd, hw, 0, hd, hw, 0, -hd, // dessous
+  ];
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(v, 3));
+  g.setAttribute("uv", new THREE.Float32BufferAttribute(new Float32Array((v.length / 3) * 2), 2));
+  g.computeVertexNormals();
+  if (ry) g.rotateY(ry);
+  g.translate(x, y, z);
+  return colored(g, color);
+};
+/** Demi-sphère (dôme). */
+export const dome = (r: number, x: number, y: number, z: number, color: number, sy = 1): THREE.BufferGeometry => {
+  const g = new THREE.SphereGeometry(r, 10, 5, 0, Math.PI * 2, 0, Math.PI / 2);
+  g.scale(1, sy, 1);
   g.translate(x, y, z);
   return colored(g, color);
 };

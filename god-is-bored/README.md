@@ -27,6 +27,29 @@ Sur téléphone (≤ 760 px, ou écran tactile ≤ 940 px) l'interface est enti�
 - **Performance Safari iOS** : résolution plafonnée à 2×, ombres 1024 px recalculées 2×/s, eau et étiquettes mises à jour à fréquence réduite, rendu plafonné à 60 i/s (ProMotion 120 Hz), nombre de particules réduit, et **qualité adaptative** : si les images dépassent ~24 ms, la résolution baisse par paliers (1.5×, 1.2×, 1×), puis les ombres, puis le rendu passe à 30 i/s ; la qualité remonte si l'appareil respire.
 - Captures : `docs/mobile/`.
 
+## Évolution visuelle des civilisations (six époques)
+
+L'époque d'une civilisation (`civ.era`, 0..5) est un **état réel de la simulation**, jamais une fonction de l'année. Elle exige la technologie découverte, une population minimale, une stabilité minimale et de l'or (dépensé à l'entrée) : `src/sim/TechTree.ts`.
+
+| Époque | Technologies | Conditions (pop · stabilité · or) | Ce qui change dans le monde |
+|---|---|---|---|
+| 1 Préhistoire | Âge du caillou, Agriculture | départ | huttes (4 styles), tentes, champs, cercle de pierres, feux de camp, lances de pierre, fourrures |
+| 2 Antiquité | Maçonnerie, Métallurgie, Écriture | 22 · 25 · 15 | maisons de pierre, temples à colonnes, marchés, routes pavées, **remparts**, toges, boucliers de bronze |
+| 3 Moyen Âge | Fer, Médecine, Poudre noire | 45 · 30 · 50 | maisons à colombages, châteaux, moulins, forges, cathédrales, chevaliers, cavalerie, canons |
+| 4 Ère industrielle | Vapeur, Électricité | 90 · 35 · 140 | maisons de brique, usines et cheminées (fumée), gares, **voies ferrées et trains**, éclairage public, fusils |
+| 5 Ère moderne | Moteur & béton | 150 · 35 · 300 | immeubles, centrales, **réseau électrique (pylônes, câbles)**, routes asphaltées, voitures, chars |
+| 6 Ère futuriste | Intelligence artificielle | 220 · 40 · 600 | tours et dômes, laboratoires, **drones**, fusils à énergie, rubans lumineux, véhicules en sustentation |
+
+- **Technologies / bâtiments** : `civ.techs` liste les technologies réellement découvertes ; les bâtiments *disponibles* en découlent (`isUnlocked`) ; les bâtiments *construits* sont dans `sim.buildings`, chacun avec sa propre `era` de construction ; `src/render/*` n'est qu'une représentation de cet état.
+- **Modernisation progressive** : un bâtiment passe à l'époque suivante un cran à la fois (chantier d'échafaudage, il reste debout et utilisable), payé en bois/pierre (ou en or), par des bâtisseurs. Certains bâtiments « historiques » ne sont jamais modernisés : une ville mélange plusieurs siècles.
+- **Effets réels** : capacité des maisons selon l'époque, marchés/gares/usines/centrales (revenus, ressources), moulins (récoltes), forges (armées), laboratoires (recherche), remparts (défense et points de vie des villes), technologie militaire.
+- **Régression** : perte de technologie (effondrement) ou population/stabilité durablement effondrées font reculer l'époque ; les bâtiments avancés restent mais on n'en construit plus.
+- **Identité** : chaque civilisation a un style architectural (0..3) qui change la forme des maisons (jusqu'à l'ère médiévale), des halls, temples et châteaux, ainsi que la teinte des murs, à niveau technologique identique.
+- **Habitants et armées** : vêtements, coiffes, outils et équipement (6 jeux de géométries), accessoires d'armée par époque (étendard, chariot, cavalerie, canon, char, drone). Chaque habitant adopte la mode de l'époque avec quelques années de décalage.
+- **Infrastructures** : l'époque d'une route = min(époque de la civilisation, infrastructures des deux villes reliées). Terre → pavés → voie ferrée → bitume → ruban énergétique. Les trains ne circulent qu'entre deux villes possédant chacune une gare ; voitures dès l'ère moderne, drones à l'ère futuriste.
+- **Limites** : les routes, trains, voitures, drones, pylônes, lampadaires, fumées et le sol urbanisé sont une représentation **visuelle** liée à l'état réel (époque, gares, laboratoires...) : ils n'ont pas d'effet de jeu propre (pas de gain de vitesse sur les routes, pas de transport de marchandises). La population mondiale est plafonnée à ~2 500 habitants pour les performances.
+- Captures : `docs/evolution/` (montage des six époques, deux époques à l'écran, Antiquité fortifiée, armée futuriste, iPhone).
+
 ## Commandes en jeu
 
 | Action | Commande |
@@ -54,7 +77,7 @@ src/sim/      Simulation pure (aucune dépendance à Three.js ni au DOM — vér
   SaveManager.ts         sérialisation JSON / LocalStorage
 src/render/   Three.js : Renderer (terrain low-poly, instancing), Fx (particules, éclairs, météo), geo (modèles procéduraux)
 src/ui/       UI DOM : barre du haut, pouvoirs, panneau civilisation, chroniques, notifications, stats, menu
-tests/        Vitest (34 tests)
+tests/        Vitest (48 tests)
 ```
 
 Le rendu ne fait que lire l'état de la simulation. Les meshes ne sont jamais source de vérité.
@@ -87,7 +110,7 @@ Le temps est découplé : `advance(dt)` accumule `dt × vitesse` et exécute aut
 
 ## Tests
 
-`npm test` — 34 tests Vitest : génération reproductible, 3 civilisations de départ, croissance, mortalité (vieillesse, famine), consommation de ressources, production, construction, découvertes/villes, déclaration de guerre, pertes militaires comptabilisées, issue des combats non aléatoire (la technologie fait la différence), changement de territoire, effets des 7 pouvoirs, vitesses ×1/×3/×10 et pause, équivalence tick/advance, sauvegarde/chargement, simulations de 400 ans sur 3 seeds avec contrôle d'invariants (population/ressources non négatives, positions valides, bâtiments cohérents, armées sans soldats fantômes, civilisations sans adultes), catastrophes à répétition, séparation simulation/rendu.
+`npm test` — 48 tests Vitest (34 de simulation + 14 d'évolution : technologies/époques, bâtiments modernisés sans disparition, modèles distincts par époque et par style, habitants et armées, budget de sommets, sauvegarde et migration d'anciennes sauvegardes, évolution organique) : génération reproductible, 3 civilisations de départ, croissance, mortalité (vieillesse, famine), consommation de ressources, production, construction, découvertes/villes, déclaration de guerre, pertes militaires comptabilisées, issue des combats non aléatoire (la technologie fait la différence), changement de territoire, effets des 7 pouvoirs, vitesses ×1/×3/×10 et pause, équivalence tick/advance, sauvegarde/chargement, simulations de 400 ans sur 3 seeds avec contrôle d'invariants (population/ressources non négatives, positions valides, bâtiments cohérents, armées sans soldats fantômes, civilisations sans adultes), catastrophes à répétition, séparation simulation/rendu.
 
 ## Pistes d'amélioration
 

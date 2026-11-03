@@ -1,4 +1,5 @@
 import type { PersonalityId, Religion } from "./types";
+import { TECHS } from "./TechTree";
 import type { RNG } from "./rng";
 
 export const CIV_COLORS = [0xd1495b, 0xedae49, 0x7b5ea7, 0x2fa59a, 0xe8743b, 0x4f7cac, 0xb5c334, 0xc65d9b];
@@ -104,19 +105,8 @@ export const DOGMA_LABEL: Record<string, string> = {
   chaos: "Dogme : personne ne se souvient du dogme",
 };
 
-export const TECH_NAMES = [
-  "Âge du caillou", "Agriculture", "La Roue", "Métallurgie", "Écriture & Paperasse", "Fer & Chevalerie", "Médecine douteuse", "Poudre noire",
-];
-export const TECH_EFFECT = [
-  "Aucun avantage notable.",
-  "Rendement agricole +20 %. Temples débloqués.",
-  "Bois +20 %. Marche plus vite, ce qui n'est pas forcément une qualité.",
-  "Soldats +25 %. Casernes débloquées.",
-  "Or et stabilité en hausse. Les rancunes sont désormais archivées.",
-  "Soldats +25 %. Châteaux débloqués.",
-  "Peste moins meurtrière, saignées plus fréquentes.",
-  "Soldats +40 %. Les voisins aussi, hélas.",
-];
+export const TECH_NAMES = TECHS.map((t) => t.name);
+export const TECH_EFFECT = TECHS.map((t) => t.effect);
 
 export const PROPHECIES: { id: string; name: string; text: string }[] = [
   { id: "peace", name: "Aimez-vous les uns les autres", text: "Paix et pardon entre voisins." },

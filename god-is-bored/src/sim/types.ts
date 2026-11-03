@@ -7,7 +7,11 @@ export type PersonalityId =
   | "pacifist" | "expansionist" | "fanatic" | "opportunist" | "arrogant" | "paranoid" | "stupid";
 
 export type BuildingType =
-  | "hall" | "house" | "farm" | "lumber" | "quarry" | "barracks" | "temple" | "castle";
+  | "hall" | "house" | "farm" | "lumber" | "quarry" | "barracks" | "temple" | "castle"
+  | "market" | "walls" | "mill" | "forge" | "factory" | "station" | "power" | "lab";
+
+/** Modificateurs économiques/militaires issus des bâtiments réellement construits. */
+export interface CivMods { farm: number; wood: number; stone: number; gold: number; tech: number; army: number; }
 
 export interface Citizen {
   id: number;
@@ -68,6 +72,12 @@ export interface Civ {
   leader: Leader;
   culture: number;
   tech: number; techProg: number;
+  techs: string[]; // technologies réellement découvertes (ids, dans l'ordre)
+  era: number; // époque visuelle/civilisationnelle 0..5 (dépend de la tech, de la population, de la stabilité et de l'or)
+  eraSince: number; // année d'entrée dans l'époque actuelle
+  eraLow: number; // années consécutives de déclin (régression)
+  style: number; // identité architecturale 0..3 (indépendante du niveau)
+  mods: CivMods;
   food: number; wood: number; stone: number; gold: number;
   stability: number;
   lowStab: number;
@@ -95,12 +105,16 @@ export interface City {
   id: number; civ: number; name: string; x: number; y: number;
   pop: number; cap: number; hp: number; maxHp: number; foundedYear: number; siege: number;
   hasHall: boolean;
+  walls: number; // époque des remparts (-1 : aucun)
 }
 
 export interface Building {
   id: number; type: BuildingType; civ: number; city: number;
   x: number; y: number; hp: number; maxHp: number; progress: number; workers: number;
   ruin: number; // >0 : années restantes en ruine
+  era: number; // époque de construction (un bâtiment garde son style historique)
+  up: number; // progression d'une modernisation (-1 : aucune)
+  upTo: number; // époque visée
 }
 
 export type ArmyState = "muster" | "march" | "siege" | "retreat";

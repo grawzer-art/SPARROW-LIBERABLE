@@ -64,7 +64,7 @@ export class Fx {
     if (Math.random() < 0.5) this.emit(x, y + 0.1, z, (Math.random() - 0.5) * 2, 1 + Math.random(), (Math.random() - 0.5) * 2, 0.35, 0.04, 0xffd36b, 4);
   }
   smoke(x: number, y: number, z: number): void {
-    this.emit(x, y, z, (Math.random() - 0.5) * 0.15, 0.6, (Math.random() - 0.5) * 0.15, 1.8, 0.16, 0x55504c, -0.1, 0.22);
+    this.emit(x, y, z, (Math.random() - 0.5) * 0.12, 0.5, (Math.random() - 0.5) * 0.12, 1.5, 0.06, 0x8c8c8c, -0.05, 0.1);
   }
 
   private burst(x: number, y: number, z: number, count: number, color: number, speed: number, life: number, size: number, grav = 6, up = 1): void {

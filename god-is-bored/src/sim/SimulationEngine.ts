@@ -17,7 +17,7 @@ import { EventSystem } from "./EventSystem";
 export interface Stats {
   births: number; deaths: number; warDeaths: number; plagueDeaths: number; famineDeaths: number;
   godDeaths: number; oldAgeDeaths: number; warsStarted: number; citiesFounded: number; peakPop: number;
-  buildingsBuilt: number; buildingsLost: number;
+  buildingsBuilt: number; buildingsLost: number; upgrades: number;
 }
 
 /**
@@ -49,7 +49,7 @@ export class SimulationEngine {
   lastTribeTick = 0;
   stats: Stats = {
     births: 0, deaths: 0, warDeaths: 0, plagueDeaths: 0, famineDeaths: 0, godDeaths: 0, oldAgeDeaths: 0,
-    warsStarted: 0, citiesFounded: 0, peakPop: 0, buildingsBuilt: 0, buildingsLost: 0,
+    warsStarted: 0, citiesFounded: 0, peakPop: 0, buildingsBuilt: 0, buildingsLost: 0, upgrades: 0,
   };
 
   // --- non sauvegardé ---
@@ -65,6 +65,20 @@ export class SimulationEngine {
   armyById = new Map<number, Army>();
   warById = new Map<number, War>();
   listeners: ((e: ChronicleEntry) => void)[] = [];
+  private bIdx = new Map<string, Building[]>();
+  /** Index (civilisation, type) des bâtiments, reconstruit à chaque tick par CitizenSystem. */
+  bOf(civ: number, type: Building["type"]): Building[] {
+    return this.bIdx.get(`${civ}:${type}`) ?? [];
+  }
+  rebuildBuildingIndex(): void {
+    this.bIdx.clear();
+    for (const b of this.buildings) {
+      if (b.hp < 0) continue;
+      const k = `${b.civ}:${b.type}`;
+      const l = this.bIdx.get(k);
+      if (l) l.push(b); else this.bIdx.set(k, [b]);
+    }
+  }
 
   citizenSys = new CitizenSystem();
   civSys = new CivilizationSystem();
@@ -197,11 +211,11 @@ export class SimulationEngine {
     if (any) this.citizens = this.citizens.filter((c) => !c.dead);
   }
 
-  addBuilding(type: Building["type"], civ: number, cityId: number, x: number, y: number, built = false): Building {
+  addBuilding(type: Building["type"], civ: number, cityId: number, x: number, y: number, built = false, era = 0): Building {
     const info = this.econ.cost(type);
     const b: Building = {
       id: this.newId(), type, civ, city: cityId, x, y,
-      hp: built ? info.hp : 1, maxHp: info.hp, progress: built ? 1 : 0, workers: 0, ruin: 0,
+      hp: built ? info.hp : 1, maxHp: info.hp, progress: built ? 1 : 0, workers: 0, ruin: 0, era, up: -1, upTo: era,
     };
     this.buildings.push(b);
     this.buildingById.set(b.id, b);
@@ -222,6 +236,10 @@ export class SimulationEngine {
     if (b.type === "hall") {
       const city = this.cityById.get(b.city);
       if (city) city.hasHall = false;
+    }
+    if (b.type === "walls") {
+      const city = this.cityById.get(b.city);
+      if (city && city.walls >= 0) { city.walls = -1; city.maxHp = Math.max(200, city.maxHp - 150); city.hp = Math.min(city.hp, city.maxHp); }
     }
   }
 

@@ -4,7 +4,10 @@ import { hash2 } from "../sim/rng";
 import { findPath } from "../sim/path";
 import type { SimulationEngine } from "../sim/SimulationEngine";
 import { T } from "../sim/World";
-import { buildingGeometries, bodyGeometry, headGeometry, spearGeometry, treeGeometry, type BuildingGeo } from "./geo";
+import { treeGeometry } from "./geo";
+import { BuildingLayer } from "./BuildingLayer";
+import { CitizenLayer } from "./CitizenLayer";
+import { Infra } from "./Infra";
 import { Fx } from "./Fx";
 
 const SOIL = new THREE.Color(0x6b5440), SOIL_DARK = new THREE.Color(0x3d2f25);
@@ -30,14 +33,10 @@ export class Renderer {
   private water!: THREE.Mesh;
   private trees!: THREE.InstancedMesh;
   private flames!: THREE.InstancedMesh;
-  private bldMeshes: Record<string, { body: THREE.InstancedMesh; accent: THREE.InstancedMesh | null }> = {};
-  private bodies!: THREE.InstancedMesh;
-  private heads!: THREE.InstancedMesh;
-  private spears!: THREE.InstancedMesh;
-  private poles!: THREE.InstancedMesh;
-  private flags!: THREE.InstancedMesh;
+  private bld!: BuildingLayer;
+  private cit!: CitizenLayer;
+  private infra!: Infra;
   private borders!: THREE.Mesh;
-  private roads!: THREE.Mesh;
   private ringTarget: THREE.Mesh;
   private ringTargetFill: THREE.Mesh;
   private ringSelect: THREE.Mesh;
@@ -45,12 +44,12 @@ export class Renderer {
   private labels = new Map<number, HTMLDivElement>();
   private lastVer = { terrain: -1, owner: -1, fire: -1, tree: -1 };
   private lastSlow = 0;
-  private lastRoadSig = "";
   private keys = new Set<string>();
   private shakeAmp = 0;
   private lastShake = new THREE.Vector3();
   private flameTiles: number[] = [];
-  private bgeo = buildingGeometries();
+  private urbanVer = -1;
+  private urban = new Uint8Array(0);
   selection: { kind: "none" | "civ" | "citizen" | "city" | "building"; id: number } = { kind: "none", id: -1 };
 
   readonly mobile: boolean;
@@ -151,21 +150,16 @@ export class Renderer {
   setSim(sim: SimulationEngine): void {
     this.sim = sim;
     this.N = sim.world.size;
-    for (const c of [this.terrain, this.skirt, this.water, this.trees, this.flames, this.bodies, this.heads, this.spears, this.poles, this.flags, this.borders, this.roads]) {
+    for (const c of [this.terrain, this.skirt, this.water, this.trees, this.flames, this.borders]) {
       if (c) { this.scene.remove(c); c.geometry.dispose(); }
     }
-    for (const k of Object.keys(this.bldMeshes)) {
-      const b = this.bldMeshes[k];
-      this.scene.remove(b.body); if (b.accent) this.scene.remove(b.accent);
-    }
-    this.bldMeshes = {};
+    this.bld?.clear(); this.cit?.clear(); this.infra?.clear();
     for (const el of this.labels.values()) el.remove();
     this.labels.clear();
     this.fx.clear();
     this.weatherObjs.clear();
     this.buildStatic();
     this.lastVer = { terrain: -1, owner: -1, fire: -1, tree: -1 };
-    this.lastRoadSig = "";
     this.selection = { kind: "none", id: -1 };
     this.ringSelect.visible = false;
   }
@@ -203,34 +197,14 @@ export class Renderer {
     this.flames = new THREE.InstancedMesh(fg, new THREE.MeshBasicMaterial({ color: 0xff8a2a }), 900);
     this.flames.frustumCulled = false; this.flames.count = 0;
     this.scene.add(this.flames);
-    // bâtiments
-    const stdMat = () => new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95 });
-    for (const [type, g] of Object.entries(this.bgeo) as [string, BuildingGeo][]) {
-      const body = new THREE.InstancedMesh(g.body, stdMat(), 500);
-      body.castShadow = true; body.receiveShadow = true; body.frustumCulled = false; body.count = 0;
-      const accent = g.accent ? new THREE.InstancedMesh(g.accent, stdMat(), 500) : null;
-      if (accent) { accent.castShadow = true; accent.frustumCulled = false; accent.count = 0; this.scene.add(accent); }
-      this.scene.add(body);
-      this.bldMeshes[type] = { body, accent };
-    }
-    // habitants
-    const cm = () => new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9 });
-    this.bodies = new THREE.InstancedMesh(bodyGeometry(), cm(), 3500);
-    this.heads = new THREE.InstancedMesh(headGeometry(), cm(), 3500);
-    this.spears = new THREE.InstancedMesh(spearGeometry(), cm(), 1500);
-    for (const m of [this.bodies, this.heads, this.spears]) { m.frustumCulled = false; m.count = 0; this.scene.add(m); }
-    // bannières d'armée
-    const pg = new THREE.CylinderGeometry(0.015, 0.015, 0.9, 4); pg.translate(0, 0.45, 0);
-    this.poles = new THREE.InstancedMesh(pg, new THREE.MeshStandardMaterial({ color: 0x6b4a2e }), 64);
-    const flg = new THREE.BoxGeometry(0.4, 0.24, 0.02); flg.translate(0.2, 0.78, 0);
-    this.flags = new THREE.InstancedMesh(flg, new THREE.MeshStandardMaterial({ roughness: 0.8 }), 64);
-    for (const m of [this.poles, this.flags]) { m.frustumCulled = false; m.count = 0; this.scene.add(m); }
+    // bâtiments, habitants, infrastructures : couches modulaires (géométries réutilisées, instanciation)
+    this.bld = new BuildingLayer(this.scene);
+    this.cit = new CitizenLayer(this.scene, this.mobile);
+    this.infra = new Infra(this.scene, this.mobile);
     // frontières & routes
     this.borders = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.9, depthWrite: false }));
     this.borders.renderOrder = 5; this.borders.frustumCulled = false;
-    this.roads = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshStandardMaterial({ color: 0xb69b70, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
-    this.roads.receiveShadow = true; this.roads.frustumCulled = false;
-    this.scene.add(this.borders, this.roads);
+    this.scene.add(this.borders);
   }
 
   // ------------------------------------------------------------------ terrain
@@ -248,6 +222,11 @@ export class Renderer {
       case T.MOUNTAIN: out.setHex(0x938f8b).lerp(this.tmpColor.setHex(0xf2f2f4), Math.max(0, Math.min(1, (h - 2.9) / 0.6))); break;
       default: out.setHex(0x66b3da);
     }
+    if (t !== T.WATER && this.urban[i] > 0) {
+      // le sol se transforme autour des bâtiments : terre battue, pierre, pavés, suie, bitume, dalles lumineuses
+      const e = (this.urban[i] & 7) - 1, strong = (this.urban[i] & 8) !== 0;
+      out.lerp(this.tmpColor.setHex([0x8d7650, 0xc8bd9c, 0x9a948a, 0x5c5a58, 0x6e7176, 0xc3d9e6][e]), strong ? 0.6 : 0.3);
+    }
     if (t !== T.WATER) {
       if (w.scorch[i] > 0) out.lerp(this.tmpColor.setHex(0x3a332d), Math.min(0.9, w.scorch[i] * 0.9));
       if (w.fire[i] > 0) out.lerp(this.tmpColor.setHex(0x6a2d10), 0.55);
@@ -260,7 +239,24 @@ export class Renderer {
     out.r = Math.max(0, out.r + n); out.g = Math.max(0, out.g + n); out.b = Math.max(0, out.b + n);
   }
 
+  private computeUrban(): void {
+    const w = this.sim.world, N = this.N;
+    if (this.urban.length !== N * N) this.urban = new Uint8Array(N * N);
+    this.urban.fill(0);
+    for (const b of this.sim.buildings) {
+      if (b.hp < 0 || b.progress < 1 || b.civ < 0 || b.type === "farm") continue;
+      const code = b.era + 1;
+      for (const [dx, dy, strong] of [[0, 0, 8], [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0]] as [number, number, number][]) {
+        const x = b.x + dx, y = b.y + dy;
+        if (!w.inb(x, y)) continue;
+        const i = y * N + x, cur = this.urban[i];
+        if (cur === 0 || (cur & 7) < code || (strong && (cur & 8) === 0 && (cur & 7) <= code)) this.urban[i] = code | strong;
+      }
+    }
+  }
+
   private rebuildTerrain(): void {
+    this.computeUrban();
     const w = this.sim.world, N = this.N, m = N + 1;
     const pos = this.terrain.geometry.attributes.position as THREE.BufferAttribute;
     const col = this.terrain.geometry.attributes.color as THREE.BufferAttribute;
@@ -387,145 +383,16 @@ export class Renderer {
     g.computeBoundingSphere();
   }
 
-  private rebuildRoads(): void {
-    const sim = this.sim, N = this.N, w = sim.world;
-    const pos: number[] = [];
-    const seen: Record<number, typeof sim.cities> = {};
-    for (const c of sim.cities) (seen[c.civ] ??= []).push(c);
-    const seg = (p: number[]) => {
-      const pts: [number, number][] = p.length >= 2 ? [] : [];
-      for (let i = 0; i < p.length; i += 2) pts.push([p[i], p[i + 1]]);
-      for (let i = 0; i + 1 < pts.length; i++) {
-        const [ax, ay] = pts[i], [bx, by] = pts[i + 1];
-        const dx = bx - ax, dz = by - ay, L = Math.hypot(dx, dz) || 1;
-        const nx = (-dz / L) * 0.07, nz = (dx / L) * 0.07;
-        const h = (x: number, y: number) => w.heightAt(x, y) + 0.04;
-        const A = [ax + nx, h(ax, ay), ay + nz], B = [ax - nx, h(ax, ay), ay - nz], C = [bx + nx, h(bx, by), by + nz], D = [bx - nx, h(bx, by), by - nz];
-        for (const v of [A, B, C, B, D, C]) pos.push(v[0] - N / 2, v[1], v[2] - N / 2);
-      }
-    };
-    for (const list of Object.values(seen)) {
-      for (let i = 1; i < list.length; i++) {
-        let best = list[0], bd = Infinity;
-        for (let j = 0; j < i; j++) { const d = Math.hypot(list[j].x - list[i].x, list[j].y - list[i].y); if (d < bd) { bd = d; best = list[j]; } }
-        const p = findPath(w, list[i].x + 0.5, list[i].y + 0.5, best.x + 0.5, best.y + 0.5);
-        if (p) seg([list[i].x + 0.5, list[i].y + 0.5, ...p]);
-      }
-    }
-    const g = this.roads.geometry;
-    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-    g.computeVertexNormals();
-    g.computeBoundingSphere();
-  }
-
   // ------------------------------------------------------------------ mise à jour par frame
 
-  private updateBuildings(): void {
-    const sim = this.sim, w = sim.world, N = this.N;
-    const counts: Record<string, number> = {};
-    for (const k of Object.keys(this.bldMeshes)) counts[k] = 0;
-    const gray = new THREE.Color();
-    for (const b of sim.buildings) {
-      const m = this.bldMeshes[b.type];
-      if (!m || b.hp < 0) continue;
-      const idx = counts[b.type]++;
-      if (idx >= 500) continue;
-      const px = b.x + 0.5, pz = b.y + 0.5;
-      let hy = Math.min(w.heightAt(px, pz), w.heightAt(px - 0.3, pz - 0.3), w.heightAt(px + 0.3, pz + 0.3)) - 0.02;
-      const ruin = b.civ < 0;
-      const built = b.progress >= 1;
-      const sy = ruin ? 0.4 : built ? 1 : Math.max(0.12, b.progress);
-      const yaw = b.type === "hall" || b.type === "castle" ? 0 : Math.floor(hash2(b.x, b.y, 3) * 4) * (Math.PI / 2);
-      this.dummy.position.set(px - N / 2, hy, pz - N / 2);
-      this.dummy.rotation.set(ruin ? (hash2(b.x, b.y, 4) - 0.5) * 0.3 : 0, yaw, ruin ? (hash2(b.x, b.y, 5) - 0.5) * 0.3 : 0);
-      this.dummy.scale.set(1, sy, 1);
-      this.dummy.updateMatrix();
-      m.body.setMatrixAt(idx, this.dummy.matrix);
-      const shade = ruin ? 0.45 : built ? (b.hp < b.maxHp * 0.5 ? 0.78 : 1) : 0.72;
-      m.body.setColorAt(idx, gray.setRGB(shade, shade, shade));
-      if (m.accent) {
-        if (!built && b.progress < 0.55) this.dummy.scale.set(0.001, 0.001, 0.001);
-        else this.dummy.scale.set(1, sy < 1 ? 1 : sy, 1);
-        this.dummy.updateMatrix();
-        m.accent.setMatrixAt(idx, this.dummy.matrix);
-        const civ = sim.civById.get(b.civ);
-        if (ruin || !civ) m.accent.setColorAt(idx, gray.setRGB(0.4, 0.4, 0.4));
-        else m.accent.setColorAt(idx, gray.setHex(civ.color));
-      }
-    }
-    for (const [type, m] of Object.entries(this.bldMeshes)) {
-      const n = Math.min(500, counts[type]);
-      m.body.count = n;
-      m.body.instanceMatrix.needsUpdate = true;
-      if (m.body.instanceColor) m.body.instanceColor.needsUpdate = true;
-      if (m.accent) {
-        m.accent.count = n;
-        m.accent.instanceMatrix.needsUpdate = true;
-        if (m.accent.instanceColor) m.accent.instanceColor.needsUpdate = true;
-      }
-    }
-  }
-
-  private updateCitizens(alpha: number): void {
-    const sim = this.sim, w = sim.world, N = this.N;
-    const list = sim.citizens;
-    let n = 0, ns = 0;
-    const t = this.time;
-    const col = new THREE.Color();
-    const zs = Math.min(2.4, Math.max(1.25, this.camera.position.distanceTo(this.controls.target) / 38));
-    for (let i = 0; i < list.length && n < 3500; i++) {
-      const c = list[i];
-      if (c.dead) continue;
-      const x = c.px + (c.x - c.px) * alpha, y = c.py + (c.y - c.py) * alpha;
-      const moving = Math.abs(c.x - c.px) + Math.abs(c.y - c.py) > 0.004;
-      const bob = moving ? Math.abs(Math.sin(t * 11 + c.id)) * 0.035 : c.state === "work" || c.state === "build" ? Math.abs(Math.sin(t * 6 + c.id)) * 0.02 : 0;
-      const hy = w.heightAt(x, y) + bob + (c.state === "flee" ? Math.abs(Math.sin(t * 16 + c.id)) * 0.05 : 0);
-      const sc = (c.job === "child" ? 0.62 + Math.min(0.2, c.age * 0.015) : 1) * zs;
-      const yaw = moving ? Math.atan2(-(c.y - c.py), c.x - c.px) : c.id * 0.7;
-      this.dummy.position.set(x - N / 2, hy, y - N / 2);
-      this.dummy.rotation.set(0, yaw, 0);
-      this.dummy.scale.set(sc, sc, sc);
-      this.dummy.updateMatrix();
-      this.bodies.setMatrixAt(n, this.dummy.matrix);
-      this.heads.setMatrixAt(n, this.dummy.matrix);
-      const civ = sim.civById.get(c.civ);
-      col.setHex(civ ? civ.color : 0x888888);
-      if (c.job === "soldier") col.multiplyScalar(0.72);
-      if (c.sick > 0) col.lerp(this.tmpColor.setHex(0x8fbf5a), 0.6);
-      this.bodies.setColorAt(n, col);
-      const skin = c.sick > 0 ? 0x9bd16b : c.panic > 0 ? 0xffffff : 0xf0c8a0;
-      this.heads.setColorAt(n, this.tmpColor.setHex(skin).multiplyScalar(0.88 + (c.id % 7) * 0.02));
-      if (c.job === "soldier" && ns < 1500) {
-        if (c.state === "fight") this.dummy.rotation.set(Math.sin(t * 14 + c.id) * 0.5, yaw, 0.5 * Math.sin(t * 14 + c.id));
-        this.dummy.updateMatrix();
-        this.spears.setMatrixAt(ns, this.dummy.matrix);
-        this.spears.setColorAt(ns, col.setRGB(1, 1, 1));
-        ns++;
-      }
-      n++;
-    }
-    for (const m of [this.bodies, this.heads]) { m.count = n; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
-    this.spears.count = ns; this.spears.instanceMatrix.needsUpdate = true; if (this.spears.instanceColor) this.spears.instanceColor.needsUpdate = true;
-    // armées : bannières
-    let a = 0;
-    for (const army of sim.armies) {
-      if (a >= 64 || army.soldiers.length === 0) continue;
-      const civ = sim.civById.get(army.civ);
-      this.dummy.position.set(army.x - N / 2, w.heightAt(army.x, army.y), army.y - N / 2);
-      this.dummy.rotation.set(0, Math.sin(t * 2 + army.id) * 0.25, 0);
-      this.dummy.scale.set(1, 1, 1);
-      this.dummy.updateMatrix();
-      this.poles.setMatrixAt(a, this.dummy.matrix);
-      this.flags.setMatrixAt(a, this.dummy.matrix);
-      this.flags.setColorAt(a, col.setHex(civ ? civ.color : 0x999999));
-      this.poles.setColorAt(a, col.setRGB(1, 1, 1));
-      a++;
-      if (army.combat && Math.random() < 0.25) this.fx.dust(army.x - N / 2, w.heightAt(army.x, army.y) + 0.1, army.y - N / 2);
-    }
-    this.poles.count = a; this.flags.count = a;
-    this.poles.instanceMatrix.needsUpdate = true; this.flags.instanceMatrix.needsUpdate = true;
-    if (this.flags.instanceColor) this.flags.instanceColor.needsUpdate = true;
-    if (this.poles.instanceColor) this.poles.instanceColor.needsUpdate = true;
+  /** Fumée des cheminées (forges, usines, maisons de brique) : seulement quand la caméra est assez proche. */
+  private emitSmoke(dt: number): void {
+    const src = this.bld.smoke;
+    if (!src.length) return;
+    const dist = this.camera.position.distanceTo(this.controls.target);
+    if (dist > (this.mobile ? 50 : 70)) return;
+    const rate = (this.mobile ? 5 : 10) * dt;
+    for (const [x, y, z] of src) if (Math.random() < rate * 0.1) this.fx.smoke(x, y, z);
   }
 
   private updateFlames(): void {
@@ -547,6 +414,14 @@ export class Renderer {
         this.flames.setMatrixAt(n++, this.dummy.matrix);
       }
       if (Math.random() < 0.04) this.fx.smoke(x + 0.5 - N / 2, w.heightAt(x + 0.5, y + 0.5) + 0.3, y + 0.5 - N / 2);
+    }
+    // feux de camp de la préhistoire (halls, temples et camps d'époque 0)
+    for (let k = 0; k < this.bld.fires.length && n < 890; k++) {
+      const [fx, fy, fz] = this.bld.fires[k];
+      const f = 0.45 + 0.3 * Math.abs(Math.sin(this.time * 10 + k * 2.1));
+      this.dummy.position.set(fx, fy, fz); this.dummy.rotation.set(0, k, 0); this.dummy.scale.set(f, f * 1.4, f); this.dummy.updateMatrix();
+      this.flames.setMatrixAt(n++, this.dummy.matrix);
+      if (Math.random() < 0.05) this.fx.smoke(fx, fy + 0.3, fz);
     }
     this.flames.count = n;
     this.flames.instanceMatrix.needsUpdate = true;
@@ -709,8 +584,10 @@ export class Renderer {
     // données changeantes
     const lv = this.lastVer;
     if (lv.terrain !== w.terrainV) { this.rebuildSkirt(); }
-    if (lv.terrain !== w.terrainV || lv.owner !== w.ownerV || lv.fire !== w.fireV || (this.time - this.lastSlow > (this.mobile ? 1.4 : 0.6) && (sim.tick % 6 === 0))) {
+    const uv = sim.stats.buildingsBuilt * 7 + sim.stats.upgrades * 13 + sim.stats.buildingsLost;
+    if (lv.terrain !== w.terrainV || lv.owner !== w.ownerV || lv.fire !== w.fireV || (uv !== this.urbanVer && this.time - this.lastSlow > 1.2) || (this.time - this.lastSlow > (this.mobile ? 1.4 : 0.6) && (sim.tick % 6 === 0))) {
       this.rebuildTerrain();
+      this.urbanVer = uv;
       if (lv.terrain !== w.terrainV || lv.owner !== w.ownerV) this.rebuildBorders();
       lv.terrain = w.terrainV; lv.owner = w.ownerV; lv.fire = w.fireV;
       this.lastSlow = this.time;
@@ -719,12 +596,13 @@ export class Renderer {
       this.rebuildTrees();
       lv.tree = w.treeV;
     }
-    const sig = sim.cities.map((c) => `${c.id}:${c.civ}`).join(",") + "|" + w.terrainV;
-    if (sig !== this.lastRoadSig) { this.lastRoadSig = sig; this.rebuildRoads(); }
-
-    this.updateBuildings();
-    this.updateCitizens(alpha);
+    this.bld.update(sim);
+    const zs = Math.min(2.4, Math.max(1.25, this.camera.position.distanceTo(this.controls.target) / 38));
+    const far = this.camera.position.distanceTo(this.controls.target) > (this.mobile ? 55 : 80);
+    this.cit.update(sim, alpha, this.time, zs, this.fx, !far);
+    this.infra.update(sim, this.time, this.bld.lamps.map(([x, y, z]) => [x, y, z] as [number, number, number]));
     this.updateFlames();
+    this.emitSmoke(dt);
     if (!this.mobile || this.frameNo % 3 === 0) this.updateLabels();
     this.syncWeather();
 
@@ -816,6 +694,12 @@ export class Renderer {
     this.selection = { kind: "none", id: -1 };
   }
   get cursorActive(): boolean { return this.cursorOn; }
+
+  /** Mesures de rendu (tests de performance) : appels de dessin, triangles, instances par couche. */
+  get renderStats() {
+    const i = this.three.info.render;
+    return { calls: i.calls, triangles: i.triangles, buildingModels: this.bld.stats.keys, buildings: this.bld.stats.instances, citizens: this.cit.stats.citizens, soldiers: this.cit.stats.soldiers, armyProps: this.cit.stats.props, ...this.infra.stats, quality: this.quality };
+  }
 
   projectLabelUnused(): void { /* réservé */ }
 }

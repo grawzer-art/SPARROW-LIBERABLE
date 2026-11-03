@@ -105,8 +105,26 @@ export class EventSystem {
       5: [`${civ.formal} découvre le fer et la chevalerie. Désormais, les massacres ont de l'allure.`, `${civ.name} adopte la chevalerie : se faire tuer en armure est un progrès.`],
       6: [`${civ.name} développe la médecine. Elle repose surtout sur des saignées et sur l'optimisme.`, `${civ.formal} invente le médecin, puis, dans la foulée, le médecin incompétent.`],
       7: [`${civ.formal} découvre la poudre noire. ${L.name} la teste immédiatement sur une chose précieuse.`, `${civ.name} invente la poudre. Les voisins constatent un regain de bruit.`],
+      8: [`${civ.formal} découvre la vapeur. La première machine sert à produire de la vapeur, ce qui est exactement ce qu'on lui demandait.`, `${civ.name} maîtrise le charbon. Le ciel, lui, n'a pas été consulté.`],
+      9: [`${civ.formal} découvre l'électricité. ${L.name} touche le câble pour vérifier. Le conseil trouve le résultat concluant.`, `${civ.name} s'éclaire : les nuits deviennent plus longues pour les travailleurs.`],
+      10: [`${civ.formal} invente le moteur et le béton. Tout est désormais gris, rapide et en retard.`, `${civ.name} coule du béton partout. Les prairies déposent un recours.`],
+      11: [`${civ.formal} met au point une intelligence artificielle. Elle conclut en quatre secondes que ${L.name} est le problème.`, `${civ.name} invente l'IA. Les habitants lui demandent conseil ; elle leur demande de se calmer.`],
     };
     this.log(sim, { civ: civ.id, type: "discovery", importance: 2, text: this.pick(sim, "disc" + level, texts[level]), consequences: `${n} : ${TECH_EFFECT[level]}` });
+  }
+
+  eraChanged(sim: SimulationEngine, civ: Civ, from: number, to: number, why: "up" | "tech" | "decline"): void {
+    const names = ["la Préhistoire", "l'Antiquité", "le Moyen Âge", "l'ère industrielle", "l'ère moderne", "l'ère futuriste"];
+    const up: string[] = [
+      "", `${civ.formal} entre dans l'Antiquité : on bâtit désormais en pierre, pour que les ruines durent plus longtemps.`,
+      `${civ.formal} entre dans le Moyen Âge. Les maisons ont des poutres apparentes, et les opinions aussi.`,
+      `${civ.formal} entre dans l'ère industrielle. L'air devient gris, signe incontestable de progrès.`,
+      `${civ.formal} entre dans l'ère moderne : immeubles, câbles et embouteillages sont officiellement des réussites.`,
+      `${civ.formal} entre dans l'ère futuriste. Les robots travaillent, les habitants commentent.`,
+    ];
+    const text = to > from ? up[to] : `${civ.formal} retombe dans ${names[to]}. ${why === "tech" ? "Les ingénieurs ont été remplacés par des légendes." : "Plus personne ne sait réparer ce que les grands-parents ont bâti."}`;
+    this.log(sim, { civ: civ.id, type: "discovery", importance: 3, text,
+      consequences: to > from ? "Nouveaux bâtiments, tenues, routes et armées. Les anciens bâtiments restent debout, modernisés peu à peu." : "Les bâtiments avancés restent, mais plus personne ne peut en construire d'autres de ce niveau." });
   }
 
   // ------------------------------------------------------------ dirigeants

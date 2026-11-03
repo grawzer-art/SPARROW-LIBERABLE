@@ -3,7 +3,8 @@ import {
   CIV_COLORS, CITY_SUFFIX, genLeaderName, genPlaceName, genReligion, PERS, TITLES,
 } from "./data";
 import type { SimulationEngine } from "./SimulationEngine";
-import type { Building, BuildingType, Citizen, City, Civ, Job, Leader, PersonalityId } from "./types";
+import type { Building, BuildingType, Citizen, City, Civ, CivMods, Job, Leader, PersonalityId } from "./types";
+import { ERA_GOLD, ERA_MIN_TECH, ERA_NAMES, ERA_POP, ERA_STAB, MAX_TECH_LEVEL, eraOfTech, isUnlocked, setTech, techGold, techPop, techThreshold as techThr } from "./TechTree";
 import { T } from "./World";
 import { RNG } from "./rng";
 
@@ -14,9 +15,16 @@ export function formalName(prefix: string, name: string): string {
   return /^[AEIOUYÉÈ]/i.test(name) && prefix.endsWith(" de") ? `${prefix.slice(0, -3)} d'${name}` : `${prefix} ${name}`;
 }
 
-export function techThreshold(level: number): number {
-  return 35 * Math.pow(level + 1, 1.7);
+export const techThreshold = techThr;
+
+export const defaultMods = (): CivMods => ({ farm: 1, wood: 1, stone: 1, gold: 1, tech: 1, army: 1 });
+
+/** Un bâtiment « historique » n'est jamais modernisé : la ville garde des traces de son passé. */
+export function isHeritage(b: { id: number; type: BuildingType }): boolean {
+  const h = Math.imul(b.id, 2654435761) >>> 0;
+  return b.type === "temple" ? h % 2 === 0 : h % 6 === 0;
 }
+const UPGRADABLE: BuildingType[] = ["house", "farm", "hall", "barracks", "lumber", "quarry", "temple", "castle", "market", "walls", "mill", "forge", "factory", "station", "power", "lab"];
 
 /** Civilisations : création, planification des bâtiments, métiers, territoire, dirigeant, technologie, effondrement. */
 export class CivilizationSystem {
@@ -66,7 +74,8 @@ export class CivilizationSystem {
     const civ: Civ = {
       id, name, formal: formalName(rng.pick(CIV_PREFIX_FOR(personality)), name), color, alive: true, personality,
       religion: genReligion(rng), leader: null as unknown as Leader, culture,
-      tech: 0, techProg: 0, food: 60, wood: 40, stone: 12, gold: 10, stability: 55, lowStab: 0, capital: -1,
+      tech: 0, techProg: 0, techs: ["stone"], era: 0, eraSince: sim.year, eraLow: 0, style: culture % 4, mods: defaultMods(),
+      food: 60, wood: 40, stone: 12, gold: 10, stability: 55, lowStab: 0, capital: -1,
       foundedYear: sim.year, extinctYear: 0, laws: [], blessed: 0, prayer: null, lastWarEnd: -9999, lastCityTick: sim.tick, lastBoast: 0,
       lastEvt: {}, pop: 0, adults: 0, soldiers: 0, farmers: 0,
       jobs: { child: 0, farmer: 0, lumberjack: 0, miner: 0, builder: 0, soldier: 0, scholar: 0 },
@@ -80,7 +89,7 @@ export class CivilizationSystem {
     const city = this.addCity(sim, civ, x, y, true);
     civ.capital = city.id;
     // village de départ
-    sim.addBuilding("hall", civ.id, city.id, x, y, true);
+    sim.addBuilding("hall", civ.id, city.id, x, y, true, 0);
     city.hasHall = true;
     for (const [type, n] of [["house", 3], ["farm", 2]] as [BuildingType, number][]) {
       for (let k = 0; k < n; k++) {
@@ -97,6 +106,7 @@ export class CivilizationSystem {
       c.job = age < 14 ? "child" : "farmer";
     }
     this.initialJobs(sim, civ);
+    sim.citizenSys.census(sim); // la nouvelle civilisation est immédiatement comptée
     if (!opts.fromSplit) sim.events.civBorn(sim, civ, city);
     return civ;
   }
@@ -113,7 +123,7 @@ export class CivilizationSystem {
     if (!first) name += rng.pick(CITY_SUFFIX);
     const city: City = {
       id: sim.newId(), civ: civ.id, name: first ? civ.name + (rng.chance(0.3) ? "-Ville" : "") : name, x, y, pop: 0, cap: 8,
-      hp: 200, maxHp: 200, foundedYear: sim.year, siege: 0, hasHall: false,
+      hp: 200, maxHp: 200, foundedYear: sim.year, siege: 0, hasHall: false, walls: -1,
     };
     sim.cities.push(city);
     sim.cityById.set(city.id, city);
@@ -181,30 +191,40 @@ export class CivilizationSystem {
 
   // ------------------------------------------------------------ construction
 
-  nextBuilding(sim: SimulationEngine, civ: Civ, city: City): BuildingType | null {
+  nextBuilding(sim: SimulationEngine, civ: Civ, city: City): BuildingType[] {
     const bs = sim.buildings.filter((b) => b.city === city.id && b.civ === civ.id);
     const count = (t: BuildingType) => bs.filter((b) => b.type === t).length;
     const civCount = (t: BuildingType) => sim.buildings.filter((b) => b.civ === civ.id && b.type === t).length;
-    if (!city.hasHall && count("hall") === 0) return "hall";
+    if (!city.hasHall && count("hall") === 0) return ["hall"];
     const housesUnder = bs.filter((b) => b.type === "house" && b.progress < 1).length;
-    if (civ.personality === "stupid" && sim.rng.chance(0.12)) return sim.rng.pick(["temple", "house", "farm"] as BuildingType[]);
-    if (city.pop + 4 >= city.cap + housesUnder * 5) return "house";
-    const farmsNeeded = Math.ceil(Math.max(city.pop * 0.42, 2) / 3);
-    if (count("farm") < farmsNeeded) return "farm";
-    if (count("lumber") === 0 && civ.jobs.lumberjack >= 2 && city.pop > 12) return "lumber";
-    if (count("quarry") === 0 && civ.jobs.miner >= 2 && city.pop > 15) return "quarry";
+    if (civ.personality === "stupid" && sim.rng.chance(0.12)) return [sim.rng.pick(["temple", "house", "farm"] as BuildingType[])];
+    if (city.pop + 4 >= city.cap + housesUnder * 5) return ["house"];
+    const farmsNeeded = Math.ceil(Math.max(city.pop * 0.42, 2) / (3 + Math.floor(civ.tech / 4)));
+    if (count("farm") < farmsNeeded) return ["farm"];
+    if (count("lumber") === 0 && civ.jobs.lumberjack >= 2 && city.pop > 12) return ["lumber"];
+    if (count("quarry") === 0 && civ.jobs.miner >= 2 && city.pop > 15) return ["quarry"];
+    const adv: BuildingType[] = [];
     const atWar = sim.wars.some((w) => w.active && (w.a === civ.id || w.d === civ.id));
-    if (civ.tech >= 3 && civ.soldiers >= 5 && civCount("barracks") < 1 + Math.floor(civ.pop / 90)) return "barracks";
+    const unl = (t: BuildingType) => isUnlocked(civ, t);
+    if (unl("barracks") && civ.soldiers >= 5 && civCount("barracks") < 1 + Math.floor(civ.pop / 90)) adv.push("barracks");
     const templeWant = Math.floor(civ.pop / 35) + (civ.personality === "fanatic" ? 1 : 0);
-    if (civ.tech >= 1 && civ.pop > 18 && civCount("temple") < Math.min(templeWant, 4) && civ.avgFaith > 0.4) return "temple";
-    if (civ.tech >= 4 && city.pop >= 26 && count("castle") === 0 && (civ.personality === "paranoid" || civ.pop > 45 || atWar)) return "castle";
-    if (city.pop + 9 >= city.cap + housesUnder * 5) return "house";
-    return null;
+    if (unl("temple") && civ.pop > 18 && civCount("temple") < Math.min(templeWant, 4) && civ.avgFaith > 0.4) adv.push("temple");
+    if (unl("castle") && city.pop >= 26 && count("castle") === 0 && (civ.personality === "paranoid" || civ.pop > 45 || atWar)) adv.push("castle");
+    if (unl("market") && count("market") === 0 && city.pop >= 18) adv.push("market");
+    if (unl("walls") && count("walls") === 0 && city.pop >= 25 && (civ.personality === "paranoid" || atWar || city.pop >= 45)) adv.push("walls");
+    if (unl("mill") && count("mill") === 0 && count("farm") >= 3) adv.push("mill");
+    if (unl("forge") && civCount("forge") < 1 + Math.floor(civ.pop / 120) && city.pop >= 30 && count("forge") === 0) adv.push("forge");
+    if (unl("factory") && civCount("factory") < 1 + Math.floor(civ.pop / 100) && city.pop >= 40 && count("factory") === 0) adv.push("factory");
+    if (unl("station") && count("station") === 0 && city.pop >= 30) adv.push("station");
+    if (unl("power") && civCount("power") < 1 + Math.floor(civ.pop / 250) && city.pop >= 60 && count("power") === 0) adv.push("power");
+    if (unl("lab") && civCount("lab") < 3 && city.pop >= 60 && count("lab") === 0) adv.push("lab");
+    if (city.pop + 9 >= city.cap + housesUnder * 5) adv.push("house");
+    return adv;
   }
 
   findSite(sim: SimulationEngine, civ: Civ, city: City, type: BuildingType): { x: number; y: number } | null {
     const w = sim.world;
-    const R = type === "castle" || type === "temple" ? 6 : 8;
+    const R = type === "castle" || type === "temple" || type === "market" || type === "station" || type === "lab" ? 6 : 8;
     let best: { x: number; y: number } | null = null, bs = Infinity;
     for (let y = Math.max(0, city.y - R); y <= Math.min(w.size - 1, city.y + R); y++)
       for (let x = Math.max(0, city.x - R); x <= Math.min(w.size - 1, city.x + R); x++) {
@@ -217,7 +237,7 @@ export class CivilizationSystem {
         if (own !== -1 && own !== civ.id) continue;
         let ok = t === T.GRASS || t === T.SAND;
         if (type === "quarry") ok = t === T.HILL && w.stone[i] > 1;
-        else if (type === "house" || type === "temple" || type === "castle" || type === "barracks") ok = ok || (t === T.HILL && w.height[i] < w.hillH + 0.4);
+        else if (type !== "farm" && type !== "lumber") ok = ok || (t === T.HILL && w.height[i] < w.hillH + 0.4);
         if (!ok) continue;
         if (type !== "lumber" && w.trees[i] > 0) continue;
         let s = d;
@@ -230,6 +250,11 @@ export class CivilizationSystem {
           s = d * 0.4 - tr * 0.5;
         } else if (type === "quarry") s = d;
         else if (type === "castle" || type === "temple") s = Math.abs(d - 3.2) + noise;
+        else if (type === "walls") s = Math.abs(d - 3.6) + noise;
+        else if (type === "market") s = Math.abs(d - 2.2) + noise;
+        else if (type === "mill") s = Math.abs(d - 4.2) - w.fertility[i] * 2 + noise;
+        else if (type === "forge" || type === "factory" || type === "power") s = Math.abs(d - 5.2) + noise;
+        else if (type === "station" || type === "lab") s = Math.abs(d - 3.6) + noise;
         else {
           // maison : se serre autour des autres bâtiments
           let adj = 0;
@@ -245,21 +270,99 @@ export class CivilizationSystem {
   plan(sim: SimulationEngine, civ: Civ): void {
     const cities = sim.cities.filter((c) => c.civ === civ.id && c.siege <= 0).sort((a, b) => b.pop - a.pop);
     for (const city of cities) {
-      const sites = sim.buildings.filter((b) => b.city === city.id && b.civ === civ.id && b.progress < 1);
+      const sites = sim.buildings.filter((b) => b.city === city.id && b.civ === civ.id && (b.progress < 1 || b.up >= 0));
       if (sites.length >= 1 + Math.floor(city.pop / 14)) continue;
-      const type = this.nextBuilding(sim, civ, city);
-      if (!type || !sim.econ.canAfford(civ, type)) continue;
-      const saving = sim.tick - (civ.lastEvt.saving ?? -1e9) < 70;
-      if (saving && type !== "hall" && civ.wood - sim.econ.cost(type).wood < 40 && city.pop + 2 < city.cap) continue;
-      const s = this.findSite(sim, civ, city, type);
-      if (!s) continue;
-      sim.econ.spend(civ, type);
-      sim.addBuilding(type, civ.id, city.id, s.x, s.y, false);
-      return;
+      const wants = this.nextBuilding(sim, civ, city);
+      let placed = false;
+      for (const type of wants) {
+        if (!sim.econ.canAfford(civ, type)) continue;
+        const saving = sim.tick - (civ.lastEvt.saving ?? -1e9) < 70;
+        if (saving && type !== "hall" && civ.wood - sim.econ.cost(type).wood < 40 && city.pop + 2 < city.cap) continue;
+        const s = this.findSite(sim, civ, city, type);
+        if (!s) continue;
+        sim.econ.spend(civ, type);
+        sim.addBuilding(type, civ.id, city.id, s.x, s.y, false, civ.era);
+        placed = true;
+        break;
+      }
+      if (placed) return;
+      // rien à bâtir : on modernise progressivement les bâtiments en retard (un cran d'époque à la fois)
+      if (wants.length === 0 || sim.rng.chance(0.2)) { if (this.planUpgrade(sim, civ, city)) return; }
     }
   }
 
-  onBuilt(sim: SimulationEngine, civ: Civ, b: Building): void {
+  planUpgrade(sim: SimulationEngine, civ: Civ, city: City): boolean {
+    if (civ.era === 0) return false;
+    const mine = sim.buildings.filter((b) => b.city === city.id && b.civ === civ.id);
+    if (mine.filter((b) => b.up >= 0).length >= 2) return false;
+    const cand = mine
+      .filter((b) => b.progress >= 1 && b.up < 0 && b.era < civ.era && UPGRADABLE.includes(b.type) && !isHeritage(b) && b.hp > 0)
+      .sort((a, b) => a.era - b.era || a.id - b.id)[0];
+    if (!cand) return false;
+    const to = cand.era + 1;
+    if (!sim.econ.canAffordUpgrade(civ, cand.type, to)) return false;
+    sim.econ.spendUpgrade(civ, cand.type, to);
+    cand.up = 0.001;
+    cand.upTo = to;
+    return true;
+  }
+
+  /** Une modernisation vient de s'achever. */
+  onUpgraded(sim: SimulationEngine, civ: Civ, b: Building): void {
+    sim.stats.upgrades++;
+    this.onBuilt(sim, civ, b, true);
+  }
+
+  // ------------------------------------------------------------ époques
+
+  /** L'époque d'une civilisation dépend de sa technologie, de sa population, de sa stabilité et de son or : jamais de l'année. */
+  evaluateEra(sim: SimulationEngine, civ: Civ): void {
+    const maxByTech = eraOfTech(civ.tech);
+    if (civ.era > maxByTech) { this.changeEra(sim, civ, maxByTech, "tech"); return; }
+    const next = civ.era + 1;
+    if (next <= 5 && next <= maxByTech && civ.pop >= ERA_POP[next] && civ.stability >= ERA_STAB[next] && civ.gold >= ERA_GOLD[next]) {
+      civ.gold -= ERA_GOLD[next];
+      civ.eraLow = 0;
+      this.changeEra(sim, civ, next, "up");
+      return;
+    }
+    // stagnation / déclin : population effondrée ou chaos prolongé
+    if (civ.era > 0 && (civ.pop < ERA_POP[civ.era] * 0.5 || civ.stability < 10)) {
+      if (++civ.eraLow >= 6) { civ.eraLow = 0; this.changeEra(sim, civ, civ.era - 1, "decline"); }
+    } else civ.eraLow = Math.max(0, civ.eraLow - 1);
+  }
+
+  changeEra(sim: SimulationEngine, civ: Civ, era: number, why: "up" | "tech" | "decline"): void {
+    const from = civ.era;
+    civ.era = Math.max(0, Math.min(5, era));
+    civ.eraSince = sim.year;
+    if (civ.era === from) return;
+    sim.events.eraChanged(sim, civ, from, civ.era, why);
+  }
+
+  /** Bonus issus des bâtiments réellement construits (marchés, moulins, forges, usines, gares, centrales, laboratoires). */
+  recomputeMods(sim: SimulationEngine, civ: Civ): void {
+    const n: Record<string, number> = {};
+    for (const b of sim.buildings) if (b.civ === civ.id && b.progress >= 1 && b.hp > 0) n[b.type] = (n[b.type] ?? 0) + 1;
+    const m = (t: string, cap: number) => Math.min(n[t] ?? 0, cap);
+    const power = m("power", 2);
+    civ.mods = {
+      farm: (1 + 0.06 * m("mill", 4)) * (1 + 0.08 * power),
+      wood: (1 + 0.1 * m("factory", 3)) * (1 + 0.08 * power),
+      stone: (1 + 0.1 * m("factory", 3)) * (1 + 0.08 * power),
+      gold: (1 + 0.1 * m("market", 3)) * (1 + 0.07 * m("station", 3)) * (1 + 0.05 * m("factory", 3)) * (1 + 0.08 * power),
+      tech: (1 + 0.15 * m("lab", 3)) * (1 + 0.1 * power),
+      army: 1 + 0.05 * m("forge", 3),
+    };
+  }
+
+  onBuilt(sim: SimulationEngine, civ: Civ, b: Building, upgraded = false): void {
+    this.recomputeMods(sim, civ);
+    if (b.type === "walls") {
+      const city = sim.cityById.get(b.city);
+      if (city) { if (city.walls < 0) city.maxHp += 150; city.walls = Math.max(city.walls, b.era); city.hp = Math.min(city.maxHp, city.hp + 100); }
+    }
+    if (upgraded) return;
     if (b.type === "hall") {
       const city = sim.cityById.get(b.city);
       if (city) { city.hasHall = true; city.hp = city.maxHp; }
@@ -317,7 +420,7 @@ export class CivilizationSystem {
     const city = this.addCity(sim, civ, x, y);
     civ.lastCityTick = sim.tick;
     civ.wood = Math.max(0, civ.wood - 25);
-    sim.addBuilding("hall", civ.id, city.id, x, y, false);
+    sim.addBuilding("hall", civ.id, city.id, x, y, false, civ.era);
     const colonists = sim.citizens.filter((c) => c.civ === civ.id && c.job !== "child" && c.army < 0 && (!origin || c.city === origin.id)).slice(0, 7);
     colonists.forEach((c, i) => {
       c.city = city.id; c.work = -1; c.wx = -1;
@@ -369,11 +472,16 @@ export class CivilizationSystem {
     for (const civ of sim.civs) {
       if (!civ.alive) continue;
       if ((sim.tick + civ.id) % 10 === 0) this.plan(sim, civ);
-      civ.techProg += civ.pop * 0.0007 * PERS[civ.personality].tech * (civ.leader.goat ? 0.8 : 1);
+      civ.techProg += civ.pop * 0.0007 * PERS[civ.personality].tech * (civ.leader.goat ? 0.8 : 1) * civ.mods.tech * Math.min(1, civ.stability / 45);
       if (civ.tech < MAX_TECH && civ.techProg >= techThreshold(civ.tech)) {
-        civ.techProg -= techThreshold(civ.tech);
-        civ.tech++;
-        sim.events.discovery(sim, civ, civ.tech);
+        // une découverte exige aussi des moyens : population minimale et financement
+        if (civ.pop >= techPop(civ.tech) && civ.gold >= techGold(civ.tech)) {
+          civ.techProg -= techThreshold(civ.tech);
+          civ.gold -= techGold(civ.tech);
+          setTech(civ, civ.tech + 1);
+          sim.events.discovery(sim, civ, civ.tech);
+          this.recomputeMods(sim, civ);
+        } else civ.techProg = techThreshold(civ.tech);
       }
       if (civ.pop === 0 && sim.tick > 5) this.extinguish(sim, civ);
     }
@@ -460,6 +568,8 @@ export class CivilizationSystem {
     civ.strikes = Math.max(0, civ.strikes - 0.2);
     civ.lowStab = civ.stability < 12 ? civ.lowStab + 1 : 0;
 
+    this.evaluateEra(sim, civ);
+    this.recomputeMods(sim, civ);
     this.rebalanceJobs(sim, civ);
     this.tryFoundCity(sim, civ);
 
@@ -503,7 +613,7 @@ export class CivilizationSystem {
       // âge sombre
       let lost = 0;
       for (const c of sim.citizens) if (c.civ === civ.id && c.army < 0 && rng.chance(0.2)) { sim.killCitizen(c, "unrest"); lost++; }
-      if (civ.tech > 0 && rng.chance(0.5)) civ.tech--;
+      if (civ.tech > 0 && rng.chance(0.5)) setTech(civ, civ.tech - 1);
       civ.techProg = 0;
       civ.gold *= 0.3;
       civ.stability = 35;
@@ -523,10 +633,12 @@ export class CivilizationSystem {
       ...from,
       id: sim.newId(), name, formal: formalName(rng.pick(CIV_PREFIX_FOR(personality)), name), color, personality, culture: (culture + 1) % 4,
       religion: rng.chance(0.5) ? from.religion : genReligion(rng), leader: null as unknown as Leader,
-      tech: Math.max(0, from.tech - (rng.chance(0.5) ? 1 : 0)), techProg: 0, food: from.food * 0.25, wood: from.wood * 0.3, stone: from.stone * 0.3, gold: from.gold * 0.2,
+      tech: Math.max(0, from.tech - (rng.chance(0.5) ? 1 : 0)), techProg: 0, techs: [], era: from.era, eraSince: sim.year, eraLow: 0, style: (culture + 1) % 4, mods: defaultMods(), food: from.food * 0.25, wood: from.wood * 0.3, stone: from.stone * 0.3, gold: from.gold * 0.2,
       stability: 50, lowStab: 0, capital: city.id, foundedYear: sim.year, laws: [], blessed: 0, prayer: null, lastWarEnd: -9999,
       lastCityTick: sim.tick, lastEvt: {}, jobs: { ...from.jobs }, stats: { births: 0, deaths: 0, kills: 0, warsWon: 0, warsLost: 0, peakPop: 0, collapses: 0 }, famine: 0, strikes: 0, tiles: 0,
     };
+    setTech(nc, nc.tech);
+    nc.era = Math.min(nc.era, eraOfTech(nc.tech));
     nc.leader = this.makeLeader(sim, nc, 1);
     from.food *= 0.75; from.wood *= 0.7; from.stone *= 0.7; from.gold *= 0.8;
     sim.civs.push(nc);
@@ -540,6 +652,7 @@ export class CivilizationSystem {
     sim.addOpinion(nc.id, from.id, -40); sim.addOpinion(from.id, nc.id, -40);
     sim.grudgeWhy[`${from.id}>${nc.id}`] = "la sécession";
     sim.grudge[`${from.id}>${nc.id}`] = 0.7;
+    sim.citizenSys.census(sim);
     return nc;
   }
 

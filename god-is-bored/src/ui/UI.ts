@@ -1,7 +1,8 @@
 import { TICKS_PER_YEAR } from "../sim/config";
 import { DOGMA_LABEL, JOB_LABEL, PERSONALITY_BLURB, PERSONALITY_LABEL, PROPHECIES, STATE_LABEL, TECH_EFFECT, TECH_NAMES } from "../sim/data";
 import { POWERS, POWER_BY_ID, type PowerId } from "../sim/DivinePowerSystem";
-import { BUILDING_LABEL } from "../sim/EconomySystem";
+import { BUILDING_LABEL, ERA_BUILDING_NAMES } from "../sim/EconomySystem";
+import { ERA_GOLD, ERA_NAMES, ERA_POP, ERA_STAB, eraOfTech, unlockedTypes } from "../sim/TechTree";
 import { LAW_INFO } from "../sim/EventSystem";
 import { techThreshold } from "../sim/CivilizationSystem";
 import type { SimulationEngine } from "../sim/SimulationEngine";
@@ -537,14 +538,15 @@ export class UI {
       if (c && civ) {
         title = "Ville";
         const counts: Record<string, number> = {};
-        for (const b of sim.buildings) if (b.city === c.id && b.civ >= 0 && b.progress >= 1) counts[b.type] = (counts[b.type] ?? 0) + 1;
+        const nm = (t: string, e: number) => (ERA_BUILDING_NAMES[t]?.[Math.min(5, e)] ?? BUILDING_LABEL[t as keyof typeof BUILDING_LABEL]);
+        for (const b of sim.buildings) if (b.city === c.id && b.civ >= 0 && b.progress >= 1) { const k = nm(b.type, b.era) + (b.up >= 0 ? " (modernisation)" : ""); counts[k] = (counts[k] ?? 0) + 1; }
         const sites = sim.buildings.filter((b) => b.city === c.id && b.progress < 1 && b.civ >= 0).length;
         html = `<div class="h-civ"><span class="sw" style="background:${hex(civ.color)}"></span><h2>${esc(c.name)}</h2></div>
         <div class="quote">${civ.capital === c.id ? "Capitale" : "Ville"} de ${esc(civ.formal)}</div>
         <div class="kv"><span>Population</span><b>${c.pop} / ${c.cap}</b><span>Fondée en</span><b>An ${c.foundedYear}</b><span>Remparts</span><b>${Math.round(c.hp)} / ${c.maxHp}</b>
         <span>Statut</span><b>${c.siege > 0 ? "Assiégée" : "Paisible"}</b><span>Chantiers</span><b>${sites}</b></div>
         <div class="sec">Bâtiments</div>
-        <div class="kv">${Object.entries(counts).map(([k, v]) => `<span>${BUILDING_LABEL[k as keyof typeof BUILDING_LABEL]}</span><b>${v}</b>`).join("") || "<span>Aucun</span><b>—</b>"}</div>
+        <div class="kv">${Object.entries(counts).sort().map(([k, v]) => `<span>${k}</span><b>${v}</b>`).join("") || "<span>Aucun</span><b>—</b>"}</div>
         <p><button class="link" data-go="civ:${civ.id}">Voir ${esc(civ.name)}</button></p>`;
       } else this.sel = { kind: "none", id: -1 };
     } else if (s.kind === "building") {
@@ -552,8 +554,9 @@ export class UI {
       if (b) {
         const civ = sim.civById.get(b.civ);
         title = "Bâtiment";
-        html = `<div class="h-civ"><h2>${BUILDING_LABEL[b.type]}</h2></div>
-        <div class="quote">${civ ? `Propriété de ${esc(civ.name)}` : "Ruines abandonnées"}</div>
+        const label = ERA_BUILDING_NAMES[b.type]?.[Math.min(5, b.era)] ?? BUILDING_LABEL[b.type];
+        html = `<div class="h-civ"><h2>${label}</h2></div>
+        <div class="quote">${civ ? `Propriété de ${esc(civ.name)} · ${ERA_NAMES[b.era]}${civ.era > b.era ? " (bâtiment historique)" : ""}` : "Ruines abandonnées"}${b.up >= 0 ? ` · modernisation ${Math.round(b.up * 100)} %` : ""}</div>
         <div class="kv"><span>Ville</span><b>${esc(sim.cityById.get(b.city)?.name ?? "—")}</b><span>Avancement</span><b>${Math.round(b.progress * 100)} %</b>
         <span>Solidité</span><b>${Math.round(b.hp)} / ${b.maxHp}</b><span>Travailleurs</span><b>${b.workers}</b></div>
         ${civ ? `<p><button class="link" data-go="civ:${civ.id}">Voir ${esc(civ.name)}</button></p>` : ""}`;
@@ -564,7 +567,7 @@ export class UI {
       const civs = sim.civs.slice().sort((a, b) => Number(b.alive) - Number(a.alive) || b.pop - a.pop);
       html = `<div class="empty">Aucune sélection. Cliquez sur un territoire, une ville ou un habitant. Ou choisissez un favori ci-dessous.</div>` +
         civs.map((c) => `<button class="civcard ${c.alive ? "" : "dead"}" data-go="civ:${c.id}"><span class="sw" style="background:${hex(c.color)}"></span>
-        <span><b>${esc(c.name)}</b>${c.alive ? "" : " †"}<small>${c.alive ? `${c.pop} hab. · ${PERSONALITY_LABEL[c.personality]} · ${TECH_NAMES[c.tech]}` : `Disparue en l'an ${c.extinctYear}`}</small></span></button>`).join("");
+        <span><b>${esc(c.name)}</b>${c.alive ? "" : " †"}<small>${c.alive ? `${c.pop} hab. · ${PERSONALITY_LABEL[c.personality]} · ${ERA_NAMES[c.era]}` : `Disparue en l'an ${c.extinctYear}`}</small></span></button>`).join("");
     }
     if (this.sel.kind !== "none") html = `<p><button class="link back" data-go="none:-1">← Toutes les civilisations</button></p>` + html;
     $("right-title").textContent = title;
@@ -584,6 +587,20 @@ export class UI {
         if (cap) this.game.renderer.focusOn(cap.x + 0.5, cap.y + 0.5, 38);
       }));
     }
+  }
+
+  /** Ce qui retient la civilisation à sa époque actuelle (technologie, population, stabilité, or). */
+  private eraHint(civ: Civ): string {
+    if (civ.era >= 5) return `<div class="law">Dernière époque atteinte. Il ne reste que la décadence.</div>`;
+    const n = civ.era + 1;
+    const ok = (v: boolean) => (v ? "var(--green)" : "var(--red)");
+    const techOk = eraOfTech(civ.tech) >= n;
+    return `<div class="law">Pour entrer dans « ${ERA_NAMES[n]} » :
+      <span style="color:${ok(techOk)}">technologie ${techOk ? "✓" : "✗"}</span> ·
+      <span style="color:${ok(civ.pop >= ERA_POP[n])}">population ${civ.pop}/${ERA_POP[n]}</span> ·
+      <span style="color:${ok(civ.stability >= ERA_STAB[n])}">stabilité ${Math.round(civ.stability)}/${ERA_STAB[n]}</span> ·
+      <span style="color:${ok(civ.gold >= ERA_GOLD[n])}">or ${Math.floor(civ.gold)}/${ERA_GOLD[n]}</span></div>
+      <div class="law">Bâtiments disponibles : ${unlockedTypes(civ).map((t) => BUILDING_LABEL[t]).join(", ")}.</div>`;
   }
 
   private civHtml(civ: Civ): string {
@@ -623,6 +640,8 @@ export class UI {
     <div class="res"><div><b>${Math.floor(civ.food)}</b><small>Vivres</small></div><div><b>${Math.floor(civ.wood)}</b><small>Bois</small></div><div><b>${Math.floor(civ.stone)}</b><small>Pierre</small></div><div><b>${Math.floor(civ.gold)}</b><small>Or</small></div></div>
     <div class="kv"><span>Fermiers</span><b>${civ.jobs.farmer}</b><span>Bûcherons</span><b>${civ.jobs.lumberjack}</b><span>Mineurs</span><b>${civ.jobs.miner}</b><span>Bâtisseurs</span><b>${civ.jobs.builder}</b><span>Érudits</span><b>${civ.jobs.scholar}</b></div>
     <div class="sec">Technologie</div>
+    <div class="kv"><span>Époque</span><b style="color:var(--gold)">${ERA_NAMES[civ.era]}</b></div>
+    ${this.eraHint(civ)}
     <div class="kv"><span>Niveau ${civ.tech}</span><b>${TECH_NAMES[civ.tech]}</b></div>
     ${civ.tech < MAX_TECH ? this.bar(civ.techProg, nextTech, "blue") : ""}
     <div class="law">${esc(TECH_EFFECT[civ.tech])}</div>

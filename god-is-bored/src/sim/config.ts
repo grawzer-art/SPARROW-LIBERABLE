@@ -8,4 +8,4 @@ export const ARMY_SPEED = 0.12;
 export const MAX_TICKS_PER_FRAME = 40;
 export const SAVE_KEY = "god-is-bored.save.v1";
 export const SAVE_VERSION = 1;
-export const MAX_TECH = 7;
+export const MAX_TECH = 11;

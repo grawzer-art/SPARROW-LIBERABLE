@@ -1,6 +1,7 @@
 import { SAVE_KEY, SAVE_VERSION } from "./config";
 import { SimulationEngine } from "./SimulationEngine";
 import { World } from "./World";
+import { eraOfTech, techIds } from "./TechTree";
 
 type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
@@ -47,6 +48,15 @@ export class SaveManager {
     sim.rel = d.rel; sim.grudge = d.grudge; sim.grudgeWhy = d.grudgeWhy; sim.status = d.status; sim.truce = d.truce;
     sim.chronicle = d.chronicle; sim.weather = d.weather; sim.cooldowns = d.cooldowns; sim.boredom = d.boredom;
     sim.lastTribeTick = d.lastTribeTick; sim.stats = d.stats;
+    // migration des anciennes sauvegardes (avant les époques)
+    for (const c of sim.civs) {
+      c.techs ??= techIds(c.tech);
+      c.era ??= Math.min(eraOfTech(c.tech), 0);
+      c.eraSince ??= sim.year; c.eraLow ??= 0; c.style ??= c.culture % 4;
+      c.mods ??= { farm: 1, wood: 1, stone: 1, gold: 1, tech: 1, army: 1 };
+    }
+    for (const c of sim.cities) c.walls ??= -1;
+    for (const b of sim.buildings) { b.era ??= 0; b.up ??= -1; b.upTo ??= b.era; }
     for (const b of sim.buildings) w.bld[w.idx(b.x, b.y)] = b.id;
     sim.reindex();
     sim.citizenSys.census(sim);

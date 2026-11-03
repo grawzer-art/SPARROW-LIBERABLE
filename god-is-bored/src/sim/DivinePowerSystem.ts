@@ -68,6 +68,8 @@ export class DivinePowerSystem {
       case "prophecy": res = this.prophecy(sim, opts.civ ?? this.civAt(sim, x, y)?.id ?? -1, opts.prophecy ?? "peace"); break;
     }
     sim.removeDead();
+    sim.citizenSys.census(sim);
+    for (const c of sim.civs) if (c.alive && c.pop === 0 && sim.tick > 5) sim.civSys.extinguish(sim, c); // une civilisation sans habitant disparaît aussitôt
     if (res.ok) sim.cooldowns[id] = sim.tick + info.cooldown;
     return res;
   }

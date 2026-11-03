@@ -12,6 +12,7 @@ export class CitizenSystem {
     const citizens = sim.citizens;
     sim.reindex();
     sim.hash.rebuild(citizens);
+    sim.rebuildBuildingIndex();
     for (const b of sim.buildings) b.workers = 0;
     for (let i = 0; i < citizens.length; i++) {
       const c = citizens[i];
@@ -46,7 +47,7 @@ export class CitizenSystem {
       if (civ.pop > 0) { civ.avgIntel /= civ.pop; civ.avgFaith /= civ.pop; }
       if (civ.pop > civ.stats.peakPop) civ.stats.peakPop = civ.pop;
     }
-    for (const city of sim.cities) city.cap = sim.econ.cityCap(sim, city.id);
+    if (sim.tick % 10 === 0) for (const city of sim.cities) city.cap = sim.econ.cityCap(sim, city.id);
   }
 
   step(sim: SimulationEngine, c: Citizen): void {
@@ -83,12 +84,12 @@ export class CitizenSystem {
     if (c.sick > 0) {
       c.sick--;
       const vuln = (c.age < 5 || c.age > 50 ? 1.5 : 1) * (c.hunger > 60 ? 1.3 : 1) * (0.85 + ((c.id * 37) % 30) / 100);
-      c.hp -= 1.15 * vuln * (1 - 0.07 * civ.tech);
+      c.hp -= 1.15 * vuln * (1 - Math.min(0.75, 0.07 * civ.tech));
       if (c.hp <= 0) { sim.killCitizen(c, "plague"); return; }
       if (c.sick === 0) c.immune = 900;
       else if (rng.chance(0.5)) {
         sim.hash.query(sim.citizens, c.x, c.y, 1.4, (o) => {
-          if (o !== c && o.sick === 0 && o.immune === 0 && !o.dead && rng.chance(0.035 * (1 - 0.04 * civ.tech))) o.sick = 70;
+          if (o !== c && o.sick === 0 && o.immune === 0 && !o.dead && rng.chance(0.035 * (1 - Math.min(0.7, 0.04 * civ.tech)))) o.sick = 70;
         });
       }
     } else if (c.immune > 0) c.immune--;
@@ -221,11 +222,12 @@ export class CitizenSystem {
   /** Bâtiment ravitaillé le plus proche (grenier, maison ou ferme). */
   nearestFoodSite(sim: SimulationEngine, c: Citizen): Building | null {
     let best: Building | null = null, bd = Infinity;
-    for (const b of sim.buildings) {
-      if (b.civ !== c.civ || b.progress < 1 || b.hp <= 0) continue;
-      if (b.type !== "hall" && b.type !== "house" && b.type !== "farm" && b.type !== "barracks") continue;
-      const d = Math.hypot(b.x - c.x, b.y - c.y);
-      if (d < bd) { bd = d; best = b; }
+    for (const t of ["hall", "house", "farm", "barracks"] as const) {
+      for (const b of sim.bOf(c.civ, t)) {
+        if (b.progress < 1 || b.hp <= 0) continue;
+        const d = Math.hypot(b.x - c.x, b.y - c.y);
+        if (d < bd) { bd = d; best = b; }
+      }
     }
     return best;
   }
@@ -248,9 +250,16 @@ export class CitizenSystem {
   giveBirth(sim: SimulationEngine, mother: Citizen, civ: Civ): void {
     const city = sim.cityById.get(mother.city);
     if (!city || city.pop >= city.cap) return;
-    const p = (civ.stability > 25 ? 0.75 : 0.4) * (civ.blessed > 0 ? 1.3 : 1);
+    // plafond mondial de population (performances, notamment sur iPhone) : la natalité s'effondre vers 2 500 habitants
+    const world = Math.max(0, Math.min(1, (2500 - sim.citizens.length) / 600));
+    const p = (civ.stability > 25 ? 0.75 : 0.4) * (civ.blessed > 0 ? 1.3 : 1) * world;
     if (!sim.rng.chance(p)) return;
-    const child = sim.spawnCitizen(civ, city, mother.x, mother.y, 0, { parent: mother });
+    // équilibre démographique : une population qui manque de femmes (ou d'hommes) finit par s'éteindre sans raison narrative
+    let f = 0, m = 0;
+    for (const o of sim.citizens) if (o.civ === civ.id && !o.dead) { if (o.female) f++; else m++; }
+    const tot = Math.max(1, f + m);
+    const female = sim.rng.chance(Math.max(0.2, Math.min(0.8, 0.5 + (0.5 - f / tot))));
+    const child = sim.spawnCitizen(civ, city, mother.x, mother.y, 0, { parent: mother, female });
     child.job = "child";
     civ.stats.births++;
     sim.stats.births++;
@@ -282,8 +291,8 @@ export class CitizenSystem {
     switch (c.job) {
       case "farmer": {
         let b = c.work >= 0 ? sim.buildingById.get(c.work) : undefined;
-        if (!b || b.type !== "farm" || b.progress < 1 || b.civ !== c.civ || b.hp <= 0 || b.workers >= 3 && c.state !== "work") {
-          b = this.findBuilding(sim, c, "farm", 3);
+        if (!b || b.type !== "farm" || b.progress < 1 || b.civ !== c.civ || b.hp <= 0 || b.workers >= 3 + Math.floor(civ.tech / 4) && c.state !== "work") {
+          b = this.findBuilding(sim, c, "farm", 3 + Math.floor(civ.tech / 4));
           c.work = b ? b.id : -1;
         }
         if (!b) { this.idleAround(sim, c, city, 3); return; }
@@ -332,7 +341,7 @@ export class CitizenSystem {
       }
       case "builder": {
         let b = c.work >= 0 ? sim.buildingById.get(c.work) : undefined;
-        if (!b || b.progress >= 1 || b.hp < 0 || b.civ !== c.civ) {
+        if (!b || (b.progress >= 1 && b.up < 0) || b.hp < 0 || b.civ !== c.civ) {
           b = this.findSite(sim, c);
           c.work = b ? b.id : -1;
         }
@@ -342,6 +351,12 @@ export class CitizenSystem {
         if (r === 1) {
           c.state = "build";
           const info = sim.econ.cost(b.type);
+          if (b.progress >= 1 && b.up >= 0) {
+            // modernisation : le bâtiment reste debout et utilisable pendant les travaux
+            b.up += (1 / sim.econ.upgradeCost(b.type, b.upTo).time) * (1 + civ.tech * 0.06);
+            if (b.up >= 1) { b.up = -1; b.era = b.upTo; c.work = -1; sim.civSys.onUpgraded(sim, civ, b); }
+            return;
+          }
           b.progress += (1 / info.time) * (1 + civ.tech * 0.06);
           b.hp = Math.min(info.hp, Math.max(b.hp, b.progress * info.hp));
           if (b.progress >= 1) {
@@ -360,7 +375,7 @@ export class CitizenSystem {
           return;
         }
         c.state = "work";
-        civ.techProg += 0.02 * (0.4 + c.intel) * (civ.tech >= 4 ? 1.2 : 1);
+        civ.techProg += 0.02 * (0.4 + c.intel) * (civ.tech >= 4 ? 1.2 : 1) * civ.mods.tech;
         return;
       }
       default:
@@ -370,8 +385,8 @@ export class CitizenSystem {
 
   findBuilding(sim: SimulationEngine, c: Citizen, type: Building["type"], cap: number): Building | undefined {
     let best: Building | undefined, bd = Infinity;
-    for (const b of sim.buildings) {
-      if (b.type !== type || b.civ !== c.civ || b.progress < 1 || b.hp <= 0 || b.workers >= cap) continue;
+    for (const b of sim.bOf(c.civ, type)) {
+      if (b.progress < 1 || b.hp <= 0 || b.workers >= cap) continue;
       const d = Math.hypot(b.x - c.x, b.y - c.y);
       if (d < bd) { bd = d; best = b; }
     }
@@ -380,7 +395,7 @@ export class CitizenSystem {
   findSite(sim: SimulationEngine, c: Citizen): Building | undefined {
     let best: Building | undefined, bd = Infinity;
     for (const b of sim.buildings) {
-      if (b.civ !== c.civ || b.progress >= 1 || b.hp < 0) continue;
+      if (b.civ !== c.civ || (b.progress >= 1 && b.up < 0) || b.hp < 0) continue;
       const d = Math.hypot(b.x - c.x, b.y - c.y) + b.workers * 4;
       if (d < bd) { bd = d; best = b; }
     }
