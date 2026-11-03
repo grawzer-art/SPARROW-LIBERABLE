@@ -1,7 +1,7 @@
 export type Job = "child" | "farmer" | "lumberjack" | "miner" | "builder" | "soldier" | "scholar";
 export type CState =
   | "idle" | "wander" | "eat" | "forage" | "work" | "build" | "travel"
-  | "mate" | "flee" | "fight" | "march" | "sick";
+  | "mate" | "flee" | "fight" | "march" | "sick" | "rest" | "talk";
 
 export type PersonalityId =
   | "pacifist" | "expansionist" | "fanatic" | "opportunist" | "arrogant" | "paranoid" | "stupid";
@@ -12,6 +12,23 @@ export type BuildingType =
 
 /** Modificateurs économiques/militaires issus des bâtiments réellement construits. */
 export interface CivMods { farm: number; wood: number; stone: number; gold: number; tech: number; army: number; }
+
+/** Actions du moteur de décision (indices stables : ils servent aussi à la sauvegarde et au diagnostic). */
+export type ActionId = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+/**
+ * Âme d'un habitant : besoins vitaux supplémentaires, traits persistants, foyer, parenté et décision courante.
+ * Données compactes (tableaux de nombres) : sauvegardées telles quelles, identité conservée au chargement.
+ */
+export interface SoulState {
+  v: 1;
+  fat: number; soc: number; com: number; fear: number; // besoins 0..100 : fatigue, solitude, inconfort, peur (faim et santé : sur Citizen)
+  t: [number, number, number, number, number]; // traits 0..1 : sociabilité, curiosité, ambition, empathie, prudence (le courage reste Citizen.courage)
+  home: number; mother: number; father: number; mate: number; // identifiants (-1 : aucun)
+  act: ActionId; since: number; until: number; target: number; // action en cours, tick de début, échéance, cible (habitant)
+  sc: number[]; // dernières utilités calculées (x100), une par action : « pourquoi » de la dernière décision
+  fail: number; failUntil: number; // dernière action impossible et fin de sa mise à l'écart
+}
 
 export interface Citizen {
   id: number;
@@ -43,6 +60,7 @@ export interface Citizen {
   dead?: boolean;
   path?: number[] | null;
   pathI?: number;
+  soul?: SoulState;
 }
 
 export interface Leader {

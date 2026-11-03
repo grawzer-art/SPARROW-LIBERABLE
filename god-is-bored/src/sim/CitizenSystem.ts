@@ -1,6 +1,7 @@
 import { CITIZEN_SPEED, TICKS_PER_YEAR } from "./config";
 import { moveToward } from "./path";
 import type { SimulationEngine } from "./SimulationEngine";
+import { ACT } from "./SoulSystem";
 import type { Building, Citizen, City, Civ } from "./types";
 import { T } from "./World";
 
@@ -13,6 +14,7 @@ export class CitizenSystem {
     sim.reindex();
     sim.hash.rebuild(citizens);
     sim.rebuildBuildingIndex();
+    sim.soul.beginTick(sim);
     for (const b of sim.buildings) b.workers = 0;
     for (let i = 0; i < citizens.length; i++) {
       const c = citizens[i];
@@ -104,11 +106,19 @@ export class CitizenSystem {
     // devenir adulte
     if (c.job === "child" && c.age >= 14) c.job = sim.civSys.pickJob(sim, civ);
 
+    // --- âme : besoins individuels, logement, perception du danger ---
+    const soul = sim.soul, ss = soul.ensure(c);
+    soul.tickNeeds(sim, c);
+    if (ss.home < 0 ? (sim.tick + c.id) % 20 === 0 : (sim.tick + c.id) % 90 === 0) soul.assignHome(sim, c);
+    if (c.panic <= 0 && (sim.tick + c.id) % 5 === 0) soul.sense(sim, c);
+
     // --- comportement (priorités) ---
     // 8. fuir les dangers
     if (c.panic > 0) {
       c.panic--;
       c.state = "flee";
+      if (ss.act !== ACT.FLEE) { ss.act = ACT.FLEE; ss.since = sim.tick; ss.target = -1; }
+      ss.until = 0;
       const dx = c.x - c.fx, dy = c.y - c.fy, d = Math.hypot(dx, dy) || 1;
       moveToward(world, c, c.x + (dx / d) * 3, c.y + (dy / d) * 3, CITIZEN_SPEED * 1.6, 0.05);
       if (c.panic === 0) { c.state = "idle"; c.think = 0; }
@@ -128,9 +138,20 @@ export class CitizenSystem {
     const city = sim.cityById.get(c.city) ?? this.nearestCity(sim, c, civ.id);
     if (city && c.city !== city.id) c.city = city.id;
 
-    // 1. chercher de la nourriture
-    if (c.hunger > 48 || c.state === "eat" || c.state === "forage") {
+    // décision par utilité : travailler, se nourrir, se reposer, discuter ou flâner (hystérésis : pas de changement d'avis incessant)
+    const act = soul.choose(sim, c, civ);
+    if (act === ACT.FOOD || c.state === "eat" || c.state === "forage") {
       if (this.seekFood(sim, c, civ, city)) return;
+      // nourri, ou aucune nourriture accessible : l'action se termine (ou échoue) et la décision est reprise
+      if (c.hunger > 60) soul.fail(sim, c, ACT.FOOD, 12); else soul.done(sim, c);
+    } else if (act === ACT.REST) {
+      if (soul.runRest(sim, c, city)) return;
+    } else if (act === ACT.SOCIAL) {
+      if (soul.runSocial(sim, c)) return;
+    } else if (act === ACT.RELAX) {
+      if (c.cooldown > 0) c.cooldown--;
+      this.idleAround(sim, c, city, c.job === "child" ? 3 : 4.5);
+      return;
     }
 
     // 5. se reproduire
@@ -185,6 +206,7 @@ export class CitizenSystem {
         const r = moveToward(world, c, c.tx, c.ty, CITIZEN_SPEED, 1.3);
         if (r === 1) {
           civ.food -= 1;
+          sim.soul.stats.eats++;
           c.hunger = Math.max(0, c.hunger - 70);
           c.state = "idle"; c.think = 0; c.tx = -1;
           return false;
@@ -242,6 +264,7 @@ export class CitizenSystem {
     const m = mate as Citizen | null;
     if (!m) return false;
     c.mateT = 14; m.mateT = 14;
+    sim.soul.ensure(c).mate = m.id; sim.soul.ensure(m).mate = c.id;
     c.state = "mate"; m.state = "mate";
     c.cooldown = 80 + sim.rng.int(60);
     return true;
@@ -300,7 +323,7 @@ export class CitizenSystem {
         const r = moveToward(world, c, b.x + 0.5, b.y + 0.5, CITIZEN_SPEED, 0.3);
         if (r === 1) {
           c.state = "work";
-          civ.food += sim.econ.farmYield(sim, civ, b);
+          civ.food += sim.econ.farmYield(sim, civ, b) * sim.soul.workFactor(c);
         } else if (r === 2) c.work = -1;
         else c.state = "travel";
         return;
@@ -313,7 +336,7 @@ export class CitizenSystem {
         if (r === 1) {
           c.state = "work";
           const near = sim.econ.nearBuilding(sim, civ.id, "lumber", c.x, c.y, 7);
-          civ.wood += sim.econ.woodYield(civ, near);
+          civ.wood += sim.econ.woodYield(civ, near) * sim.soul.workFactor(c);
           if (++c.workT >= 24) {
             c.workT = 0;
             const i = world.idx(Math.floor(c.wx), Math.floor(c.wy));
@@ -331,7 +354,7 @@ export class CitizenSystem {
         if (r === 1) {
           c.state = "work";
           const near = sim.econ.nearBuilding(sim, civ.id, "quarry", c.x, c.y, 7);
-          const y = sim.econ.stoneYield(civ, near);
+          const y = sim.econ.stoneYield(civ, near) * sim.soul.workFactor(c);
           civ.stone += y;
           const i = world.idx(Math.floor(c.wx), Math.floor(c.wy));
           world.stone[i] = Math.max(0, world.stone[i] - y);
@@ -357,7 +380,7 @@ export class CitizenSystem {
             if (b.up >= 1) { b.up = -1; b.era = b.upTo; c.work = -1; sim.civSys.onUpgraded(sim, civ, b); }
             return;
           }
-          b.progress += (1 / info.time) * (1 + civ.tech * 0.06);
+          b.progress += (1 / info.time) * (1 + civ.tech * 0.06) * sim.soul.workFactor(c);
           b.hp = Math.min(info.hp, Math.max(b.hp, b.progress * info.hp));
           if (b.progress >= 1) {
             b.progress = 1; b.hp = info.hp; c.work = -1;
@@ -375,7 +398,7 @@ export class CitizenSystem {
           return;
         }
         c.state = "work";
-        civ.techProg += 0.02 * (0.4 + c.intel) * (civ.tech >= 4 ? 1.2 : 1) * civ.mods.tech;
+        civ.techProg += 0.02 * sim.soul.workFactor(c) * (0.4 + c.intel) * (civ.tech >= 4 ? 1.2 : 1) * civ.mods.tech;
         return;
       }
       default:

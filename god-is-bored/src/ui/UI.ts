@@ -1,4 +1,5 @@
 import { TICKS_PER_YEAR } from "../sim/config";
+import { TRAIT_LABEL } from "../sim/SoulSystem";
 import { DOGMA_LABEL, JOB_LABEL, PERSONALITY_BLURB, PERSONALITY_LABEL, PROPHECIES, STATE_LABEL, TECH_EFFECT, TECH_NAMES } from "../sim/data";
 import { POWERS, POWER_BY_ID, type PowerId } from "../sim/DivinePowerSystem";
 import { BUILDING_LABEL, ERA_BUILDING_NAMES } from "../sim/EconomySystem";
@@ -6,7 +7,7 @@ import { ERA_GOLD, ERA_NAMES, ERA_POP, ERA_STAB, eraOfTech, unlockedTypes } from
 import { LAW_INFO } from "../sim/EventSystem";
 import { techThreshold } from "../sim/CivilizationSystem";
 import type { SimulationEngine } from "../sim/SimulationEngine";
-import type { ChronicleEntry, Civ, EventType } from "../sim/types";
+import type { ChronicleEntry, Citizen, Civ, EventType } from "../sim/types";
 import type { Renderer } from "../render/Renderer";
 import { MAX_TECH } from "../sim/config";
 
@@ -460,6 +461,25 @@ export class UI {
 
   // ------------------------------------------------------------ HUD
 
+  /** Bloc « âme » de la fiche : action en cours, raisons de la décision (utilités), besoins et traits. */
+  private soulHtml(c: Citizen): string {
+    const s = c.soul;
+    if (!s) return "";
+    const ex = this.sim.soul.explain(c);
+    const home = s.home >= 0 ? this.sim.buildingById.get(s.home) : undefined;
+    const why = ex.reasons.slice(0, 3).map(([n, v]) => `${esc(n)} ${v}`).join(" · ");
+    const mother = s.mother >= 0 ? this.sim.citizenById.get(s.mother)?.name : undefined;
+    const traits = TRAIT_LABEL.map((n, i) => `<span>${n}</span><b>${Math.round(s.t[i] * 100)}</b>`).join("");
+    return `<p class="hint"><b>Vie intérieure</b></p>
+      <div class="kv"><span>Action</span><b>${esc(ex.action)}</b><span>Logis</span><b>${home ? "oui" : "sans toit"}</b>${mother ? `<span>Mère</span><b>${esc(mother)}</b>` : ""}</div>
+      <div class="kv"><span>Fatigue</span><b>${Math.round(s.fat)}</b></div>${this.bar(s.fat, 100, s.fat > 80 ? "red" : "")}
+      <div class="kv"><span>Solitude</span><b>${Math.round(s.soc)}</b></div>${this.bar(s.soc, 100, s.soc > 80 ? "red" : "")}
+      <div class="kv"><span>Confort</span><b>${Math.round(s.com)}</b></div>${this.bar(s.com, 100, s.com < 30 ? "red" : "green")}
+      <div class="kv"><span>Peur</span><b>${Math.round(s.fear)}</b></div>${this.bar(s.fear, 100, s.fear > 40 ? "red" : "")}
+      <div class="kv">${traits}</div>
+      <p class="hint">Pourquoi : ${why || "—"}</p>`;
+  }
+
   private hud(): void {
     const sim = this.sim;
     $("s-year").textContent = String(sim.year);
@@ -530,6 +550,7 @@ export class UI {
         <div class="kv"><span>Courage</span><b>${Math.round(c.courage * 100)}</b></div>${this.bar(c.courage, 1)}
         <div class="kv"><span>Agressivité</span><b>${Math.round(c.aggr * 100)}</b></div>${this.bar(c.aggr, 1, "red")}
         <div class="kv"><span>Foi</span><b>${faith}</b></div>${this.bar(c.faith, 1)}
+        ${this.soulHtml(c)}
         <p><button class="link" data-go="civ:${civ.id}">Voir ${esc(civ.name)}</button></p>`;
       } else this.sel = { kind: "none", id: -1 };
     } else if (s.kind === "city") {

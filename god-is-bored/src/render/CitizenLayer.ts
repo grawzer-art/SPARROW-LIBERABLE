@@ -34,6 +34,7 @@ export function animFor(c: Pick<Citizen, "state" | "job" | "sick">, moving: bool
     }
     case "fight": return { mode: 3, tool: -1, speed: 1.1 };
     case "flee": return { mode: 1, tool: -1, speed: 1.8 };
+    case "rest": return { mode: 4, tool: -1, speed: 1 };
     case "march": return { mode: 1, tool: -1, speed: 1.15 };
     default: return { mode: moving ? 1 : (c.sick > 0 || (night > 0.65 && c.state === "idle" && adult) ? 4 : 0), tool: -1, speed: 1 };
   }

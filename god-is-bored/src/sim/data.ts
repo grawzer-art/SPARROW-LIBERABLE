@@ -154,5 +154,5 @@ export const JOB_LABEL: Record<string, string> = {
 };
 export const STATE_LABEL: Record<string, string> = {
   idle: "Désœuvré", wander: "Flâne", eat: "Cherche à manger", forage: "Cueille des trucs", work: "Travaille", build: "Construit",
-  travel: "En chemin", mate: "S'occupe de démographie", flee: "Panique", fight: "Se bat", march: "Marche au front", sick: "Malade",
+  travel: "En chemin", mate: "S'occupe de démographie", flee: "Panique", fight: "Se bat", march: "Marche au front", sick: "Malade", rest: "Se repose", talk: "Discute",
 };

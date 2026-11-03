@@ -13,6 +13,7 @@ import { DiplomacySystem } from "./DiplomacySystem";
 import { WarSystem } from "./WarSystem";
 import { DivinePowerSystem } from "./DivinePowerSystem";
 import { EventSystem } from "./EventSystem";
+import { SoulSystem } from "./SoulSystem";
 
 export interface Stats {
   births: number; deaths: number; warDeaths: number; plagueDeaths: number; famineDeaths: number;
@@ -87,6 +88,7 @@ export class SimulationEngine {
   war = new WarSystem();
   divine = new DivinePowerSystem();
   events = new EventSystem();
+  soul = new SoulSystem();
 
   constructor(world: World, seed: number) {
     this.world = world;
@@ -182,6 +184,8 @@ export class SimulationEngine {
       female, state: "idle", tx: x, ty: y, work: -1, wx: -1, wy: -1, think: rng.int(20), cooldown: rng.int(60), mateT: 0,
       sick: 0, immune: 0, panic: 0, fx: 0, fy: 0, army: -1, slot: 0, stuck: 0, workT: 0,
     };
+    this.soul.init(c, p, p ? this.citizenById.get(p.soul?.mate ?? -1) : undefined);
+    if (p) this.soul.inheritHome(this, c, p);
     this.citizens.push(c);
     this.citizenById.set(c.id, c);
     return c;
