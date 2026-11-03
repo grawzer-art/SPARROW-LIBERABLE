@@ -67,6 +67,10 @@
       <div id="notif-list" class="list hidden"></div>
     </section>
 
+    <div id="veil"></div>
+    <nav id="crumbs" aria-label="Échelle de vue"><button data-lvl="planet">Planète</button><i>›</i><button data-lvl="region">Région</button><i>›</i><button data-lvl="local">Local</button></nav>
+    <div id="planet-tools"><button id="p-in" title="Zoom +">+</button><button id="p-out" title="Zoom −">−</button></div>
+    <div id="planet-card" class="hidden"><button class="pc-x" aria-label="Fermer">×</button><h3 id="pc-title"></h3><div id="pc-lines"></div><div id="pc-actions"></div></div>
     <div id="toasts"></div>
     <div id="actionbar"><div class="ab-info"><b id="ab-name"></b><span id="ab-hint"></span></div><button id="ab-msg" class="secondary hidden">Message</button><button id="ab-cancel" class="cancel">Annuler</button></div>
     <div id="hint"></div>
@@ -82,6 +86,7 @@
       <button id="c-in" title="Zoom +">+</button>
       <button id="c-out" title="Zoom −">−</button>
       <button id="c-reset" title="Recentrer la vue">◎</button>
+      <button id="c-globe" title="Vue régionale et planète">🌍</button>
     </div>
 
     <div id="modal" class="hidden"><div class="card"><div class="grab"><i></i></div><button class="x" id="modal-x">×</button><div id="modal-body"></div></div></div>

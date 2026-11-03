@@ -14,6 +14,7 @@ import { WarSystem } from "./WarSystem";
 import { DivinePowerSystem } from "./DivinePowerSystem";
 import { EventSystem } from "./EventSystem";
 import { SoulSystem } from "./SoulSystem";
+import { Planet } from "./Planet";
 
 export interface Stats {
   births: number; deaths: number; warDeaths: number; plagueDeaths: number; famineDeaths: number;
@@ -89,6 +90,10 @@ export class SimulationEngine {
   divine = new DivinePowerSystem();
   events = new EventSystem();
   soul = new SoulSystem();
+  private _planet: Planet | null = null;
+  /** Planète portant ce monde : la carte actuelle en est la région R1 (créée à la demande, déterministe). */
+  get planet(): Planet { return (this._planet ??= Planet.create(this.seed, this.world.size)); }
+  set planet(p: Planet) { this._planet = p; }
 
   constructor(world: World, seed: number) {
     this.world = world;

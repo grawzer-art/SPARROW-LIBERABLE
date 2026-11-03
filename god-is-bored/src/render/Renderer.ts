@@ -436,6 +436,33 @@ export class Renderer {
     this.sun.target.updateMatrixWorld();
   }
 
+  /** Géométrie du terrain local (lue par la vue planétaire : même relief, mêmes couleurs, même territoire). */
+  get terrainGeometry(): THREE.BufferGeometry { return this.terr.mesh.geometry; }
+  /** Met à jour le terrain local (hauteurs, couleurs, chemins, territoires) sans rendre la scène locale. */
+  syncTerrainOnly(): void {
+    if (!this.sim) return;
+    this.infra.update(this.sim, this.time, []);
+    this.rebuildTerrain();
+  }
+  /** Pose de la caméra locale : point visé (cases), distance (cases), élévation et azimut (radians). */
+  setPose(tx: number, ty: number, dist: number, el: number, az: number): void {
+    const N = this.N, h = Math.max(0, this.sim.world.heightAt(tx, ty)) + 0.2;
+    const d = Math.max(this.controls.minDistance, Math.min(this.controls.maxDistance, dist));
+    const wx = tx - N / 2, wz = ty - N / 2;
+    this.tween = null;
+    this.controls.target.set(wx, h, wz);
+    this.camera.position.set(wx + d * Math.cos(el) * Math.cos(az), h + d * Math.sin(el), wz + d * Math.cos(el) * Math.sin(az));
+    this.controls.update();
+  }
+  getPose(): { x: number; y: number; dist: number; el: number; az: number } {
+    const t = this.controls.target, o = this.camera.position.clone().sub(t), d = o.length();
+    return { x: t.x + this.N / 2, y: t.z + this.N / 2, dist: d, el: Math.asin(Math.max(-1, Math.min(1, o.y / d))), az: Math.atan2(o.z, o.x) };
+  }
+  /** Active ou suspend les contrôles locaux (la vue planétaire possède alors le canevas). */
+  setControlsEnabled(on: boolean): void { this.controls.enabled = on; }
+  /** Vide la file d'effets locaux quand la scène locale n'est pas rendue (évite l'accumulation). */
+  drainFx(): void { if (this.sim) this.sim.fx.length = 0; }
+
   zoom(f: number): void {
     const off = this.camera.position.clone().sub(this.controls.target);
     const d = Math.max(this.controls.minDistance, Math.min(this.controls.maxDistance, off.length() * f));

@@ -143,3 +143,7 @@ Diagnostic : la V2 avait de beaux personnages mais des campements clairsemés et
 - **Exception « simulation »** : `CivilizationSystem.findSite` (pondération du choix d'emplacement des huttes de l'ère 0/1 : en cercle autour du foyer, orientées vers lui). Aucune règle, aucun compteur ni aucune sauvegarde n'est modifié ; les anciennes sauvegardes se chargent (vérifié avec une sauvegarde du commit précédent).
 - **Mesures** (émulation, JS par image, scène de référence ~1660 habitants / 453 bâtiments) : desktop 2,2 ms, mobile 3,5 ms ; ~114 / 106 appels de dessin ; 323 k / 219 k triangles. Aucun test sur un vrai iPhone.
 - **Tests** : 68 (dont 20 graphiques). Captures avant/après : `docs/graphics-v3/`.
+
+## The Living Planet (première tranche verticale)
+
+Le jeu s'ouvre sur un globe 3D : continents, océans, atmosphère, nuages. La carte d'origine en est la région « Terre Première » (vrai terrain, vraies villes, vrais habitants du moteur) ; on peut zoomer de la planète à la région puis au village, et revenir. Voir [`docs/planet/AUDIT_ET_PLAN.md`](docs/planet/AUDIT_ET_PLAN.md) (audit, architecture, limites, mesures) et les captures `docs/planet/`. Ouvrir avec `?local` pour démarrer directement dans la scène locale.

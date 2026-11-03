@@ -1,6 +1,7 @@
 import { SAVE_KEY, SAVE_VERSION } from "./config";
 import { SimulationEngine } from "./SimulationEngine";
 import { World } from "./World";
+import { Planet } from "./Planet";
 import { eraOfTech, techIds } from "./TechTree";
 
 type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
@@ -21,6 +22,7 @@ export class SaveManager {
       wars: sim.wars.slice(-60),
       rel: sim.rel, grudge: sim.grudge, grudgeWhy: sim.grudgeWhy, status: sim.status, truce: sim.truce,
       chronicle: sim.chronicle.slice(-1200),
+      planet: sim.planet.serialize(),
       weather: sim.weather, cooldowns: sim.cooldowns, boredom: sim.boredom, lastTribeTick: sim.lastTribeTick, stats: sim.stats,
       world: {
         seedUsed: w.seedUsed, hillH: w.hillH, mtnH: w.mtnH,
@@ -48,6 +50,7 @@ export class SaveManager {
     sim.rel = d.rel; sim.grudge = d.grudge; sim.grudgeWhy = d.grudgeWhy; sim.status = d.status; sim.truce = d.truce;
     sim.chronicle = d.chronicle; sim.weather = d.weather; sim.cooldowns = d.cooldowns; sim.boredom = d.boredom;
     sim.lastTribeTick = d.lastTribeTick; sim.stats = d.stats;
+    sim.planet = Planet.restore(d.planet, d.seed); // anciennes sauvegardes : planète régénérée à l'identique depuis la graine
     // migration des anciennes sauvegardes (avant les époques)
     for (const c of sim.civs) {
       c.techs ??= techIds(c.tech);

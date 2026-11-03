@@ -12,6 +12,7 @@ import type { Renderer } from "../render/Renderer";
 import { MAX_TECH } from "../sim/config";
 
 export interface GameHost {
+  mode: "planet" | "region" | "local";
   sim: SimulationEngine;
   renderer: Renderer;
   save(): string;
@@ -165,6 +166,7 @@ export class UI {
     // carte
     el.addEventListener("contextmenu", (e) => e.preventDefault());
     el.addEventListener("pointerdown", (e) => {
+      if (this.game.mode !== "local") return;
       this.ptrs.add(e.pointerId);
       if (this.ptrs.size > 1) this.multi = true;
       this.lastPtr = e.pointerType;
@@ -175,6 +177,7 @@ export class UI {
       }
     });
     const release = (e: PointerEvent, click: boolean) => {
+      if (this.game.mode !== "local") { this.ptrs.clear(); this.down = null; return; }
       this.ptrs.delete(e.pointerId);
       const d = this.down;
       if (this.ptrs.size > 0) return;
@@ -189,6 +192,7 @@ export class UI {
     el.addEventListener("pointerup", (e) => release(e, true));
     el.addEventListener("pointercancel", (e) => release(e, false));
     el.addEventListener("pointermove", (e) => {
+      if (this.game.mode !== "local") return;
       if (e.pointerType === "touch" || e.pointerType === "pen" && this.mobile) return;
       const g = r.pickGround(e.clientX, e.clientY);
       this.cursor = g;
