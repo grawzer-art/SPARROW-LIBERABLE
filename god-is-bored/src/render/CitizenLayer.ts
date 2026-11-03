@@ -102,6 +102,8 @@ export class CitizenLayer {
       for (let k = 0; k < 8; k++) {
         const c = new THREE.Color(ERA_CLOTH[era]).lerp(this.tmp.setHex(civ.color), 0.5 + (k % 3) * 0.1);
         c.offsetHSL(((k * 37) % 11 - 5) * 0.009, ((k * 17) % 7 - 3) * 0.04, ((k * 13) % 9 - 4) * 0.032);
+        // lisibilité : aux ères du chaume et de la pierre, les vêtements restent plus sombres et plus saturés que les toits et le sol
+        if (era <= 2) { const hsl = { h: 0, s: 0, l: 0 }; c.getHSL(hsl); c.setHSL(hsl.h, Math.max(0.38, Math.min(0.75, hsl.s + 0.1)), Math.max(0.2, Math.min(0.36, hsl.l * 0.62))); }
         v.push(c);
       }
       this.variants.set(key, v);

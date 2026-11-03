@@ -264,11 +264,16 @@ export class CivilizationSystem {
         else {
           // maison : en façade de rue, serrée vers la place, dans un quartier d'habitat
           s = Math.abs(info.dStreet - 1.15) * 2.0 + (info.dStreet > 2.6 ? 3 : 0) + info.r * 0.5 + mismatch + (hash2(x, y, 12) - 0.5) * 0.5;
+          if (civ.era === 0) {
+            // camp : cercle serré autour du foyer, entrées tournées vers lui (les rues ne comptent presque pas)
+            s = Math.abs(info.dStreet - 1.15) * 0.5 + (info.dStreet > 3.2 ? 1.5 : 0) + mismatch * 0.3 + (hash2(x, y, 12) - 0.5) * 0.5;
+            rot = Math.atan2(city.x + 0.5 - (x + 0.5), city.y + 0.5 - (y + 0.5)) + (hash2(x, y, 6) - 0.5) * 0.35;
+          }
           // les villages anciens sont plus aérés : on évite de coller les huttes
           if (civ.era <= 1) {
             // campement : les huttes se serrent autour du foyer (anneaux successifs), sans se toucher
             let adj = 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if ((dx || dy) && w.inb(x + dx, y + dy) && w.bld[(y + dy) * w.size + x + dx] >= 0) adj++;
-            s += adj * (civ.era === 0 ? 0.22 : 0.3) + d * (civ.era === 0 ? 0.55 : 0.2);
+            s += adj * (civ.era === 0 ? 0.18 : 0.3) + d * (civ.era === 0 ? 1.0 : 0.2);
           }
         }
         if (s < bs) { bs = s; best = { x, y, rot }; }

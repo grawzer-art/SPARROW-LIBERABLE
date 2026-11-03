@@ -147,6 +147,8 @@ export class Infra {
         let tx = city.x + 0.5, ty = city.y + 0.5;
         if (b.type === "house" || b.type === "temple" || b.type === "market") { const info = streetInfo(city, bx, by); tx = info.px; ty = info.py; }
         const L = Math.hypot(tx - bx, ty - by);
+        // terre battue sous chaque habitation des premières ères : l'empreinte du camp se lit tout de suite
+        if (b.era <= 1 && (b.type === "house" || b.type === "hall")) paths.push({ ax: bx, ay: by, bx: bx + 0.01, by: by + 0.01, w: b.type === "hall" ? 0.85 : 0.6, col: 0x6f5636 });
         if (L < 0.45) continue;
         const nx = -(ty - by) / L, ny = (tx - bx) / L, off = (hash2(b.id, 3, 3) - 0.5) * 0.55 * Math.min(1, L / 3);
         const mx = (bx + tx) / 2 + nx * off, my = (by + ty) / 2 + ny * off;

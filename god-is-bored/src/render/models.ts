@@ -61,7 +61,7 @@ function houseV2(era: number, st: number, v: number): [G[], G[], [number, number
       else { body.push(box(0.72 + v * 0.06, 0.18, 0.4, 0, 0, 0, C.wood), prism(0.82 + v * 0.06, 0.24, 0.48, 0, 0.18, 0, straw), box(0.1, 0.13, 0.02, -0.12, 0, 0.205, C.door), box(0.1, 0.13, 0.02, 0.18, 0, 0.205, C.door)); acc.push(box(0.04, 0.22, 0.44, 0.38 + v * 0.03, 0.04, 0, 0xffffff), box(0.04, 0.22, 0.44, -0.38 - v * 0.03, 0.04, 0, 0xffffff)); }
       if (v === 1) body.push(box(0.26, 0.02, 0.02, 0.42, 0.18, 0.1, C.dwood), cyl(0.012, 0.012, 0.2, 4, 0.34, 0, 0.1, C.dwood), cyl(0.012, 0.012, 0.2, 4, 0.5, 0, 0.1, C.dwood), box(0.16, 0.02, 0.06, 0.42, 0.14, 0.1, 0xc9b184)); // séchoir à peaux
       if (v === 2) body.push(cyl(0.14, 0.16, 0.12, 7, -0.4, 0, 0.18, wall), cone(0.2, 0.2, 7, -0.4, 0.12, 0.18, straw)); // appentis rond
-      for (const g of [...body, ...acc]) g.scale(0.9, 0.9, 0.9); // huttes lisibles à tous les zooms
+      for (const g of [...body, ...acc]) g.scale(1.0, 1.0, 1.0); // huttes lisibles à tous les zooms
       return [body, acc, smoke];
     }
     case 1: { // maisons de pierre : appareil en assises, linteaux, toit selon la culture

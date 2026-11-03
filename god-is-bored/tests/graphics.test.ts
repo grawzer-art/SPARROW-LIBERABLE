@@ -66,7 +66,14 @@ describe("Urbanisme : rues, places et quartiers", () => {
         const info = streetInfo(city, h.x + 0.5, h.y + 0.5);
         if (info.dStreet <= 2.9) near++;
         let dr = Math.abs(((h.rot - faceStreet(h.x + 0.5, h.y + 0.5, info) + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
-        if (dr < 0.4) facing++;
+        let ok = dr < 0.4;
+        // campements (ère 0) : les entrées regardent le foyer
+        if (!ok && h.era <= 1) {
+          const hearth = Math.atan2(city.x + 0.5 - (h.x + 0.5), city.y + 0.5 - (h.y + 0.5));
+          let dh = Math.abs(((h.rot - hearth + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+          ok = dh < 0.45;
+        }
+        if (ok) facing++;
       }
       expect(near / houses.length, `${city.name} : maisons le long des rues`).toBeGreaterThan(0.7);
       expect(facing / houses.length, `${city.name} : façades tournées vers la rue`).toBeGreaterThan(0.8);
