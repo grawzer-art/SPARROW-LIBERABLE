@@ -147,3 +147,7 @@ Diagnostic : la V2 avait de beaux personnages mais des campements clairsemés et
 ## The Living Planet (première tranche verticale)
 
 Le jeu s'ouvre sur un globe 3D : continents, océans, atmosphère, nuages. La carte d'origine en est la région « Terre Première » (vrai terrain, vraies villes, vrais habitants du moteur) ; on peut zoomer de la planète à la région puis au village, et revenir. Voir [`docs/planet/AUDIT_ET_PLAN.md`](docs/planet/AUDIT_ET_PLAN.md) (audit, architecture, limites, mesures) et les captures `docs/planet/`. Ouvrir avec `?local` pour démarrer directement dans la scène locale.
+
+## World Expansion V1
+
+Planète complète (6 continents, biomes lisibles), régions explorables partout (terrain local dérivé du relief du globe), plusieurs civilisations indépendantes (une simulation par région sur une horloge commune), sauvegardes multi-régions avec migration des anciennes parties. Audit, limites, tests et mesures : [`docs/world/AUDIT_ET_PLAN.md`](docs/world/AUDIT_ET_PLAN.md).

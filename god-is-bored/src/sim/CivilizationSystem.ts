@@ -31,15 +31,15 @@ const UPGRADABLE: BuildingType[] = ["house", "farm", "hall", "barracks", "lumber
 export class CivilizationSystem {
   // ------------------------------------------------------------ création
 
-  initWorld(sim: SimulationEngine): void {
+  initWorld(sim: SimulationEngine, count = 3): void {
     const rng = sim.rng;
-    const sites = sim.world.pickStartSites(3, rng);
+    const sites = sim.world.pickStartSites(count, rng);
     const pool = [...PERSONALITIES];
     for (let i = pool.length - 1; i > 0; i--) { const j = rng.int(i + 1); [pool[i], pool[j]] = [pool[j], pool[i]]; }
     const picked: PersonalityId[] = [];
     for (const p of pool) {
-      if (picked.length >= 3) break;
-      if (p === "pacifist" && picked.length === 2 && picked.every((q) => q !== "expansionist" && q !== "arrogant")) continue;
+      if (picked.length >= count) break;
+      if (count === 3 && p === "pacifist" && picked.length === 2 && picked.every((q) => q !== "expansionist" && q !== "arrogant")) continue;
       picked.push(p);
     }
     sites.forEach((s, i) => this.createCiv(sim, s.x, s.y, picked[i % picked.length], 16 + rng.int(4)));
@@ -70,7 +70,7 @@ export class CivilizationSystem {
     const culture = rng.int(4);
     const name = genPlaceName(rng, culture);
     const id = sim.newId();
-    const used = new Set(sim.civs.filter((c) => c.alive).map((c) => c.color));
+    const used = new Set([...sim.civs.filter((c) => c.alive).map((c) => c.color), ...sim.extraUsedColors]);
     const color = CIV_COLORS.find((c) => !used.has(c)) ?? CIV_COLORS[idx % CIV_COLORS.length];
     const civ: Civ = {
       id, name, formal: formalName(rng.pick(CIV_PREFIX_FOR(personality)), name), color, alive: true, personality,

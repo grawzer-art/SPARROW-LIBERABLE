@@ -20,6 +20,7 @@ export class World {
   scorch: Float32Array;
   corner: Float32Array;
   region: Int16Array;
+  biome: Uint8Array; // biome planétaire de la case (0 : aucun, carte d'origine) ; teinte le terrain des régions dérivées du globe
   riv: Float32Array; // masque des rivières (1 = case de rivière), pour creuser le lit visuel
   hillH = 1.0;
   mtnH = 2.0;
@@ -44,6 +45,7 @@ export class World {
     this.corner = new Float32Array((this.size + 1) * (this.size + 1));
     this.region = new Int16Array(n).fill(-1);
     this.riv = new Float32Array(n);
+    this.biome = new Uint8Array(n);
   }
 
   idx(x: number, y: number): number {

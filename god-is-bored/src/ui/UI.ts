@@ -7,12 +7,15 @@ import { ERA_GOLD, ERA_NAMES, ERA_POP, ERA_STAB, eraOfTech, unlockedTypes } from
 import { LAW_INFO } from "../sim/EventSystem";
 import { techThreshold } from "../sim/CivilizationSystem";
 import type { SimulationEngine } from "../sim/SimulationEngine";
+import type { PlanetSim } from "../sim/PlanetSim";
 import type { ChronicleEntry, Citizen, Civ, EventType } from "../sim/types";
 import type { Renderer } from "../render/Renderer";
 import { MAX_TECH } from "../sim/config";
 
 export interface GameHost {
   mode: "planet" | "region" | "local";
+  ps: PlanetSim;
+  worldChronicle(limit?: number): { region: string; entry: ChronicleEntry }[];
   sim: SimulationEngine;
   renderer: Renderer;
   save(): string;
@@ -53,6 +56,7 @@ export class UI {
   private lastDetails = "";
   private lastCivOpts = "";
   private notifs: { year: number; text: string }[] = [];
+  private bound = new WeakSet<SimulationEngine>();
   private hist: { year: number; pops: Record<number, number> }[] = [];
   private lastHistYear = -1;
   private cursor: { x: number; y: number } | null = null;
@@ -80,7 +84,8 @@ export class UI {
 
   /** (Re)lie l'UI à une nouvelle simulation. */
   attach(): void {
-    this.sim.listeners.push((e) => this.onEvent(e));
+    const eng = this.sim;
+    if (!this.bound.has(eng)) { this.bound.add(eng); eng.listeners.push((e) => { if (eng === this.sim) this.onEvent(e); }); }
     this.chronDirty = true;
     this.hist = [];
     this.lastHistYear = -1;
@@ -487,9 +492,10 @@ export class UI {
   private hud(): void {
     const sim = this.sim;
     $("s-year").textContent = String(sim.year);
-    $("s-pop").textContent = String(sim.totalPop());
-    $("s-civs").textContent = String(sim.aliveCivs().length);
-    const wars = sim.activeWars().length;
+    const world = this.game.mode !== "local", tot = this.game.ps.totals();
+    $("s-pop").textContent = String(world ? tot.population : sim.totalPop());
+    $("s-civs").textContent = String(world ? tot.civs : sim.aliveCivs().length);
+    const wars = world ? tot.wars : sim.activeWars().length;
     $("s-wars").textContent = String(wars);
     $("s-wars-wrap").classList.toggle("warn", wars > 0);
     $("s-bored").style.width = `${Math.round(sim.boredom)}%`;
@@ -725,9 +731,31 @@ export class UI {
     $("notif-list").innerHTML = this.notifs.map((n) => `<div class="ev"><div class="y">An ${n.year}</div><div class="t">${esc(n.text)}</div></div>`).join("") || `<div class="empty" style="padding:10px">Aucune notification. Les mortels se tiennent bien. Pour l'instant.</div>`;
   }
 
+  /** Notification d'une autre région : compacte, préfixée par le nom de la région. */
+  remoteNotice(region: string, text: string, war = false): void {
+    this.toast(`${region} — ${text}`, "", war, false);
+  }
+
+  private toastGroup = { n: 0, t: 0 };
   toast(text: string, sub = "", war = false, big = false, _type?: string): void {
     const box = $("toasts");
     const mob = this.mobile;
+    if (this.game.mode !== "local") {
+      // vue planète / région : UNE notification compacte à la fois ; les suivantes sont regroupées (« +N »), les Chroniques gardent tout
+      const now = performance.now();
+      const live = box.firstElementChild as HTMLElement | null;
+      this.toastGroup.n = live && now - this.toastGroup.t < 3500 ? this.toastGroup.n + 1 : 0;
+      this.toastGroup.t = now;
+      box.textContent = "";
+      const t = document.createElement("div");
+      t.className = `toast compact ${war ? "war" : ""}`;
+      t.textContent = text;
+      if (this.toastGroup.n > 0) { const b = document.createElement("b"); b.textContent = ` +${this.toastGroup.n}`; t.appendChild(b); }
+      box.appendChild(t);
+      setTimeout(() => { if (t.parentElement) { t.classList.add("out"); setTimeout(() => t.remove(), 500); } }, 3800);
+      t.addEventListener("click", () => { t.remove(); this.showWorldChronicle(); });
+      return;
+    }
     const t = document.createElement("div");
     t.className = `toast ${war ? "war" : ""} ${big && !mob ? "big" : ""}`;
     t.innerHTML = `${esc(text)}${sub && !mob ? `<small>${esc(sub)}</small>` : ""}`;
@@ -735,6 +763,13 @@ export class UI {
     while (box.children.length > (mob ? 2 : 3)) box.firstElementChild?.remove();
     setTimeout(() => { t.classList.add("out"); setTimeout(() => t.remove(), 600); }, mob ? (big ? 4200 : 3000) : big ? 7000 : 4500);
     t.addEventListener("click", () => t.remove());
+  }
+
+  /** Chroniques de toute la planète (toutes régions), accessibles depuis la vue planète. */
+  showWorldChronicle(): void {
+    const rows = this.game.worldChronicle(70).map(({ region, entry: e }) => `<div class="ev i${e.importance} type-${e.type}"><div class="y">An ${e.year}</div><div><div class="t"><b style="color:var(--gold)">${esc(region)}</b> — ${esc(e.text)}</div>${e.consequences ? `<div class="c">${esc(e.consequences)}</div>` : ""}</div></div>`).join("");
+    $("modal-body").innerHTML = `<h2>Chroniques de la planète</h2><div class="list" style="max-height:60vh;overflow:auto">${rows || '<div class="empty">Rien à signaler.</div>'}</div>`;
+    $("modal").classList.remove("hidden");
   }
 
   // ------------------------------------------------------------ modales

@@ -43,11 +43,16 @@ export function fbm3(x: number, y: number, z: number, s: number, oct = 4): numbe
 // ---------------------------------------------------------------- types
 
 export interface Region {
-  id: number; // identifiant persistant de la région (la carte actuelle est R1)
+  id: number; // identifiant persistant de la région (la carte d'origine est R1)
   name: string;
   lat: number; lon: number; // centre (radians)
   spanDeg: number; // largeur angulaire de la carte locale (degrés)
   size: number; // cases par côté de la carte locale
+  /** Régions « dérivées » : terrain local généré à partir du relief et des biomes du globe (R1, carte d'origine, ne l'est pas). */
+  derived?: boolean;
+  seed?: number; // graine persistante du terrain local
+  continent?: number; // continent d'appartenance (indice dans `continents()`, informatif)
+  inhabited?: boolean; // une civilisation y est simulée dès le départ
 }
 export interface Continent { id: number; name: string; kind: "continent" | "island"; cells: number; areaPct: number; lat: number; lon: number; }
 export interface Biome { id: number; name: string; color: [number, number, number]; }
@@ -57,7 +62,9 @@ export const BIOME = {
 } as const;
 export const BIOME_NAME = ["Océan", "Plateau continental", "Plage", "Désert", "Savane", "Plaine", "Forêt", "Jungle", "Taïga", "Toundra", "Collines", "Montagne", "Neiges"];
 const hex = (n: number): [number, number, number] => [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
-const PALETTE = [0x1f5d80, 0x3f9bb0, 0xdccb98, 0xdcc48c, 0xb6b45a, 0x77a64c, 0x3f7b3c, 0x2f7a43, 0x4d7458, 0xa5ac98, 0x93a05c, 0x8d8780, 0xf1f3f5].map(hex);
+const PALETTE_V1 = [0x1f5d80, 0x3f9bb0, 0xdccb98, 0xdcc48c, 0xb6b45a, 0x77a64c, 0x3f7b3c, 0x2f7a43, 0x4d7458, 0xa5ac98, 0x93a05c, 0x8d8780, 0xf1f3f5].map(hex);
+// v2 : couleurs plus saturées et plus contrastées (terre chaude / océan profond), neige réservée aux pôles et aux sommets
+const PALETTE_V2 = [0x1b4d86, 0x3aa0b8, 0xe9d8a0, 0xe3b865, 0xc3b252, 0x72b04c, 0x2f7d3d, 0x1f8a4a, 0x3f7358, 0x9db79a, 0x93a657, 0x8c8478, 0xf2f5f7].map(hex);
 
 const SYL_A = ["Aur", "Vel", "Tor", "Mer", "Zan", "Kel", "Ily", "Orb", "Sab", "Nem", "Cal", "Dra", "Eph", "Gor"];
 const SYL_B = ["ia", "ora", "land", "ath", "ea", "um", "ance", "ova", "ion", "eth"];
@@ -82,6 +89,8 @@ interface Blob { c: Vec3; r: number; w: number; }
 
 export class Planet {
   readonly seed: number;
+  /** Version du générateur : 1 = première planète (conservée pour les parties existantes), 2 = continents répartis, biomes lisibles. */
+  readonly gen: number;
   regions: Region[];
   private blobs: Blob[] = [];
   private contCache: Continent[] | null = null;
@@ -89,8 +98,9 @@ export class Planet {
   static readonly GW = 144;
   static readonly GH = 72;
 
-  constructor(seed: number, regions?: Region[]) {
+  constructor(seed: number, regions?: Region[], gen = 2) {
     this.seed = seed | 0;
+    this.gen = gen;
     this.makeBlobs();
     this.regions = regions ?? [this.placeHomeRegion(64)];
   }
@@ -102,6 +112,7 @@ export class Planet {
   }
 
   private makeBlobs(): void {
+    if (this.gen >= 2) { this.makeBlobsV2(); return; }
     const s = this.seed;
     const rnd = (k: number) => h3(k, 17, 5, s);
     const pick = (k: number, minSep: number, existing: Blob[]): Vec3 => {
@@ -120,6 +131,40 @@ export class Planet {
     for (let i = 0; i < 12; i++) this.blobs.push({ c: pick(300 + i, 0.5, this.blobs.slice(0, cont).concat(this.blobs.slice(cont))), r: 0.1 + rnd(320 + i) * 0.13, w: 1.2 });
   }
 
+  /**
+   * Génération v2 : 6 masses continentales réparties régulièrement (points de Fibonacci tournés et secoués par la graine),
+   * de tailles différentes, séparées par des océans continus, puis des archipels groupés au large des côtes.
+   */
+  private makeBlobsV2(): void {
+    const s = this.seed;
+    const rnd = (k: number) => h3(k, 17, 5, s);
+    const n = 6, ga = Math.PI * (3 - Math.sqrt(5));
+    const ra = rnd(1) * TAU, rb = (rnd(2) - 0.5) * 0.9;
+    const rot = (v: Vec3): Vec3 => { // rotation autour de y puis de x
+      const c = Math.cos(ra), si = Math.sin(ra), x = v[0] * c + v[2] * si, z = -v[0] * si + v[2] * c;
+      const c2 = Math.cos(rb), s2 = Math.sin(rb);
+      return [x, v[1] * c2 - z * s2, v[1] * s2 + z * c2];
+    };
+    for (let i = 0; i < n; i++) {
+      const y = 1 - (2 * (i + 0.5)) / n, q = Math.sqrt(1 - y * y), a = ga * i;
+      const c = norm(rot([q * Math.cos(a) + (rnd(10 + i) - 0.5) * 0.35, y * 0.9 + (rnd(20 + i) - 0.5) * 0.3, q * Math.sin(a) + (rnd(30 + i) - 0.5) * 0.35]));
+      this.blobs.push({ c, r: 0.6 + rnd(40 + i) * 0.25, w: 1.0 + rnd(50 + i) * 0.1 });
+    }
+    // archipels : 4 grappes de 3 à 4 îles à 0,85–1,15 rad d'un continent
+    const cont = this.blobs.length;
+    for (let g = 0; g < 4; g++) {
+      const base = this.blobs[Math.floor(rnd(60 + g) * cont)];
+      const dir = rnd(70 + g) * TAU, dist = 0.86 + rnd(80 + g) * 0.3;
+      const fr = frameAt(base.c);
+      const centre = norm([base.c[0] + (fr.e[0] * Math.cos(dir) + fr.s[0] * Math.sin(dir)) * dist, base.c[1] + (fr.e[1] * Math.cos(dir) + fr.s[1] * Math.sin(dir)) * dist, base.c[2] + (fr.e[2] * Math.cos(dir) + fr.s[2] * Math.sin(dir)) * dist]);
+      const f2 = frameAt(centre), k = 3 + Math.floor(rnd(90 + g) * 2);
+      for (let i = 0; i < k; i++) {
+        const a = rnd(100 + g * 10 + i) * TAU, d = 0.06 + rnd(120 + g * 10 + i) * 0.2;
+        this.blobs.push({ c: norm([centre[0] + (f2.e[0] * Math.cos(a) + f2.s[0] * Math.sin(a)) * d, centre[1] + (f2.e[1] * Math.cos(a) + f2.s[1] * Math.sin(a)) * d, centre[2] + (f2.e[2] * Math.cos(a) + f2.s[2] * Math.sin(a)) * d]), r: 0.1 + rnd(140 + g * 10 + i) * 0.1, w: 1.25 });
+      }
+    }
+  }
+
   /** Altitude normalisée (≈ -1 : abysses, 0 : niveau de la mer, 1 : hautes montagnes). Hors région (voir `heightWithRegions`). */
   height(d: Vec3): number {
     const s = this.seed;
@@ -128,9 +173,9 @@ export class Planet {
     const wz = (noise3(d[0] * 1.4, d[1] * 1.4, d[2] * 1.4 + 37, s + 3) - 0.5) * 0.7;
     const p = norm([d[0] + wx, d[1] + wy, d[2] + wz]);
     let f = 0;
-    for (const b of this.blobs) { const a = Math.acos(clamp(dot(p, b.c), -1, 1)); f += b.w * Math.exp(-Math.pow(a / b.r, 2) * 1.5); }
+    for (const b of this.blobs) { const a = Math.acos(clamp(dot(p, b.c), -1, 1)), v = b.w * Math.exp(-Math.pow(a / b.r, 2) * 1.5); if (this.gen >= 2) f = Math.max(f, v); else f += v; } // v2 : maximum (les continents ne fusionnent pas)
     const detail = (fbm3(d[0] * 3.2, d[1] * 3.2, d[2] * 3.2, s + 5, 4) - 0.5) * 0.6 + (fbm3(d[0] * 9, d[1] * 9, d[2] * 9, s + 9, 3) - 0.5) * 0.16;
-    const h = f + detail - 0.66;
+    const h = f + detail - (this.gen >= 2 ? 0.58 : 0.66);
     if (h > 0.3) { // chaînes de montagnes : relief en crêtes à l'intérieur des terres
       const ridge = 1 - Math.abs(fbm3(d[0] * 4.4, d[1] * 4.4, d[2] * 4.4, s + 13, 4) * 2 - 1);
       return h + ridge * ridge * 0.38 * sstep(0.3, 0.7, h);
@@ -141,7 +186,7 @@ export class Planet {
   /** Altitude finale : la zone d'une région est creusée (sous la surface de l'eau) car la carte réelle de la région y est tracée. */
   heightWithRegions(d: Vec3): number {
     let h = this.height(d);
-    for (const r of this.regions) { const w = this.regionWeight(r, d); if (w > 0) h = lerp(h, Math.min(h, -0.45), w); }
+    for (const r of this.regions) { if (r.derived) continue; const w = this.regionWeight(r, d); if (w > 0) h = lerp(h, Math.min(h, -0.45), w); }
     return h;
   }
 
@@ -155,6 +200,7 @@ export class Planet {
   }
 
   biomeOf(d: Vec3, h: number): number {
+    if (this.gen >= 2) return this.biomeV2(d, h);
     if (h < -0.04) return h < -0.06 ? BIOME.ocean : BIOME.shelf;
     if (h < 0.015) return BIOME.beach;
     const lat = Math.asin(clamp(d[1], -1, 1));
@@ -169,13 +215,30 @@ export class Planet {
     return moist < 0.36 ? BIOME.desert : moist < 0.46 ? BIOME.savanna : moist < 0.6 ? BIOME.grass : BIOME.forest;
   }
 
+  private biomeV2(d: Vec3, h: number): number {
+    if (h < -0.04) return h < -0.06 ? BIOME.ocean : BIOME.shelf;
+    if (h < 0.012) return BIOME.beach;
+    const lat = Math.asin(clamp(d[1], -1, 1));
+    const temp = 1 - Math.abs(lat) / 1.45 - Math.max(0, h) * 0.5 + (fbm3(d[0] * 2, d[1] * 2, d[2] * 2, this.seed + 21, 3) - 0.5) * 0.14;
+    const moist = fbm3(d[0] * 2.3 + 7, d[1] * 2.3, d[2] * 2.3, this.seed + 27, 4) + 0.2 * Math.cos(lat * 2.6) - 0.08;
+    if (h > 0.72 || (h > 0.5 && temp < 0.3)) return BIOME.snow;
+    if (h > 0.46) return BIOME.rock;
+    if (h > 0.27) return BIOME.hills;
+    if (temp < 0.02) return BIOME.snow;
+    if (temp < 0.2) return BIOME.tundra;
+    if (temp < 0.34) return moist > 0.42 ? BIOME.taiga : BIOME.tundra;
+    if (temp > 0.6) return moist < 0.44 ? BIOME.desert : moist < 0.56 ? BIOME.savanna : BIOME.jungle;
+    return moist < 0.33 ? BIOME.desert : moist < 0.44 ? BIOME.savanna : moist < 0.58 ? BIOME.grass : BIOME.forest;
+  }
+
   /** Couleur stylisée d'un point (palette cohérente avec le terrain local). */
   colorAt(d: Vec3, h: number, out: [number, number, number]): number {
     const b = this.biomeOf(d, h);
-    const base = PALETTE[b];
+    const PAL = this.gen >= 2 ? PALETTE_V2 : PALETTE_V1;
+    const base = PAL[b];
     const n = (fbm3(d[0] * 14, d[1] * 14, d[2] * 14, this.seed + 33, 2) - 0.5) * 0.16;
     let r = base[0], g = base[1], bl = base[2];
-    if (b === BIOME.ocean) { const k = sstep(-0.06, -0.5, h); r = lerp(PALETTE[1][0], 0.07, k); g = lerp(PALETTE[1][1], 0.27, k); bl = lerp(PALETTE[1][2], 0.42, k); }
+    if (b === BIOME.ocean) { const k = sstep(-0.06, -0.5, h); r = lerp(PAL[1][0], this.gen >= 2 ? 0.06 : 0.07, k); g = lerp(PAL[1][1], this.gen >= 2 ? 0.25 : 0.27, k); bl = lerp(PAL[1][2], this.gen >= 2 ? 0.46 : 0.42, k); }
     out[0] = clamp(r * (1 + n)); out[1] = clamp(g * (1 + n)); out[2] = clamp(bl * (1 + n));
     return b;
   }
@@ -214,6 +277,117 @@ export class Planet {
     if (!best) best = { score: 0, d: dirOf(0.4, 0.5) };
     const ll = latLonOf(best.d);
     return { id: 1, name: "Terre Première", lat: ll.lat, lon: ll.lon, spanDeg, size };
+  }
+
+  // ---------------------------------------------------------------- régions explorables (partout sur terre)
+
+  /** Région existante dont l'emprise contient la direction (marge comprise), sinon undefined. */
+  regionAt(d: Vec3, margin = 0): Region | undefined {
+    for (const r of this.regions) {
+      const l = this.dirToLocal(r, d);
+      if (l && l.x > -margin && l.y > -margin && l.x < r.size + margin && l.y < r.size + margin) return r;
+    }
+    return undefined;
+  }
+  /** Cellule de grille (déterministe) contenant la direction : bandes de latitude de la largeur d'une carte, longitudes en nombre entier par bande. */
+  gridCell(d: Vec3): { band: number; idx: number; lat: number; lon: number; id: number } {
+    const sr = (26 * Math.PI) / 180;
+    const { lat, lon } = latLonOf(d);
+    const band = Math.max(-5, Math.min(5, Math.round(lat / sr)));
+    const clat = band * sr;
+    const n = Math.max(1, Math.round((TAU * Math.cos(clat)) / sr));
+    const idx = ((Math.round(((lon + Math.PI) / TAU) * n) % n) + n) % n;
+    return { band, idx, lat: clat, lon: (idx / n) * TAU - Math.PI, id: 1000 + (band + 5) * 100 + idx };
+  }
+  /** Région qu'un toucher en ce point ouvrirait (sans la créer) : existante, ou cellule de grille ; null en mer. */
+  previewRegionAt(d: Vec3): Region | null {
+    const ex = this.regionAt(d, 0.5);
+    if (ex) return ex;
+    if (this.height(d) < 0.005) return null;
+    const c = this.gridCell(d), prior = this.regionById(c.id);
+    if (prior) return prior;
+    const home = this.regions[0];
+    if (home && !home.derived && Math.acos(clamp(dot(dirOf(c.lat, c.lon), this.regionCenter(home)), -1, 1)) < this.spanRad(home) * 1.05) return home;
+    const r: Region = { id: c.id, name: "", lat: c.lat, lon: c.lon, spanDeg: 26, size: 64, derived: true };
+    r.name = this.describeRegion(r);
+    return r;
+  }
+  /** Région explorable en un point : celle qui existe déjà, sinon celle de la cellule de grille (créée, persistante). Null sur l'océan. */
+  ensureRegionAt(d: Vec3): Region | null {
+    const ex = this.regionAt(d, 0.5);
+    if (ex) return ex;
+    if (this.height(d) < 0.005) return null;
+    const c = this.gridCell(d);
+    const prior = this.regionById(c.id);
+    if (prior) return prior;
+    const home = this.regions[0];
+    const cc = dirOf(c.lat, c.lon);
+    if (home && !home.derived && Math.acos(clamp(dot(cc, this.regionCenter(home)), -1, 1)) < this.spanRad(home) * 1.05) return home; // trop proche de la carte d'origine
+    return this.createRegion(c.lat, c.lon, c.id);
+  }
+  /** Crée (une seule fois) la région dérivée centrée en (lat, lon). */
+  createRegion(lat: number, lon: number, id: number, inhabited = false): Region {
+    const ex = this.regionById(id);
+    if (ex) return ex;
+    const center = dirOf(lat, lon), cont = this.continentAt(center);
+    const r: Region = { id, name: "", lat, lon, spanDeg: 26, size: 64, derived: true, seed: Math.imul(this.seed ^ 0x5bd1e995, id) >>> 0, continent: cont?.id, inhabited };
+    r.name = this.describeRegion(r);
+    this.regions.push(r);
+    return r;
+  }
+  /** Nom lisible : biome dominant de l'emprise + continent (« Forêts de Torath »). */
+  describeRegion(r: Region): string {
+    const counts = new Map<number, number>(), sr = this.spanRad(r);
+    for (let i = 0; i < 5; i++) for (let j = 0; j < 5; j++) {
+      const d = this.localToDir({ ...r, derived: true }, ((i + 0.5) / 5) * r.size, ((j + 0.5) / 5) * r.size), h = this.height(d);
+      if (h > 0) { const b = this.biomeOf(d, h); counts.set(b, (counts.get(b) ?? 0) + 1); }
+    }
+    void sr;
+    let best = BIOME.grass as number, bc = -1;
+    for (const [b, c] of counts) if (c > bc) { bc = c; best = b; }
+    const lab: Record<number, string> = { [BIOME.desert]: "Désert", [BIOME.savanna]: "Savanes", [BIOME.grass]: "Plaines", [BIOME.forest]: "Forêts", [BIOME.jungle]: "Jungles", [BIOME.taiga]: "Taïga", [BIOME.tundra]: "Toundra", [BIOME.hills]: "Collines", [BIOME.rock]: "Montagnes", [BIOME.snow]: "Glaces", [BIOME.beach]: "Rivages" };
+    const cont = this.continentAt(dirOf(r.lat, r.lon));
+    const nm = cont?.name ?? nameOf(this.seed, r.id);
+    const p = lab[best] ?? "Terres";
+    return `${p} ${/^[AEIOUYÉÈ]/i.test(nm) ? "d'" : "de "}${nm}`;
+  }
+  /** Proportion (0..1) de terres émergées et de terres fertiles dans l'emprise d'une région potentielle. */
+  footprintStats(lat: number, lon: number): { land: number; fertile: number; cold: number } {
+    const r: Region = { id: 0, name: "", lat, lon, spanDeg: 26, size: 64, derived: true };
+    let land = 0, fertile = 0, cold = 0, tot = 0;
+    for (let i = 0; i < 9; i++) for (let j = 0; j < 9; j++) {
+      const d = this.localToDir(r, ((i + 0.5) / 9) * 64, ((j + 0.5) / 9) * 64), h = this.height(d); tot++;
+      if (h <= 0.01) continue;
+      land++;
+      const b = this.biomeOf(d, h);
+      if (b === BIOME.grass || b === BIOME.forest || b === BIOME.savanna || b === BIOME.jungle) fertile++;
+      if (b === BIOME.snow || b === BIOME.tundra) cold++;
+    }
+    return { land: land / tot, fertile: fertile / tot, cold: cold / tot };
+  }
+  /**
+   * Régions de départ habitables, une par continent, loin de la carte d'origine : la meilleure cellule de chaque continent
+   * (terres, fertilité), triées par qualité. Déterministe.
+   */
+  suggestStartRegions(count: number): { lat: number; lon: number; id: number; continent: number }[] {
+    const home = this.regions[0] ? this.regionCenter(this.regions[0]) : null;
+    const best = new Map<number, { score: number; lat: number; lon: number; id: number }>();
+    const sr = (26 * Math.PI) / 180;
+    for (let band = -3; band <= 3; band++) {
+      const clat = band * sr, n = Math.max(1, Math.round((TAU * Math.cos(clat)) / sr));
+      for (let idx = 0; idx < n; idx++) {
+        const lon = (idx / n) * TAU - Math.PI, c = dirOf(clat, lon);
+        if (home && Math.acos(clamp(dot(c, home), -1, 1)) < 0.9) continue;
+        const st = this.footprintStats(clat, lon);
+        if (st.land < 0.5 || st.fertile < 0.3 || st.cold > 0.25) continue;
+        const cont = this.continentAt(c) ?? this.continentAt(dirOf(clat, lon + 0.1));
+        const key = cont ? cont.id : -1;
+        const score = st.fertile * 1.2 + st.land * 0.6 - st.cold - Math.abs(band) * 0.04 + h3(band + 9, idx, 3, this.seed) * 0.05;
+        const b = best.get(key);
+        if (!b || score > b.score) best.set(key, { score, lat: clat, lon, id: 1000 + (band + 5) * 100 + idx });
+      }
+    }
+    return [...best.entries()].sort((a, b) => b[1].score - a[1].score).slice(0, count).map(([continent, v]) => ({ lat: v.lat, lon: v.lon, id: v.id, continent }));
   }
 
   regionById(id: number): Region | undefined { return this.regions.find((r) => r.id === id); }
@@ -332,9 +506,10 @@ export class Planet {
     };
   }
 
-  serialize(): { seed: number; regions: Region[] } { return { seed: this.seed, regions: this.regions.map((r) => ({ ...r })) }; }
-  static restore(data: { seed: number; regions: Region[] } | undefined | null, fallbackSeed: number): Planet {
-    return data && Array.isArray(data.regions) && data.regions.length ? new Planet(data.seed, data.regions.map((r) => ({ ...r }))) : Planet.create(fallbackSeed);
+  serialize(): { seed: number; gen: number; regions: Region[] } { return { seed: this.seed, gen: this.gen, regions: this.regions.map((r) => ({ ...r })) }; }
+  /** Restaure une planète. Une planète sauvegardée sans version est de génération 1 (jamais régénérée) ; sans planète du tout : génération actuelle. */
+  static restore(data: { seed: number; gen?: number; regions: Region[] } | undefined | null, fallbackSeed: number): Planet {
+    return data && Array.isArray(data.regions) && data.regions.length ? new Planet(data.seed, data.regions.map((r) => ({ ...r })), data.gen ?? 1) : Planet.create(fallbackSeed);
   }
 }
 

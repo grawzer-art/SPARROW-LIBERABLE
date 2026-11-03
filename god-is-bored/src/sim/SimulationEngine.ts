@@ -32,6 +32,10 @@ export class SimulationEngine {
   seed: number;
   tick = 0;
   nextId = 1;
+  /** Région planétaire portée par cette simulation (1 : carte d'origine). */
+  regionId = 1;
+  /** Couleurs de civilisations déjà employées dans d'autres régions (identification unique sur la planète, non sauvegardé). */
+  extraUsedColors: number[] = [];
   civs: Civ[] = [];
   cities: City[] = [];
   buildings: Building[] = [];

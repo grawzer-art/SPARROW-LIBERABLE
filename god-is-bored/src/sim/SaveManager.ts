@@ -28,7 +28,7 @@ export class SaveManager {
         seedUsed: w.seedUsed, hillH: w.hillH, mtnH: w.mtnH,
         height: Array.from(w.height, r3), type: Array.from(w.type), trees: Array.from(w.trees), maxTrees: Array.from(w.maxTrees),
         fertility: Array.from(w.fertility, r3), stone: Array.from(w.stone, (v) => Math.round(v)), owner: Array.from(w.owner),
-        fire: Array.from(w.fire), scorch: Array.from(w.scorch, r3),
+        fire: Array.from(w.fire), scorch: Array.from(w.scorch, r3), biome: Array.from(w.biome),
       },
     };
     return JSON.stringify(data);
@@ -42,6 +42,7 @@ export class SaveManager {
     w.height.set(d.world.height); w.type.set(d.world.type); w.trees.set(d.world.trees); w.maxTrees.set(d.world.maxTrees);
     w.fertility.set(d.world.fertility); w.stone.set(d.world.stone); w.owner.set(d.world.owner); w.fire.set(d.world.fire);
     w.scorch.set(d.world.scorch);
+    if (d.world.biome) w.biome.set(d.world.biome);
     w.recomputeCorners();
     w.computeRegions();
     const sim = new SimulationEngine(w, d.seed);

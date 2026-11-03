@@ -7,6 +7,39 @@ export interface PathSeg { ax: number; ay: number; bx: number; by: number; w: nu
 
 const smooth = (a: number, b: number, x: number) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
+/** Couleur de base d'une case (matériaux naturels, biome, territoire, feu, cendres, sol urbanisé) : partagée avec la vue planétaire. */
+export function tileBaseColor(w: World, i: number, ownerColor: number, urban: number, out: THREE.Color, tmp: THREE.Color): void {
+  const t = w.type[i], h = w.height[i], f = w.fertility[i];
+  const bio = w.biome[i];
+  if (bio > 0 && (t === T.GRASS || t === T.SAND || t === T.HILL || t === T.MOUNTAIN)) {
+    // région dérivée du globe : la couleur suit le biome réel (désert, savane, forêt, jungle, taïga, toundra, glace…)
+    const BIO: Record<number, number> = { 2: 0xdccb98, 3: 0xd9b866, 4: 0xb9ad5c, 5: 0x6f9d49, 6: 0x4d8a45, 7: 0x3f8a4f, 8: 0x56795c, 9: 0xa3ae96, 10: 0x8f9a58, 11: 0x8b857d, 12: 0xeef2f5 };
+    out.setHex(BIO[bio] ?? 0x6f9d49);
+    if (t === T.MOUNTAIN) out.lerp(tmp.setHex(0xf0f2f4), smooth(2.9, 3.6, h));
+    else if (t === T.HILL) out.lerp(tmp.setHex(0x9a8f66), 0.25 * Math.min(1, (h - w.hillH) / 1.0));
+    else if (t === T.GRASS && bio !== 12) out.lerp(tmp.setHex(0x4f8040), Math.min(0.4, h / 4));
+  } else switch (t) {
+    case T.WATER: out.setHex(0xcbbf94); break;
+    case T.SAND: out.setHex(0xd9c795); break;
+    case T.GRASS: {
+      out.setHex(0x6f9d49).lerp(tmp.setHex(0x4f8040), Math.min(1, h / 1.6)).lerp(tmp.setHex(0xa59d58), Math.max(0, 0.5 - f) * 1.4);
+      break;
+    }
+    case T.HILL: out.setHex(0x8f9a58).lerp(tmp.setHex(0x9a8f66), Math.min(1, (h - w.hillH) / 1.0)); break;
+    case T.MOUNTAIN: out.setHex(0x8b857d).lerp(tmp.setHex(0xf0f2f4), smooth(2.9, 3.6, h)); break;
+    default: out.setHex(0x7d6a4a); // berge de rivière : boue
+  }
+  if (t !== T.WATER) {
+    if (w.scorch[i] > 0) out.lerp(tmp.setHex(0x2f2a26), Math.min(0.88, w.scorch[i] * 0.9));
+    if (w.fire[i] > 0) out.lerp(tmp.setHex(0x40200e), 0.5);
+    if (ownerColor >= 0) out.lerp(tmp.setHex(ownerColor), 0.075);
+    if (urban > 0) {
+      const e = (urban & 7) - 1, strong = (urban & 8) !== 0;
+      out.lerp(tmp.setHex([0x8d7650, 0xb9ae8c, 0x938c80, 0x59574f, 0x6a6d72, 0xbcd0dc][e]), strong ? 0.58 : 0.26);
+    }
+  }
+}
+
 /**
  * Terrain doux : maillage indexé à haute résolution (hauteur bicubique), normales lissées, couleurs par sommet
  * interpolées entre les cases (aucune limite de case visible), bruit, pentes rocheuses, berges, sable mouillé,
@@ -81,29 +114,7 @@ export class Terrain {
 
   /** Couleur de base d'une case (avant interpolation) : matériaux naturels, légère teinte de territoire, feu, cendres, sol urbanisé. */
   private tileBase(w: World, i: number, ownerColor: number, urban: number, out: THREE.Color): void {
-    const t = w.type[i], h = w.height[i], f = w.fertility[i];
-    const x = i % this.N, y = (i / this.N) | 0;
-    switch (t) {
-      case T.WATER: out.setHex(0xcbbf94); break;
-      case T.SAND: out.setHex(0xd9c795); break;
-      case T.GRASS: {
-        out.setHex(0x6f9d49).lerp(this.tmp.setHex(0x4f8040), Math.min(1, h / 1.6)).lerp(this.tmp.setHex(0xa59d58), Math.max(0, 0.5 - f) * 1.4);
-        break;
-      }
-      case T.HILL: out.setHex(0x8f9a58).lerp(this.tmp.setHex(0x9a8f66), Math.min(1, (h - w.hillH) / 1.0)); break;
-      case T.MOUNTAIN: out.setHex(0x8b857d).lerp(this.tmp.setHex(0xf0f2f4), smooth(2.9, 3.6, h)); break;
-      default: out.setHex(0x7d6a4a); // berge de rivière : boue
-    }
-    if (t !== T.WATER) {
-      if (w.scorch[i] > 0) out.lerp(this.tmp.setHex(0x2f2a26), Math.min(0.88, w.scorch[i] * 0.9));
-      if (w.fire[i] > 0) out.lerp(this.tmp.setHex(0x40200e), 0.5);
-      if (ownerColor >= 0) out.lerp(this.tmp.setHex(ownerColor), 0.075);
-      if (urban > 0) {
-        const e = (urban & 7) - 1, strong = (urban & 8) !== 0;
-        out.lerp(this.tmp.setHex([0x8d7650, 0xb9ae8c, 0x938c80, 0x59574f, 0x6a6d72, 0xbcd0dc][e]), strong ? 0.58 : 0.26);
-      }
-    }
-    void x; void y;
+    tileBaseColor(w, i, ownerColor, urban, out, this.tmp);
   }
 
   /**
