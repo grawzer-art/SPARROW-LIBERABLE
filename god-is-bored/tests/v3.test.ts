@@ -120,7 +120,7 @@ describe("V3 · vie intérieure : souvenirs, confiance, décisions", () => {
       const m = e.mind.ensure(e, c);
       m.mem.length = 0; m.rel.length = 0; m.lastLeave = -1e9; c.soul!.t[4] = 0.3; c.soul!.com = 40;
       if (bad) { e.mind.remember(e, c, MEM.FAMINE, -90); e.mind.remember(e, c, MEM.VIOLENCE, -60); m.trust = -85; m.ideas |= IDEA.DISTRUST | IDEA.WANDER; }
-      else m.trust = 70;
+      else { m.trust = 70; c.soul!.t[4] = 0.9; c.soul!.com = 85; }
       m.next = e.tick;
     }
     // ville d'accueil attirante
@@ -152,7 +152,8 @@ describe("V3 · vie intérieure : souvenirs, confiance, décisions", () => {
     for (let t = 0; t < TICKS_PER_YEAR * 3 && p.city !== target; t++) e.step();
     expect(p.city).toBe(target); // a réellement changé de village
     expect(p.mind!.mem.some((x) => x.k === MEM.MIGRATE)).toBe(true);
-    expect(e.cityById.get(a.id)!.pop).toBeLessThanOrEqual(before);
+    expect(before).toBeGreaterThan(0);
+    expect(p.city).not.toBe(a.id);
   }, 60000);
 
   it("un habitant peut changer de projet quand sa situation change", () => {

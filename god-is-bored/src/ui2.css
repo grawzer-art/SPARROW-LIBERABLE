@@ -145,3 +145,11 @@ body.m-planet #place, body.m-region #place { top: calc(var(--sat) + 92px); }
 #bubble.hidden { display: none; }
 #bubble::after { content: ""; position: absolute; left: 50%; bottom: -5px; width: 8px; height: 8px; background: inherit; border-right: 1px solid var(--glass-line); border-bottom: 1px solid var(--glass-line); transform: translateX(-50%) rotate(45deg); }
 body.card-open #msgs { bottom: calc(var(--sab) + 262px); }
+.talkline { display: flex; flex-direction: column; gap: 1px; max-width: 86%; margin: 7px 0; padding: 8px 12px; border-radius: 16px; background: rgba(255,255,255,.07); }
+.talkline.r { margin-left: auto; background: rgba(255, 226, 168, .14); }
+.talkline b { font-size: 11.5px; color: var(--warm); letter-spacing: .02em; }
+.talkline span { font-family: var(--serif); font-size: 14.5px; line-height: 1.35; color: #f4ead6; }
+
+/* mode « sans interface » (scène témoin) : le monde seul ; une carte apparaît quand on touche un habitant */
+body.noui #hud, body.noui #dock, body.noui #follow, body.noui #place, body.noui #tray, body.noui #armed { display: none !important; }
+body.noui #app::after { background: radial-gradient(ellipse at 50% 46%, rgba(0,0,0,0) 50%, rgba(34, 18, 30, .34) 100%); }

@@ -6,6 +6,8 @@ import { PlanetSim, START_INHABITED_REGIONS } from "./sim/PlanetSim";
 import { SimulationEngine } from "./sim/SimulationEngine";
 import type { ChronicleEntry } from "./sim/types";
 import { buildReferenceWorld } from "./sim/Reference";
+import { buildWitnessScene, type WitnessCast } from "./sim/WitnessScene";
+import { Director } from "./render/Director";
 import { TICK_MS } from "./sim/config";
 import { UI, MOBILE_Q, type GameHost } from "./ui/UI";
 
@@ -20,6 +22,8 @@ class Game implements GameHost {
   mode: GameMode = "local";
   level: ScaleLevel = "local";
   private busy = false;
+  director: Director | null = null;
+  witness: WitnessCast | null = null;
   private startLocal = false;
   private last = performance.now();
   private lastSave = performance.now();
@@ -45,7 +49,8 @@ class Game implements GameHost {
     this.ui.onPlanetAction = (id) => this.planetView.action(id);
     (window as unknown as { game: Game }).game = this;
     const q = new URLSearchParams(location.search);
-    if (q.has("ref")) { this.referenceScene(); this.setMode("local", true); }
+    if (q.get("scene") === "sentience") { this.sentienceScene(q.get("ui") === "1"); }
+    else if (q.has("ref")) { this.referenceScene(); this.setMode("local", true); }
     else this.intro();
     if (q.has("local")) this.startLocal = true;
     requestAnimationFrame((t) => this.loop(t));
@@ -169,6 +174,25 @@ class Game implements GameHost {
     // démarrage direct possible : un clic ailleurs ne ferme rien, volontairement
   }
 
+  /** Scène témoin « Sentience » : village, cinq habitants avec mémoire, conversation spontanée, décision, action collective ; vue sans interface pilotée par le réalisateur. */
+  private sentienceScene(showUi: boolean): void {
+    document.getElementById("intro")!.classList.add("hidden");
+    const { e, cast } = buildWitnessScene();
+    this.witness = cast;
+    this.swap(PlanetSim.fromEngine(e));
+    e.speed = Number(new URLSearchParams(location.search).get("speed")) || 1; e.paused = false;
+    this.setMode("local", true);
+    this.renderer.setPose(cast.home.x + 0.5, cast.home.y + 1.5, 21, 0.62, 0.9);
+    if (!showUi) document.body.classList.add("noui");
+    const ids = () => [cast.mira.id, cast.ysa.id, cast.tobias.id, cast.garen.id, cast.lenn.id, cast.kid.id];
+    this.director = new Director(() => this.sim, this.renderer, () => ({ x: cast.home.x + 0.5, y: cast.home.y + 1.5 }), ids, () => cast.sites.find((id) => (this.sim.buildingById.get(id)?.progress ?? 1) < 1) ?? cast.site);
+    const el = this.renderer.three.domElement;
+    el.addEventListener("pointerdown", () => this.director?.yield(14));
+    el.addEventListener("wheel", () => this.director?.yield(14), { passive: true });
+    // un toucher sur le décor fait apparaître l'interface (et le réalisateur laisse la main) ; deux touchers rapides la masquent
+    el.addEventListener("dblclick", () => document.body.classList.toggle("noui"));
+  }
+
   /** Scène de référence graphique : trois villes à trois époques, jour, caméra sur la cité moderne. */
   private referenceScene(): void {
     document.getElementById("intro")!.classList.add("hidden");
@@ -266,7 +290,7 @@ class Game implements GameHost {
       // plafonne le rendu (60 i/s, 30 en dernier recours) : Safari ProMotion tourne à 120 Hz
       if (now - this.lastRender >= this.renderer.frameInterval) {
         const alpha = this.sim.paused ? 1 : Math.min(1, this.sim.acc / TICK_MS);
-        if (this.mode === "local") this.renderer.frame(Math.min(0.25, this.accDt), alpha);
+        if (this.mode === "local") { this.director?.update(Math.min(0.25, this.accDt)); this.renderer.frame(Math.min(0.25, this.accDt), alpha); }
         else { this.renderer.drainFx(); this.planetView.frame(Math.min(0.25, this.accDt)); }
         this.accDt = 0;
         this.lastRender = now;

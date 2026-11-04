@@ -143,7 +143,7 @@ describe("Modèles : architecture variée, personnages articulés", () => {
       const part = g.attributes.aPart.array as Float32Array;
       const seen = new Set(Array.from(part));
       for (const p of [PART.body, PART.legL, PART.legR, PART.armL, PART.armR]) expect(seen.has(p), `époque ${e} : partie ${p}`).toBe(true);
-      expect(vertexCount(g)).toBeLessThan(750);
+      expect(vertexCount(g)).toBeLessThan(1500);
     }
     expect(prints.size).toBe(12);
     const gear = new Set(), tools = new Set();

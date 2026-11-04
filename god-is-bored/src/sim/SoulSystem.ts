@@ -1,6 +1,7 @@
 import { CITIZEN_SPEED } from "./config";
 import { moveToward } from "./path";
 import { hash2 } from "./rng";
+import { TUNING } from "./tuning";
 import { HOUSE_CAP } from "./EconomySystem";
 import type { SimulationEngine } from "./SimulationEngine";
 import type { ActionId, Building, Citizen, City, Civ, SoulState } from "./types";
@@ -115,7 +116,7 @@ export class SoulSystem {
       case "idle": case "wander": s.fat += 0.04 * k; break;
       default: s.fat += 0.12 * k; // travail, marche, combat, fuite
     }
-    s.soc += c.state === "talk" ? -4 : 0.08 + 0.12 * s.t[0];
+    s.soc += c.state === "talk" ? -0.5 : 0.08 + 0.12 * s.t[0]; // une vraie conversation dure plusieurs secondes
     // confort : un logement non surpeuplé rassure ; sans toit (ou entassé), il s'érode
     const home = this.homeOf(sim, s);
     const crowd = home ? (this.occ.get(home.id) ?? 1) / HOUSE_CAP[Math.min(5, home.era)] : 2;
@@ -193,7 +194,11 @@ export class SoulSystem {
     const s = this.ensure(c), t = sim.tick;
     const cur = s.act;
     const emergency = c.hunger > 90 || s.fat > 95;
+    // une conversation entamée n'est pas coupée au milieu d'une phrase : on reste jusqu'à ce que l'échange soit terminé
+    if (TUNING.mind && cur === ACT.SOCIAL && s.target >= 0 && !emergency && c.panic <= 0 && c.hunger < 65 && s.fat < 85) { const tk = sim.talk.get(c.id, s.target); if (tk && !tk.over) { s.until = Math.max(s.until, t + 8); return cur; } }
     if (!emergency && t < s.until && t - s.since < MIN_HOLD && !(s.failUntil > t && s.fail === cur)) return cur;
+    // en route vers un nouveau village : le voyage prime sur les bavardages et le repos (la faim ou l'épuisement restent prioritaires)
+    if (c.mind && c.mind.goal === 1 && (c.mind.go === undefined || t >= c.mind.go) && !emergency && c.hunger < 72 && s.fat < 90 && c.panic <= 0) { if (cur !== ACT.WORK) { s.act = ACT.WORK; s.since = t; s.until = t + 20; s.target = -1; } return ACT.WORK; }
     const u = this.tmp;
     this.score(sim, c, civ, u);
     let best: ActionId = ACT.WORK;
@@ -257,7 +262,8 @@ export class SoulSystem {
     if (p && (p.dead || p.civ !== c.civ || p.panic > 0 || Math.hypot(p.x - c.x, p.y - c.y) > 9)) p = null;
     if (!p) { p = this.findPartner(sim, c); s.target = p ? p.id : -1; }
     if (!p) { this.fail(sim, c, ACT.SOCIAL, 30); return false; }
-    if (s.soc < 18 && c.state === "talk") { this.done(sim, c); c.state = "idle"; return false; }
+    const tk = sim.talk.get(c.id, p.id);
+    if ((s.soc < 12 || (tk && tk.over)) && c.state === "talk") { this.done(sim, c); c.state = "idle"; s.target = -1; return false; }
     const d = Math.hypot(p.x - c.x, p.y - c.y);
     if (d > 1.15) {
       const r = moveToward(sim.world, c, p.x, p.y, CITIZEN_SPEED, 1.0);
@@ -268,8 +274,9 @@ export class SoulSystem {
     if (c.state !== "talk") this.stats.talks++;
     c.state = "talk";
     const ps = this.ensure(p);
-    ps.soc = clamp(ps.soc - 3);
+    ps.soc = clamp(ps.soc - 0.4);
     sim.mind.interact(sim, c, p);
+    if (TUNING.mind) sim.talk.step(sim, c, p);
     // l'interlocuteur s'arrête aussi, s'il n'a pas d'urgence
     if (ps.act !== ACT.SOCIAL && p.hunger < 70 && ps.fat < 85 && p.panic === 0 && p.army < 0) { ps.act = ACT.SOCIAL; ps.target = c.id; ps.since = sim.tick; ps.until = sim.tick + 10; }
     return true;

@@ -536,6 +536,14 @@ export class Renderer {
     return this.mobile ? (this.quality >= 3 ? 33 : 15) : 0;
   }
   /** Se rapproche en douceur d'un point : l'inclinaison est ramenée dans une plage lisible (jamais rasante, jamais verticale). */
+  /** Glisse en douceur vers une pose (cadrage automatique d'une conversation, caméra du directeur) : `k` = fraction parcourue ce frame. */
+  glide(x: number, y: number, dist: number, el: number, az: number, k: number): void {
+    const p = this.getPose();
+    let da = az - p.az; da = Math.atan2(Math.sin(da), Math.cos(da));
+    const kk = Math.max(0, Math.min(1, k));
+    this.setPose(p.x + (x - p.x) * kk, p.y + (y - p.y) * kk, p.dist + (dist - p.dist) * kk, p.el + (el - p.el) * kk, p.az + da * kk);
+  }
+
   /** Position écran (px) d'un point de la carte locale, ou null s'il est derrière la caméra. */
   screenOf(x: number, y: number): { x: number; y: number } | null {
     const v = new THREE.Vector3(x - this.N / 2, Math.max(0, this.sim.world.heightAt(x, y)) + 0.95, y - this.N / 2).project(this.camera);

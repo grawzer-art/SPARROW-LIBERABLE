@@ -48,6 +48,7 @@ export interface Mind {
   goal: number; gT: number; gTarget: number; gWhy: number[]; // projet, début, cible (ville/habitant), raisons (codes)
   next: number; // prochaine délibération (tick)
   lastLeave: number;
+  go?: number; // départ concerté : tick avant lequel on prépare le voyage (la famille se rassemble)
 }
 
 export interface Citizen {

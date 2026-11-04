@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { blob, box, cone, cyl, merge } from "./geo";
+import { ball, blob, box, cone, cyl, merge } from "./geo";
 import type { Sky } from "./Sky";
 
 type G = THREE.BufferGeometry;
@@ -15,55 +15,60 @@ function tag(g: G, part: number, region: number): G {
   return g;
 }
 const W = 0xffffff;
+/** Tronc ovale effilé (épaules plus larges que la taille) : remplace les torses en boîte. */
+const oval = (w: number, h: number, d: number, y: number, color: number = W): G => { const g = cyl(w * 0.5, w * 0.6, h, 8, 0, y, 0, color); g.scale(1, 1, d / w); return g; };
+/** Sphère aplatie ou étirée (têtes, mains, volumes arrondis) : même sommets que `ball`, proportions libres. */
+const lobe = (rx: number, ry: number, rz: number, x: number, y: number, z: number, color: number = W, sw = 6, sh = 4): G => { const g = ball(1, 0, 0, 0, color, sw, sh); g.scale(rx, ry, rz); g.translate(x, y, z); return g; };
 // repère : le personnage regarde vers +X, pieds en y=0, hanches y=0.15, épaules y=0.30
 const legs = (era: number): G[] => {
   const reg = era <= 1 ? REGION.skin : REGION.pants;
-  return [tag(box(0.05, 0.15, 0.052, 0, 0, 0.034, W), PART.legL, reg), tag(box(0.05, 0.15, 0.052, 0, 0, -0.034, W), PART.legR, reg),
-    tag(box(0.07, 0.025, 0.056, 0.008, 0, 0.034, era >= 3 ? 0x2a2622 : 0x5a4330), PART.legL, REGION.fixed), tag(box(0.07, 0.025, 0.056, 0.008, 0, -0.034, era >= 3 ? 0x2a2622 : 0x5a4330), PART.legR, REGION.fixed)];
+  const shoe = era >= 3 ? 0x2a2622 : 0x5a4330;
+  return [tag(cyl(0.024, 0.03, 0.15, 6, 0, 0, 0.034, W), PART.legL, reg), tag(cyl(0.024, 0.03, 0.15, 6, 0, 0, -0.034, W), PART.legR, reg),
+    tag(lobe(0.044, 0.02, 0.03, 0.012, 0.016, 0.034, shoe), PART.legL, REGION.fixed), tag(lobe(0.044, 0.02, 0.03, 0.012, 0.016, -0.034, shoe), PART.legR, REGION.fixed)];
 };
 const arms = (era: number): G[] => {
   const reg = era <= 1 ? REGION.skin : REGION.cloth;
-  return [tag(box(0.038, 0.15, 0.038, 0, 0.155, 0.083, W), PART.armL, reg), tag(box(0.038, 0.15, 0.038, 0, 0.155, -0.083, W), PART.armR, reg),
-    tag(box(0.04, 0.04, 0.04, 0, 0.14, 0.083, W), PART.armL, REGION.skin), tag(box(0.04, 0.04, 0.04, 0, 0.14, -0.083, W), PART.armR, REGION.skin)];
+  return [tag(cyl(0.017, 0.022, 0.15, 6, 0, 0.155, 0.083, W), PART.armL, reg), tag(cyl(0.017, 0.022, 0.15, 6, 0, 0.155, -0.083, W), PART.armR, reg),
+    tag(lobe(0.024, 0.026, 0.024, 0, 0.145, 0.083), PART.armL, REGION.skin), tag(lobe(0.024, 0.026, 0.024, 0, 0.145, -0.083), PART.armR, REGION.skin)];
 };
-const head = (): G[] => [tag(blob(0.056, 0.004, 0.37, 0, W), PART.body, REGION.skin), tag(box(0.012, 0.014, 0.014, 0.054, 0.37, 0.02, 0x1d1a18), PART.body, REGION.fixed), tag(box(0.012, 0.014, 0.014, 0.054, 0.37, -0.02, 0x1d1a18), PART.body, REGION.fixed)];
+const head = (): G[] => [tag(lobe(0.052, 0.058, 0.05, 0, 0.375, 0, W, 8, 6), PART.body, REGION.skin), tag(box(0.01, 0.013, 0.012, 0.05, 0.38, 0.02, 0x1d1a18), PART.body, REGION.fixed), tag(box(0.01, 0.013, 0.012, 0.05, 0.38, -0.02, 0x1d1a18), PART.body, REGION.fixed), tag(box(0.014, 0.018, 0.014, 0.056, 0.362, 0, W), PART.body, REGION.skin)];
 
 function outfit(era: number, female: boolean, v = 0): G[] {
   const out: G[] = [...legs(era), ...arms(era), ...head()];
   const B = (g: G, r: number = REGION.cloth) => out.push(tag(g, PART.body, r));
   switch (era) {
     case 0: // peaux de bêtes
-      B(box(0.085, 0.15, 0.135, 0, 0.15, 0, W)); B(cone(0.1, 0.1, 6, 0, 0.07, 0, W));
+      B(oval(0.085, 0.15, 0.135, 0.15)); B(cone(0.1, 0.1, 6, 0, 0.07, 0, W));
       out.push(tag(box(0.055, 0.032, 0.055, 0.0, 0.285, 0.083, 0xb09a78), PART.body, REGION.fixed), tag(box(0.055, 0.032, 0.055, 0.0, 0.285, -0.083, 0xb09a78), PART.body, REGION.fixed));
       out.push(tag(blob(0.062, -0.012, 0.395, 0, W), PART.body, REGION.hair), tag(box(0.05, 0.03, 0.05, 0.02, 0.42, 0.03, W), PART.body, REGION.hair));
       if (female) out.push(tag(box(0.03, 0.12, 0.08, -0.05, 0.27, 0, W), PART.body, REGION.hair));
       break;
     case 1: // tunique / toge
-      B(box(0.085, 0.16, 0.135, 0, 0.15, 0, W)); B(cone(0.105, female ? 0.17 : 0.1, 7, 0, female ? 0.02 : 0.06, 0, W));
+      B(oval(0.085, 0.16, 0.135, 0.15)); B(cone(0.105, female ? 0.17 : 0.1, 7, 0, female ? 0.02 : 0.06, 0, W));
       out.push(tag(box(0.09, 0.03, 0.14, 0, 0.2, 0, 0xd8b64a), PART.body, REGION.fixed));
       out.push(tag(blob(0.058, -0.004, 0.388, 0, W), PART.body, REGION.hair), tag(cyl(0.06, 0.06, 0.012, 7, 0, 0.405, 0, 0x4f9a52), PART.body, REGION.fixed));
       if (female) out.push(tag(box(0.04, 0.14, 0.09, -0.05, 0.25, 0, W), PART.body, REGION.hair));
       break;
     case 2: // surcot, capuche
-      B(box(0.088, 0.17, 0.138, 0, 0.15, 0, W)); B(cone(0.11, female ? 0.18 : 0.12, 7, 0, female ? 0.02 : 0.05, 0, W));
+      B(oval(0.088, 0.17, 0.138, 0.15)); B(cone(0.11, female ? 0.18 : 0.12, 7, 0, female ? 0.02 : 0.05, 0, W));
       out.push(tag(box(0.092, 0.022, 0.142, 0, 0.19, 0, 0x4a3a2a), PART.body, REGION.fixed));
       if (female) out.push(tag(blob(0.062, -0.006, 0.385, 0, 0xe8e2d4), PART.body, REGION.fixed), tag(box(0.05, 0.1, 0.1, -0.05, 0.27, 0, 0xe8e2d4), PART.body, REGION.fixed));
       else { out.push(tag(cone(0.066, 0.09, 6, -0.005, 0.39, 0, W), PART.body, REGION.accent), tag(blob(0.058, -0.012, 0.37, 0, W), PART.body, REGION.hair)); }
       break;
     case 3: // manteau, chapeau
-      B(box(0.09, 0.19, 0.14, 0, 0.14, 0, W)); if (female) B(cone(0.115, 0.17, 7, 0, 0.03, 0, W));
+      B(oval(0.09, 0.19, 0.14, 0.14)); if (female) B(cone(0.115, 0.17, 7, 0, 0.03, 0, W));
       out.push(tag(box(0.092, 0.2, 0.026, 0.0, 0.14, 0, 0x2a2622), PART.body, REGION.fixed));
       if (female) out.push(tag(blob(0.062, -0.01, 0.388, 0, W), PART.body, REGION.hair), tag(cyl(0.075, 0.075, 0.01, 7, 0, 0.405, 0, 0x4a3a30), PART.body, REGION.fixed));
       else out.push(tag(cyl(0.085, 0.085, 0.012, 7, 0, 0.405, 0, 0x2a2622), PART.body, REGION.fixed), tag(cyl(0.05, 0.05, 0.075, 7, 0, 0.415, 0, 0x2a2622), PART.body, REGION.fixed));
       break;
     case 4: // veste, jean
-      B(box(0.085, 0.16, 0.14, 0, 0.15, 0, W)); B(box(0.08, 0.04, 0.136, 0, 0.13, 0, W));
+      B(oval(0.085, 0.16, 0.14, 0.15)); B(oval(0.08, 0.04, 0.136, 0.13));
       if (female) out.push(tag(box(0.1, 0.07, 0.15, 0, 0.1, 0, W), PART.body, REGION.cloth));
       out.push(tag(blob(0.06, -0.008, 0.385, 0, W), PART.body, REGION.hair));
       if (female) out.push(tag(box(0.035, 0.1, 0.09, -0.052, 0.28, 0, W), PART.body, REGION.hair));
       break;
     default: // combinaison, visière
-      B(box(0.08, 0.16, 0.13, 0, 0.15, 0, W)); out.push(tag(box(0.082, 0.02, 0.132, 0, 0.22, 0, 0x62e4ff), PART.body, REGION.fixed), tag(box(0.082, 0.012, 0.132, 0, 0.17, 0, 0x62e4ff), PART.body, REGION.fixed));
+      B(oval(0.08, 0.16, 0.13, 0.15)); out.push(tag(box(0.082, 0.02, 0.132, 0, 0.22, 0, 0x62e4ff), PART.body, REGION.fixed), tag(box(0.082, 0.012, 0.132, 0, 0.17, 0, 0x62e4ff), PART.body, REGION.fixed));
       out.push(tag(blob(0.058, -0.006, 0.385, 0, W), PART.body, REGION.hair), tag(box(0.04, 0.026, 0.11, 0.035, 0.375, 0, 0x62e4ff), PART.body, REGION.fixed));
       if (female) out.push(tag(box(0.03, 0.09, 0.08, -0.05, 0.28, 0, W), PART.body, REGION.hair));
   }
@@ -134,6 +139,21 @@ export function toolGeometry(era: number, kind = 0): G {
   return g;
 }
 
+/** Charge portée à deux mains devant le torse : 0 planches (bâtisseur vers son chantier), 1 fagot, 2 sac de grain. */
+export function loadGeometry(kind = 0): G {
+  const key = "load" + kind;
+  let g = cache.get(key);
+  if (g) return g;
+  const R = (g2: G) => tag(g2, PART.body, REGION.fixed);
+  g = merge(kind === 0
+    ? [R(box(0.2, 0.025, 0.07, 0.12, 0.19, 0, 0xc9a266)), R(box(0.2, 0.025, 0.07, 0.12, 0.215, 0.012, 0xb48f55)), R(box(0.2, 0.025, 0.07, 0.12, 0.24, -0.008, 0xd2ae72)), R(box(0.025, 0.07, 0.09, 0.07, 0.19, 0, 0x7b5a3a))]
+    : kind === 1
+      ? [R(cyl(0.045, 0.045, 0.2, 6, 0.12, 0.2, 0, 0x7b5a3a).rotateX(Math.PI / 2)), R(cyl(0.04, 0.04, 0.2, 6, 0.12, 0.23, 0.02, 0x8f6c47).rotateX(Math.PI / 2))]
+      : [R(blob(0.075, 0.12, 0.22, 0, 0xd9c283)), R(blob(0.06, 0.12, 0.27, 0, 0xcfb674))]);
+  cache.set(key, g);
+  return g;
+}
+
 /** Silhouette légère pour le niveau de détail lointain (aucune animation). */
 export function farPersonGeometry(): G {
   let g = cache.get("far");
@@ -155,7 +175,7 @@ uniform float uTime;
 attribute float aPart; attribute float aRegion;
 attribute vec4 aAnim; attribute vec3 aCloth; attribute vec3 aSkin; attribute vec3 aHair; attribute vec3 aAccent;
 vec2 gPiv; float gAng; float gYoff;
-// pose (angle, décalage vertical) d'un membre pour un mode : 0 repos, 1 marche, 2 frappe (hache/marteau/pioche), 3 combat, 4 assis, 5 bêche/cueillette, 6 lecture
+// pose (angle, décalage vertical) d'un membre pour un mode : 0 repos, 1 marche, 2 frappe (hache/marteau/pioche), 3 combat, 4 assis, 5 bêche/cueillette, 6 lecture, 7 parle, 8 écoute, 9 dispute, 10 porte
 vec2 pose(float m, float part){
   float ph = aAnim.y, sp = aAnim.z;
   float wk = sin(uTime*9.0*sp + ph), wr = uTime*5.0*sp + ph, wf = uTime*7.0*sp + ph, ws = uTime*3.2*sp + ph;
@@ -168,7 +188,19 @@ vec2 pose(float m, float part){
   else if (m < 3.5) { if (leg) a = s*sin(wf*0.5)*0.35; else if (aL) a = 0.6 + sin(wf+1.5)*0.3; else if (aR) a = 1.0 + sin(wf)*0.9; }
   else if (m < 4.5) { y = -0.075; if (leg) a = 1.45; else if (part > 2.5) a = 0.55; }
   else if (m < 5.5) { y = -0.012 - 0.008*sin(ws); if (aL) a = 0.85 + sin(ws+0.5)*0.4; else if (aR) a = 0.9 + sin(ws)*0.45; }
-  else { if (aL) a = 0.95 + sin(uTime*0.9+ph)*0.04; else if (aR) a = 1.05 + sin(uTime*0.8+ph)*0.05; y = sin(uTime*1.6+ph)*0.003; }
+  else if (m < 6.5) { if (aL) a = 0.95 + sin(uTime*0.9+ph)*0.04; else if (aR) a = 1.05 + sin(uTime*0.8+ph)*0.05; y = sin(uTime*1.6+ph)*0.003; }
+  else if (m < 7.5) { // parle : gestes amples et alternés, léger balancement
+    y = sin(uTime*2.2+ph)*0.004;
+    if (aL) a = 0.55 + max(0.0, sin(wf*0.7+1.7))*1.0; else if (aR) a = 0.7 + max(0.0, sin(wf*0.6))*1.15; }
+  else if (m < 8.5) { // écoute : attentif, hoche la tête (corps), un bras ramené vers le torse
+    y = sin(uTime*1.4+ph)*0.005;
+    if (aL) a = 0.12 + sin(uTime*1.1+ph)*0.05; else if (aR) a = 0.55 + sin(uTime*0.9+ph)*0.08; }
+  else if (m < 9.5) { // dispute : gestes brusques des deux bras
+    y = abs(sin(wf*1.4))*0.006;
+    if (aL) a = 0.9 + sin(wf*2.1+1.0)*0.85; else if (aR) a = 1.1 + sin(wf*2.4)*0.95; }
+  else { // porte : bras tendus devant, marche si besoin
+    y = abs(wk)*0.01*step(0.5, sp);
+    if (leg) a = s*wk*0.6*step(0.5, sp); else if (part > 2.5) a = 1.32 + sin(ws*0.6)*0.03; }
   return vec2(a, y);
 }
 void limb(){

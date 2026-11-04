@@ -22,13 +22,17 @@ const SPECIES: { name: string; near: number; shadow: boolean; far?: number }[] =
   { name: "stump", near: 36, shadow: false },
 ];
 
+/** Masse de feuillage : sphère étirée (pas de cônes répétitifs). */
+const lobe = (rx: number, ry: number, rz: number, x: number, y: number, z: number, color: number): G => { const g = blob(1, 0, 0, 0, color); g.scale(rx, ry, rz); g.translate(x, y, z); return g; };
+
 function geometries(): G[] {
   const g = (c: number) => c;
   void g;
-  const pineTall = merge([cyl(0.028, 0.04, 0.14, 5, 0, 0, 0, 0x5a4330), cone(0.2, 0.3, 6, 0, 0.1, 0, 0x2f5f3a), cone(0.155, 0.28, 6, 0, 0.27, 0, 0x376b40), cone(0.105, 0.24, 6, 0, 0.45, 0, 0x417849), cone(0.05, 0.14, 5, 0, 0.62, 0, 0x4a8352)]);
-  const pineShort = merge([cyl(0.03, 0.04, 0.1, 5, 0, 0, 0, 0x5a4330), cone(0.22, 0.26, 6, 0, 0.08, 0, 0x33663c), cone(0.15, 0.24, 6, 0, 0.26, 0, 0x3f7647)]);
-  const oak = merge([cyl(0.03, 0.05, 0.2, 5, 0, 0, 0, 0x5d4632), blob(0.19, 0, 0.32, 0, 0x4f8a3c), blob(0.14, 0.12, 0.38, 0.05, 0x5a9744), blob(0.13, -0.1, 0.34, -0.07, 0x468236), blob(0.1, 0.02, 0.5, -0.02, 0x62a04b)]);
-  const birch = merge([cyl(0.016, 0.024, 0.4, 5, 0, 0, 0, 0xe3dfd2), blob(0.12, 0, 0.42, 0, 0x7fb04a), blob(0.09, 0.07, 0.52, 0.03, 0x93bf55), blob(0.08, -0.06, 0.34, -0.03, 0x6fa244)]);
+  // conifères : étages de feuillage en masses souples, légèrement décalées (silhouette organique, pas de cônes empilés)
+  const pineTall = merge([cyl(0.026, 0.042, 0.2, 6, 0, 0, 0, 0x5a4330), lobe(0.2, 0.1, 0.19, 0.01, 0.16, 0, 0x2f5f3a), lobe(0.16, 0.09, 0.15, -0.015, 0.28, 0.01, 0x376b40), lobe(0.125, 0.085, 0.12, 0.012, 0.4, -0.01, 0x417849), lobe(0.085, 0.08, 0.08, 0, 0.52, 0.004, 0x4a8352), lobe(0.04, 0.07, 0.04, 0, 0.62, 0, 0x57905c)]);
+  const pineShort = merge([cyl(0.03, 0.045, 0.12, 6, 0, 0, 0, 0x5a4330), lobe(0.23, 0.12, 0.21, 0, 0.14, 0, 0x33663c), lobe(0.17, 0.11, 0.16, 0.02, 0.27, -0.01, 0x3f7647), lobe(0.1, 0.1, 0.1, -0.01, 0.38, 0.01, 0x4a8352)]);
+  const oak = merge([cyl(0.03, 0.055, 0.24, 6, 0, 0, 0, 0x5d4632), cyl(0.012, 0.02, 0.14, 4, 0.08, 0.2, 0.02, 0x5d4632).rotateZ(-0.9), lobe(0.2, 0.15, 0.19, 0, 0.36, 0, 0x4f8a3c), lobe(0.15, 0.12, 0.14, 0.14, 0.4, 0.05, 0x5a9744), lobe(0.14, 0.11, 0.13, -0.12, 0.37, -0.08, 0x468236), lobe(0.12, 0.1, 0.12, 0.02, 0.5, -0.02, 0x62a04b), lobe(0.09, 0.08, 0.09, -0.06, 0.28, 0.12, 0x3f7a35)]);
+  const birch = merge([cyl(0.014, 0.024, 0.46, 6, 0, 0, 0, 0xe3dfd2), cyl(0.004, 0.012, 0.16, 4, 0.03, 0.26, 0, 0xd8d3c4).rotateZ(-0.7), lobe(0.12, 0.17, 0.12, 0, 0.48, 0, 0x7fb04a), lobe(0.09, 0.13, 0.09, 0.07, 0.56, 0.03, 0x93bf55), lobe(0.08, 0.11, 0.08, -0.06, 0.4, -0.03, 0x6fa244), lobe(0.06, 0.09, 0.06, 0.03, 0.66, -0.01, 0xa3cb62)]);
   const bush = merge([blob(0.1, 0, 0.07, 0, 0x3f7a35), blob(0.075, 0.09, 0.05, 0.03, 0x4a8a3c), blob(0.07, -0.07, 0.05, -0.05, 0x39702f)]);
   const rock = merge([blob(0.13, 0, 0.06, 0, 0x8b8780), blob(0.08, 0.1, 0.03, 0.04, 0x7a766f)]);
   const tuft = merge([cone(0.014, 0.12, 3, -0.03, 0, 0, 0x6ea04a), cone(0.014, 0.15, 3, 0.02, 0, 0.01, 0x7bb04f), cone(0.014, 0.1, 3, 0.0, 0, -0.03, 0x628f42), cone(0.012, 0.09, 3, 0.04, 0, -0.02, 0x86b855)]);

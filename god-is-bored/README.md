@@ -160,3 +160,6 @@ Interface minimaliste (capsule haut, dock Interagir/Pouvoirs/Planète, cartes co
 
 ## V3 — The Living World
 Démographie −70 % (réglages centraux `src/sim/tuning.ts`), esprits des habitants (émotions, souvenirs, relations, intentions, idées : `src/sim/MindSystem.ts`), vie sociale émergente, interventions divines interprétées, fiche humaine avec pensées et souvenirs. Voir `docs/v3/THE_LIVING_WORLD.md`.
+
+## Sentience × Visual Experience — scène témoin
+`?scene=sentience` : un village, cinq habitants avec identité et mémoire, une conversation spontanée qui fait basculer une décision, un départ collectif et un chantier visibles, caméra sans interface. Voir `docs/sentience/SENTIENCE_X_VISUAL.md`.

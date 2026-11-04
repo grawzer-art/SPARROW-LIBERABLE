@@ -10,6 +10,7 @@ import type { SimulationEngine } from "../sim/SimulationEngine";
 import type { PlanetSim } from "../sim/PlanetSim";
 import type { ChronicleEntry, Citizen, Civ, EventType } from "../sim/types";
 import type { Renderer } from "../render/Renderer";
+import { TOPIC_LABEL, type Talk } from "../sim/Talk";
 import { MAX_TECH } from "../sim/config";
 
 export interface GameHost {
@@ -71,7 +72,7 @@ const ACT3: Record<string, string> = { "Travailler": "Travaille", "Se nourrir": 
 export const jobOf = (c: Citizen): string => (c.female ? JOB_F : JOB_M)[c.job] ?? c.job;
 
 type CardSpec = { title: string; sub: string; color?: number; actions: { id: string; label: string; main?: boolean; cool?: boolean }[]; back?: boolean; grid?: boolean };
-type Sel = { kind: "none" | "civ" | "citizen" | "city" | "building"; id: number };
+type Sel = { kind: "none" | "civ" | "citizen" | "city" | "building" | "talk"; id: number };
 
 export class UI {
   private power: PowerId | null = null;
@@ -93,6 +94,8 @@ export class UI {
   private planetTab: "cont" | "civ" | "chron" = "cont";
   private menuTab: "time" | "stats" | "game" = "time";
   private influence = false;
+  private talkPair: [number, number] | null = null;
+  private framing: { pair: [number, number]; prev: { x: number; y: number; dist: number; el: number; az: number }; endAt: number } | null = null;
   private planetInf = false;
   private cardIsPlanet: { ref?: { region: number; id: number }; spec: CardSpec } | null = null;
   private detailRef: { sim: SimulationEngine; sel: Sel } | null = null;
@@ -200,7 +203,7 @@ export class UI {
     el.addEventListener("pointermove", (e) => {
       if (this.game.mode !== "local") return;
       // un glissement de la vue interrompt le suivi d'un habitant
-      if (this.follow !== null && this.down && Math.hypot(e.clientX - this.down.x, e.clientY - this.down.y) > 10) this.follow = null;
+      if (this.down && Math.hypot(e.clientX - this.down.x, e.clientY - this.down.y) > 10) { this.follow = null; this.framing = null; }
       if (e.pointerType === "touch" || e.pointerType === "pen" && this.mobile) return;
       const g = r.pickGround(e.clientX, e.clientY);
       this.cursor = g;
@@ -336,6 +339,10 @@ export class UI {
       const i = sim.world.tileAt(x, y);
       if (i >= 0 && sim.world.bld[i] >= 0) best = { d: 0, kind: "building", id: sim.world.bld[i] };
     }
+    if (best && best.kind === "citizen") {
+      const c = sim.citizenById.get(best.id), tk = c ? sim.talk.of(c) : undefined;
+      if (tk) { this.select("citizen", best.id); this.talkPair = [tk.talk.a, tk.talk.b]; this.refreshCard(); return; } // toucher quelqu'un qui parle : on touche la conversation
+    }
     if (best) this.select(best.kind, best.id);
     else {
       const civ = sim.divine.civAt(sim, x, y);
@@ -346,7 +353,8 @@ export class UI {
 
   select(kind: Sel["kind"], id: number): void {
     this.sel = { kind, id };
-    this.game.renderer.selection = { kind, id };
+    this.talkPair = null;
+    this.game.renderer.selection = { kind: kind === "talk" ? "citizen" : kind, id };
     this.influence = false;
     if (kind === "none") { this.game.renderer.clearSelection(); this.follow = null; this.showCard(null); return; }
     if (this.tray) this.showTray(false);
@@ -362,6 +370,7 @@ export class UI {
 
   /** Carte d'une sélection en scène locale. */
   private specFor(sim: SimulationEngine, s: Sel): CardSpec | null {
+    if (s.kind === "citizen" && this.talkPair && !this.influence) { const ts = this.talkSpec(sim); if (ts) return ts; }
     if (s.kind === "citizen") {
       const c = sim.citizenById.get(s.id);
       const civ = c ? sim.civById.get(c.civ) : undefined;
@@ -404,6 +413,48 @@ export class UI {
       return { title: label, sub: civ ? `${esc(civ.name)} · ${ERA_NAMES[b.era]}` : "Ruines abandonnées", color: civ?.color, actions: [{ id: "details", label: "Détails", main: true }] };
     }
     return null;
+  }
+
+  /** Carte d'une conversation : ce qui se dit, sur quoi, sur quel ton. Les répliques se lisent à la demande (jamais en bulles permanentes). */
+  private talkSpec(sim: SimulationEngine): CardSpec | null {
+    const [a, b] = this.talkPair!;
+    const A = sim.citizenById.get(a), B = sim.citizenById.get(b);
+    if (!A || !B) return null;
+    const tk = sim.talk.get(a, b);
+    if (!tk) { this.talkPair = null; return null; }
+    const last = tk.lines.slice(-2).map((l) => `<em>${esc(sim.citizenById.get(l.who)?.name ?? "?")}</em> : « ${esc(l.text)} »`).join("<br>");
+    const ton = ["tranquille", "tendu", "chaleureux"][tk.mood];
+    return { title: `${A.name} et ${B.name}`, sub: `${TOPIC_LABEL[tk.topic]} · ton ${ton}${tk.over ? " · terminée" : ""}<br>${last || "…"}${tk.effect ? `<br><span class="thought">${esc(tk.effect)}</span>` : ""}`, color: sim.civById.get(A.civ)?.color,
+      actions: [{ id: "talk:frame", label: this.framing ? "Caméra libre" : "Écouter", main: true }, { id: "talk:log", label: "Échanges" }, { id: "details", label: "Détails" }] };
+  }
+
+  /** Cadrage automatique et discret d'une conversation : la caméra se rapproche, se met de profil, suit les interlocuteurs, puis revient à sa place. */
+  private frameTalk(on: boolean): void {
+    const r = this.game.renderer;
+    if (!on) { if (this.framing) { const f = this.framing; this.framing = null; r.setPose(f.prev.x, f.prev.y, f.prev.dist, f.prev.el, f.prev.az); } return; }
+    if (!this.talkPair) return;
+    this.framing = { pair: this.talkPair, prev: r.getPose(), endAt: 0 };
+  }
+  private framingStep(dt: number): void {
+    const f = this.framing; if (!f) return;
+    const sim = this.sim, r = this.game.renderer;
+    const A = sim.citizenById.get(f.pair[0]), B = sim.citizenById.get(f.pair[1]);
+    const tk = sim.talk.get(f.pair[0], f.pair[1]);
+    if (!A || !B || A.dead || B.dead) { this.framing = null; return; }
+    if (tk && !tk.over) f.endAt = 0; else if (!f.endAt) f.endAt = performance.now() + 1800;
+    if (f.endAt && performance.now() > f.endAt) { // la conversation est finie : retour fluide à la vue précédente, puis caméra libre
+      const p = f.prev; r.glide(p.x, p.y, p.dist, p.el, p.az, Math.min(1, dt * 2.5));
+      const c = r.getPose();
+      if (Math.hypot(c.x - p.x, c.y - p.y) < 0.4 && Math.abs(c.dist - p.dist) < 0.5) this.framing = null;
+      return;
+    }
+    const mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2;
+    const ax = Math.atan2(B.y - A.y, B.x - A.x), cur = r.getPose();
+    // de profil : la caméra se place perpendiculairement à l'axe des deux visages, du côté où elle se trouve déjà
+    const opts = [ax + Math.PI / 2, ax - Math.PI / 2];
+    const diff = (u: number) => Math.abs(Math.atan2(Math.sin(u - cur.az), Math.cos(u - cur.az)));
+    const az = diff(opts[0]) < diff(opts[1]) ? opts[0] : opts[1];
+    r.glide(mx, my, 5.8, 0.46, az, Math.min(1, dt * 2.2));
   }
 
   /** Interventions sur une civilisation / un village : foi, découverte, protection, châtiment, dirigeant, bénédiction. */
@@ -458,6 +509,8 @@ export class UI {
   private cardAction(id: string): void {
     if (this.cardIsPlanet) { this.planetCardAction(id); return; }
     const sim = this.sim, s = this.sel;
+    if (id === "talk:frame") { this.frameTalk(!this.framing); this.refreshCard(); return; }
+    if (id === "talk:log" && this.talkPair) { this.detailRef = { sim, sel: { kind: "talk", id: this.talkPair[0] } }; this.openSheet("details"); return; }
     if (id === "influence") { this.influence = true; this.refreshCard(); return; }
     if (id.startsWith("inf:") || id.startsWith("civ:")) { this.divineAction(sim, id, s); return; }
     if (id === "observe") {
@@ -541,6 +594,7 @@ export class UI {
     }
     this.followPill();
     this.bubble();
+    this.framingStep(Math.min(0.1, (performance.now() - (this.lastFrameT || performance.now())) / 1000)); this.lastFrameT = performance.now();
     const now = performance.now();
     if (now - this.lastHud > 250) { this.lastHud = now; this.hud(); }
   }
@@ -586,6 +640,7 @@ export class UI {
     el.style.transform = `translate(${Math.round(p.x)}px, ${Math.round(p.y)}px) translate(-50%, -100%)`;
   }
 
+  private lastFrameT = 0;
   private followName = "";
   /** Pastille « Suivi » : un habitant suivi pendant sa vie ; sa mort est annoncée discrètement. */
   private followPill(): void {
@@ -742,7 +797,19 @@ export class UI {
 
   private detailsHtml(sim: SimulationEngine, s: Sel): { title: string; html: string } {
     let html = "", title = "Détails";
-    if (s.kind === "civ") {
+    if (s.kind === "talk") {
+      const pair = this.talkPair ?? [s.id, -1];
+      const A = sim.citizenById.get(pair[0]), B = sim.citizenById.get(pair[1]);
+      const tk = A && B ? sim.talk.get(A.id, B.id) : undefined;
+      if (A && B && tk) {
+        title = "Conversation";
+        const ton = ["tranquille", "tendu", "chaleureux"][tk.mood];
+        html = `<div class="h-civ"><h2>${esc(A.name)} et ${esc(B.name)}</h2></div><div class="quote">${TOPIC_LABEL[tk.topic]} · ton ${ton}${tk.over ? " · terminée" : " · en cours"}</div>` +
+          tk.lines.map((l) => `<div class="talkline ${l.who === A.id ? "l" : "r"}"><b>${esc(sim.citizenById.get(l.who)?.name ?? "?")}</b><span>${esc(l.text)}</span></div>`).join("") +
+          (tk.effect ? `<div class="sheet-sec">Ce que cela change</div><p class="thought big">${esc(tk.effect)}</p>` : "") +
+          `<div class="sheet-sec">Ce qu'ils en retiennent</div>` + [A, B].map((c) => { const d = sim.mind.describe(sim, c); return `<div class="law" style="color:var(--text)"><b>${esc(c.name)}</b> : ${esc(d.intent)}. ${d.why.length ? "Parce qu'il/elle " + d.why.map(esc).join(", ") + "." : ""}</div>`; }).join("");
+      }
+    } else if (s.kind === "civ") {
       const civ = sim.civById.get(s.id);
       if (civ) { title = "Civilisation"; html = this.civHtml(civ, sim); }
     } else if (s.kind === "citizen") {

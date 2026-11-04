@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { SimulationEngine } from "../sim/SimulationEngine";
 import type { Army, Citizen, Civ } from "../sim/types";
-import { CharSet, TOOL, characterGeometry, characterMaterial, farPersonGeometry, gearGeometry, toolGeometry } from "./Characters";
+import { CharSet, TOOL, characterGeometry, loadGeometry, characterMaterial, farPersonGeometry, gearGeometry, toolGeometry } from "./Characters";
 import type { Fx } from "./Fx";
 import { GrowMesh } from "./grow";
 import type { Sky } from "./Sky";
@@ -41,6 +41,20 @@ export function animFor(c: Pick<Citizen, "state" | "job" | "sick">, moving: bool
     case "march": return { mode: 1, tool: -1, speed: 1.15 };
     default: return { mode: moving ? 1 : (c.sick > 0 || (night > 0.65 && c.state === "idle" && adult) ? 4 : 0), tool: -1, speed: 1 };
   }
+}
+
+/**
+ * Animation d'un habitant déduite de son état RÉEL : activité, métier, conversation (qui parle, sur quel ton), charge portée.
+ * Fonction pure (testée) : aucune animation ne contredit l'action simulée. Modes : 0 repos, 1 marche, 2 frappe, 3 combat, 4 assis,
+ * 5 bêche/cueillette, 6 lecture, 7 parle, 8 écoute, 9 dispute, 10 porte une charge.
+ */
+export function actionMode(c: Pick<Citizen, "state" | "job" | "sick" | "work" | "wx">, moving: boolean, night: number, talk?: { speaking: boolean; mood: number }): { mode: number; tool: number; carry: number; speed: number } {
+  const an = animFor(c, moving, night), adult = c.job !== "child";
+  if (c.state === "talk") return talk ? { mode: talk.mood === 1 ? 9 : talk.speaking ? 7 : 8, tool: -1, carry: -1, speed: 1 } : { mode: 0, tool: -1, carry: -1, speed: 1 };
+  if (moving && adult && (c.state === "build" || c.state === "work") && c.job === "builder" && c.work >= 0) return { mode: 10, tool: -1, carry: 0, speed: 1 }; // planches vers le chantier
+  if (moving && adult && c.state === "work" && c.job === "lumberjack" && c.wx < 0) return { mode: 10, tool: -1, carry: 1, speed: 1 }; // bois rapporté
+  if (moving && adult && c.state === "forage") return { mode: an.mode, tool: TOOL.basket, carry: -1, speed: an.speed };
+  return { mode: an.mode, tool: an.tool, carry: -1, speed: an.speed };
 }
 
 const SKIN = [0xf2c9a8, 0xe3ab82, 0xc98f66, 0x9d6c49, 0x72492f].map((h) => new THREE.Color(h));
@@ -153,6 +167,11 @@ export class CitizenLayer {
       // cap : dans le sens du déplacement, sinon face à la tâche réelle (arbre, roche, chantier, champ), sinon on garde l'orientation
       let goal = NaN;
       if (moving && moved > 0.0005) goal = Math.atan2(-(c.y - c.py), c.x - c.px);
+      else if (c.state === "talk") {
+        // face à face : on se tourne vers son interlocuteur réel (celui de la conversation simulée)
+        const o = sim.citizenById.get(c.soul?.target ?? -1);
+        if (o && Math.hypot(o.x - x, o.y - y) > 0.05) goal = Math.atan2(-(o.y - y), o.x - x);
+      }
       else if (working || c.state === "fight") {
         let tx = -1, ty = -1;
         if (c.wx >= 0 && (c.job === "lumberjack" || c.job === "miner")) { tx = c.wx; ty = c.wy; }
@@ -183,8 +202,10 @@ export class CitizenLayer {
       }
       // comportement -> animation (réelle : l'état et le métier viennent de la simulation)
       const an = animFor(c, moving, night);
-      const want = an.mode, tool = an.tool;
-      let sp = an.speed;
+      const tkr = c.state === "talk" ? sim.talk.of(c) : undefined;
+      const am = actionMode(c, moving, night, tkr ? { speaking: tkr.speaking, mood: tkr.talk.mood } : undefined);
+      const want = am.mode, tool = am.tool, carry = am.carry;
+      let sp = am.speed;
       sp *= spBoost;
       // fondu entre deux animations (~0.22 s) : plus de saccade à l'arrêt ou au départ
       if (want !== st.mode) { st.prev = st.mode; st.mode = want; st.blend = 1; }
@@ -198,7 +219,8 @@ export class CitizenLayer {
       const S = this.set(`c${era}${c.female ? "f" : "m"}${variant}`, () => characterGeometry(era, c.female, variant));
       S.push(d.matrix, mode, phase, sp, prevCode, cl, skin, hair, acc);
       if (soldier) { this.set(`g${era}`, () => gearGeometry(era)).push(d.matrix, mode, phase, sp, prevCode, cl, skin, hair, acc); ns++; }
-      else if (tool >= 0 && (mode === 2 || mode === 5 || mode === 6) && adult) { const tk = tool; this.set(`t${era}k${tk}`, () => toolGeometry(era, tk)).push(d.matrix, mode, phase, sp, prevCode, cl, skin, hair, acc); }
+      else if (carry >= 0 && mode === 10) { const ck = carry; this.set(`l${ck}`, () => loadGeometry(ck)).push(d.matrix, mode, phase, sp, prevCode, cl, skin, hair, acc); }
+      else if (tool >= 0 && (mode === 2 || mode === 5 || mode === 6 || (mode === 1 && tool === TOOL.basket)) && adult) { const tk = tool; this.set(`t${era}k${tk}`, () => toolGeometry(era, tk)).push(d.matrix, mode, phase, sp, prevCode, cl, skin, hair, acc); }
       // ombre portée simplifiée : disque sombre au sol
       d.position.y = hy + 0.012; d.scale.set(sw, 1, sw); d.rotation.set(0, 0, 0); d.updateMatrix();
       this.blobs.push(d.matrix);

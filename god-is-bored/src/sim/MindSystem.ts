@@ -9,7 +9,7 @@ const TPY = TICKS_PER_YEAR;
 const clamp = (v: number, a = 0, b = 100) => (v < a ? a : v > b ? b : v);
 
 /** Genres de souvenirs. */
-export const MEM = { FAMINE: 0, KIN_DEATH: 1, VIOLENCE: 2, DISASTER: 3, BIRTH: 4, DIVINE: 5, LEADER: 6, BETRAYAL: 7, FRIEND: 8, QUARREL: 9, RECONCILE: 10, MIGRATE: 11, WEDDING: 12, HEALED: 13, FIRE: 14, REBEL: 15 } as const;
+export const MEM = { FAMINE: 0, KIN_DEATH: 1, VIOLENCE: 2, DISASTER: 3, BIRTH: 4, DIVINE: 5, LEADER: 6, BETRAYAL: 7, FRIEND: 8, QUARREL: 9, RECONCILE: 10, MIGRATE: 11, WEDDING: 12, HEALED: 13, FIRE: 14, REBEL: 15, TALK: 16 } as const;
 /** Projets (intentions à long terme). */
 export const GOAL = { STAY: 0, LEAVE: 1, FAMILY: 2, REBEL: 3, REVENGE: 4, DEVOUT: 5 } as const;
 /** Genres de relations. */
@@ -30,7 +30,7 @@ const MEM_TEXT: Record<number, string> = {
   [MEM.FAMINE]: "La grande faim", [MEM.KIN_DEATH]: "La mort d'un proche", [MEM.VIOLENCE]: "La violence de la guerre", [MEM.DISASTER]: "Une catastrophe",
   [MEM.BIRTH]: "La naissance d'un enfant", [MEM.DIVINE]: "Un signe du ciel", [MEM.LEADER]: "Un changement de dirigeant", [MEM.BETRAYAL]: "Une trahison",
   [MEM.FRIEND]: "Une amitié", [MEM.QUARREL]: "Une dispute", [MEM.RECONCILE]: "Une réconciliation", [MEM.MIGRATE]: "L'exil vers un nouveau foyer",
-  [MEM.WEDDING]: "Une union", [MEM.HEALED]: "Une guérison miraculeuse", [MEM.FIRE]: "Un incendie", [MEM.REBEL]: "La révolte",
+  [MEM.WEDDING]: "Une union", [MEM.HEALED]: "Une guérison miraculeuse", [MEM.FIRE]: "Un incendie", [MEM.REBEL]: "La révolte", [MEM.TALK]: "Une conversation qui a compté",
 };
 
 /**
@@ -47,6 +47,9 @@ export class MindSystem {
   /** État à sauvegarder (compteurs d'exode de l'année et statistiques) : la reprise est identique à la poursuite. */
   serialize(): { exodus: [number, { n: number; to: number; first: string }][]; stats: MindSystem["stats"] } { return { exodus: [...this.exodus], stats: { ...this.stats } }; }
   restore(d?: { exodus: [number, { n: number; to: number; first: string }][]; stats: MindSystem["stats"] }): void { if (!d) return; this.exodus = new Map(d.exodus); Object.assign(this.stats, d.stats); }
+
+  /** Dernières utilités calculées par habitant (diagnostic et tests : « pourquoi a-t-il choisi cela ? »). */
+  lastU = new Map<number, number[]>();
 
   private rnd(a: number, b: number, k: number): number { return hash2(a * 131 + (b % 100003), k, 9100); }
 
@@ -245,7 +248,7 @@ export class MindSystem {
   }
 
   /** Meilleur village où s'installer (null si aucun n'est vraiment plus attirant). */
-  private destination(sim: SimulationEngine, c: Citizen, civ: Civ, m: Mind): { city: City; score: number } | null {
+  destination(sim: SimulationEngine, c: Citizen, civ: Civ, m: Mind): { city: City; score: number } | null {
     const own = sim.cityById.get(c.city);
     let best: City | null = null, bs = -1;
     for (const o of sim.cities) {
@@ -273,7 +276,7 @@ export class MindSystem {
     if (m.trust < -35) m.ideas |= IDEA.DISTRUST; else if (m.trust > 25) m.ideas &= ~IDEA.DISTRUST;
     if (!adult) return;
     // engagement : un départ en cours n'est pas remis en cause à chaque révision (le voyage dure)
-    if (m.goal === GOAL.LEAVE && m.trust < 10 && m.gTarget >= 0 && sim.cityById.has(m.gTarget) && sim.tick - m.gT < TPY * 3) return;
+    if (m.goal === GOAL.LEAVE && m.trust < 10 && m.gTarget >= 0 && sim.cityById.has(m.gTarget) && sim.tick - m.gT < TPY * 8) return;
     // projets : chaque tendance reçoit un score et des raisons ; hystérésis pour éviter les revirements
     const kin = m.rel.filter((r) => (r.k === REL.KIN || r.k === REL.PARTNER) && sim.citizenById.has(r.id) && sim.citizenById.get(r.id)!.city === c.city).length;
     const attached = Math.min(0.4, kin * 0.08) + (s.com > 60 ? 0.12 : 0) + s.t[4] * 0.12;
@@ -288,26 +291,29 @@ export class MindSystem {
     const origin = sim.cityById.get(c.city);
     const canLeave = !!origin && origin.pop > 6 && civ.pop > 10 && (this.exodus.get(origin.id)?.n ?? 0) < Math.max(2, Math.floor(origin.pop * 0.25));
     if (dest && canLeave && c.army < 0 && sim.tick - m.lastLeave > TPY * 3) {
-      uLeave += add(GOAL.LEAVE, 0, Math.max(0, -m.trust / 100) * 0.38) + add(GOAL.LEAVE, 1, famine * 0.3) + add(GOAL.LEAVE, 3, viol * 0.15) + add(GOAL.LEAVE, 2, loss * 0.08)
-        + add(GOAL.LEAVE, 4, (m.ideas & IDEA.WANDER ? 0.14 : 0) + s.t[1] * 0.1 * (1 - s.t[4])) + add(GOAL.LEAVE, 6, s.home < 0 ? 0.1 : 0) + add(GOAL.LEAVE, 15, better * 0.6);
-      uLeave += add(GOAL.LEAVE, 13, m.rel.some((r) => r.k === REL.FRIEND && sim.citizenById.get(r.id)?.mind?.goal === GOAL.LEAVE) ? 0.12 : 0);
-      uLeave *= 1 - Math.min(0.6, attached * 0.7);
+      // ce qui POUSSE à partir (méfiance, souvenirs, paroles d'amis, absence de toit) et ce qui ATTIRE ailleurs : l'attrait seul ne suffit jamais
+      const push = add(GOAL.LEAVE, 0, Math.max(0, -m.trust / 100) * 0.38) + add(GOAL.LEAVE, 1, famine * 0.3) + add(GOAL.LEAVE, 3, viol * 0.15) + add(GOAL.LEAVE, 2, loss * 0.08) + add(GOAL.LEAVE, 6, s.home < 0 ? 0.1 : 0)
+        + add(GOAL.LEAVE, 13, (m.rel.some((r) => r.k === REL.FRIEND && sim.citizenById.get(r.id)?.mind?.goal === GOAL.LEAVE) ? 0.12 : 0) + this.memLoad(sim, m, MEM.TALK) * 0.3); // les paroles d'un ami pèsent
+      const pull = add(GOAL.LEAVE, 4, (m.ideas & IDEA.WANDER ? 0.14 : 0) + s.t[1] * 0.1 * (1 - s.t[4])) + add(GOAL.LEAVE, 15, Math.min(0.25, better * 0.4));
+      uLeave = (push > 0.12 ? push + pull : pull * 0.5) * (1 - Math.min(0.6, attached * 0.7));
     }
     let uRebel = 0;
     if (c.army < 0 && civ.alive) {
       const fire = (c.courage * 0.5 + c.aggr * 0.5);
       uRebel += add(GOAL.REBEL, 0, Math.max(0, -m.trust - 20) / 100 * 0.9 * (0.4 + fire)) + add(GOAL.REBEL, 12, m.emo[EMO.ANGER] / 100 * 0.25) + add(GOAL.REBEL, 1, famine * 0.2 * fire);
-      if (m.ideas & IDEA.DISTRUST) uRebel += add(GOAL.REBEL, 13, 0.1);
+      if (m.ideas & IDEA.DISTRUST) uRebel += add(GOAL.REBEL, 13, 0.1 + this.memLoad(sim, m, MEM.TALK) * 0.15);
       uRebel *= 1 - s.t[4] * 0.4;
     }
     let uFamily = 0;
-    if (c.age >= TUNING.minParentAge && c.age <= 38 && s.mate < 0) uFamily = add(GOAL.FAMILY, 8, 0.25 + s.t[0] * 0.25 + (m.emo[EMO.JOY] > 40 ? 0.1 : 0)) * (c.hunger < 50 && s.com > 40 ? 1 : 0.3);
+    const hasKid = m.rel.some((r) => r.k === REL.KIN && (sim.citizenById.get(r.id)?.age ?? 99) < c.age - 10);
+    if (c.age >= TUNING.minParentAge && c.age <= 38 && s.mate < 0) uFamily = add(GOAL.FAMILY, 8, 0.25 + s.t[0] * 0.25 + (m.emo[EMO.JOY] > 40 ? 0.1 : 0)) * (c.hunger < 50 && s.com > 40 ? 1 : 0.3) * (hasKid ? 0.3 : 1);
     let uRevenge = 0;
     const foe = m.rel.filter((r) => r.k === REL.RIVAL).sort((a, b) => a.a - b.a)[0];
     if (foe && sim.citizenById.has(foe.id)) uRevenge = add(GOAL.REVENGE, 9, (-foe.a / 100) * 0.4 * (0.4 + c.aggr) + m.emo[EMO.ANGER] / 100 * 0.2) * (1 - s.t[3] * 0.5);
     const faithMem = this.memLoad(sim, m, MEM.DIVINE, 1) + this.memLoad(sim, m, MEM.HEALED, 1);
     const uDevout = add(GOAL.DEVOUT, 10, c.faith * 0.35 + faithMem * 0.3 + (m.ideas & IDEA.FAITH ? 0.12 : 0) + (m.ideas & IDEA.FEAR_GOD ? 0.08 : 0)) * 0.9;
     const U = [uStay, uLeave, uFamily, uRebel * 1.05, uRevenge, uDevout];
+    this.lastU.set(c.id, U.slice());
     U[m.goal] += 0.12; // continuité du projet en cours
     let best = 0;
     for (let g = 1; g < U.length; g++) if (U[g] > U[best]) best = g;
@@ -326,7 +332,15 @@ export class MindSystem {
 
   /** Quitter son village : la famille est persuadée selon l'affinité et ses propres convictions. */
   private decideLeave(sim: SimulationEngine, c: Citizen, civ: Civ, m: Mind, dest: City, why: number[]): void {
+    this.rally(sim, c, dest, 0);
+    void civ; void why; void m;
+  }
+
+  /** Rassemble la famille autour d'un projet de départ : chacun est persuadé selon l'affinité et ses propres convictions ; tous partent ensemble après `delay` ticks. */
+  rally(sim: SimulationEngine, c: Citizen, dest: City, delay: number): void {
+    const m = this.ensure(sim, c);
     m.lastLeave = sim.tick;
+    if (delay > 0) { m.go = Math.max(m.go ?? 0, sim.tick + delay); }
     for (const r of m.rel) {
       if (r.k !== REL.KIN && r.k !== REL.PARTNER) continue;
       const o = sim.citizenById.get(r.id);
@@ -334,9 +348,8 @@ export class MindSystem {
       const mo = this.ensure(sim, o);
       if (mo.goal === GOAL.LEAVE) continue;
       const p = r.a / 100 * 0.55 + (o.job === "child" ? 0.4 : 0) + Math.max(0, -mo.trust) / 100 * 0.2 - (o.soul?.t[4] ?? 0.5) * 0.15;
-      if (this.rnd(c.id, o.id + sim.tick, 40) < p) { mo.goal = GOAL.LEAVE; mo.gT = sim.tick; mo.gTarget = dest.id; mo.gWhy = [5]; mo.lastLeave = sim.tick; this.touch(o, c.id, 4); }
+      if (this.rnd(c.id, o.id + sim.tick, 40) < p) { mo.goal = GOAL.LEAVE; mo.gT = sim.tick; mo.gTarget = dest.id; mo.gWhy = [5]; mo.lastLeave = sim.tick; this.touch(o, c.id, 4); if (delay > 0) mo.go = Math.max(mo.go ?? 0, sim.tick + delay); }
     }
-    void civ; void why;
   }
 
   private seekPartner(sim: SimulationEngine, c: Citizen): void {
@@ -397,8 +410,9 @@ export class MindSystem {
     const m = c.mind;
     if (!TUNING.mind || !m || c.army >= 0) return false;
     if (m.goal === GOAL.LEAVE && m.gTarget >= 0) {
+      if (m.go !== undefined && sim.tick < m.go) return false; // on prépare les bagages, la famille se rassemble
       const dest = sim.cityById.get(m.gTarget);
-      if (!dest || sim.tick - m.gT > TPY * 4) { m.goal = GOAL.STAY; return false; }
+      if (!dest || sim.tick - m.gT > TPY * 8) { m.goal = GOAL.STAY; return false; }
       if (c.city === dest.id) { m.goal = GOAL.STAY; return false; }
       const r = moveToward(sim.world, c, dest.x + 0.5 + ((c.id % 5) - 2) * 0.4, dest.y + 1.6, CITIZEN_SPEED, 0.9);
       c.state = "travel";
@@ -498,7 +512,7 @@ export class MindSystem {
     } as Record<number, string>)[m.goal] ?? "—";
     const why = m.gWhy.map((k) => WHY[k]).filter(Boolean);
     const mems = m.mem.slice().sort((a, b) => Math.abs(this.strength(b, sim.tick)) - Math.abs(this.strength(a, sim.tick))).slice(0, 4).map((x) => {
-      const who = x.who >= 0 && (x.k === MEM.KIN_DEATH || x.k === MEM.FRIEND || x.k === MEM.QUARREL || x.k === MEM.BETRAYAL || x.k === MEM.RECONCILE || x.k === MEM.WEDDING || x.k === MEM.BIRTH) ? sim.citizenById.get(x.who)?.name : undefined;
+      const who = x.who >= 0 && (x.k === MEM.KIN_DEATH || x.k === MEM.FRIEND || x.k === MEM.QUARREL || x.k === MEM.BETRAYAL || x.k === MEM.RECONCILE || x.k === MEM.WEDDING || x.k === MEM.BIRTH || x.k === MEM.TALK) ? sim.citizenById.get(x.who)?.name : undefined;
       return `An ${Math.floor(x.t / TPY) + 1} · ${MEM_TEXT[x.k] ?? "Un souvenir"}${who ? ` (${who})` : ""}`;
     });
     const emoI = m.emo.indexOf(Math.max(...m.emo));
