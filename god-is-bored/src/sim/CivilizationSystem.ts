@@ -4,6 +4,7 @@ import {
 } from "./data";
 import type { SimulationEngine } from "./SimulationEngine";
 import type { Building, BuildingType, Citizen, City, Civ, CivMods, Job, Leader, PersonalityId } from "./types";
+import { popT, TUNING } from "./tuning";
 import { ERA_GOLD, ERA_MIN_TECH, ERA_NAMES, ERA_POP, ERA_STAB, MAX_TECH_LEVEL, eraOfTech, isUnlocked, setTech, techGold, techPop, techThreshold as techThr } from "./TechTree";
 import { T } from "./World";
 import { RNG, hash2 } from "./rng";
@@ -101,7 +102,7 @@ export class CivilizationSystem {
     // premiers habitants
     for (let i = 0; i < startPop; i++) {
       const a = rng.next() * Math.PI * 2, r = 0.8 + rng.next() * 2;
-      const age = i < 4 ? rng.range(2, 12) : rng.range(16, 42);
+      const age = i < 5 ? rng.range(1, 13) : rng.range(17, 38);
       const px = x + 0.5 + Math.cos(a) * r, py = y + 0.5 + Math.sin(a) * r;
       const c = sim.spawnCitizen(civ, city, sim.world.passable(px, py) ? px : x + 0.5, sim.world.passable(px, py) ? py : y + 0.5, age, { female: i % 2 === 0 });
       c.job = age < 14 ? "child" : "farmer";
@@ -202,23 +203,23 @@ export class CivilizationSystem {
     if (city.pop + 4 >= city.cap + housesUnder * 5) return ["house"];
     const farmsNeeded = Math.ceil(Math.max(city.pop * 0.42, 2) / (3 + Math.floor(civ.tech / 4)));
     if (count("farm") < farmsNeeded) return ["farm"];
-    if (count("lumber") === 0 && civ.jobs.lumberjack >= 2 && city.pop > 12) return ["lumber"];
-    if (count("quarry") === 0 && civ.jobs.miner >= 2 && city.pop > 15) return ["quarry"];
+    if (count("lumber") === 0 && civ.jobs.lumberjack >= 2 && city.pop > popT(12)) return ["lumber"];
+    if (count("quarry") === 0 && civ.jobs.miner >= 2 && city.pop > popT(15)) return ["quarry"];
     const adv: BuildingType[] = [];
     const atWar = sim.wars.some((w) => w.active && (w.a === civ.id || w.d === civ.id));
     const unl = (t: BuildingType) => isUnlocked(civ, t);
-    if (unl("barracks") && civ.soldiers >= 5 && civCount("barracks") < 1 + Math.floor(civ.pop / 90)) adv.push("barracks");
-    const templeWant = Math.floor(civ.pop / 35) + (civ.personality === "fanatic" ? 1 : 0);
-    if (unl("temple") && civ.pop > 18 && civCount("temple") < Math.min(templeWant, 4) && civ.avgFaith > 0.4) adv.push("temple");
-    if (unl("castle") && city.pop >= 26 && count("castle") === 0 && (civ.personality === "paranoid" || civ.pop > 45 || atWar)) adv.push("castle");
-    if (unl("market") && count("market") === 0 && city.pop >= 18) adv.push("market");
-    if (unl("walls") && count("walls") === 0 && city.pop >= 25 && (civ.personality === "paranoid" || atWar || city.pop >= 45)) adv.push("walls");
+    if (unl("barracks") && civ.soldiers >= 5 && civCount("barracks") < 1 + Math.floor(civ.pop / popT(90))) adv.push("barracks");
+    const templeWant = Math.floor(civ.pop / popT(35)) + (civ.personality === "fanatic" ? 1 : 0);
+    if (unl("temple") && civ.pop > popT(18) && civCount("temple") < Math.min(templeWant, 4) && civ.avgFaith > 0.4) adv.push("temple");
+    if (unl("castle") && city.pop >= popT(26) && count("castle") === 0 && (civ.personality === "paranoid" || civ.pop > popT(45) || atWar)) adv.push("castle");
+    if (unl("market") && count("market") === 0 && city.pop >= popT(18)) adv.push("market");
+    if (unl("walls") && count("walls") === 0 && city.pop >= popT(25) && (civ.personality === "paranoid" || atWar || city.pop >= popT(45))) adv.push("walls");
     if (unl("mill") && count("mill") === 0 && count("farm") >= 3) adv.push("mill");
-    if (unl("forge") && civCount("forge") < 1 + Math.floor(civ.pop / 120) && city.pop >= 30 && count("forge") === 0) adv.push("forge");
-    if (unl("factory") && civCount("factory") < 1 + Math.floor(civ.pop / 100) && city.pop >= 40 && count("factory") === 0) adv.push("factory");
-    if (unl("station") && count("station") === 0 && city.pop >= 30) adv.push("station");
-    if (unl("power") && civCount("power") < 1 + Math.floor(civ.pop / 250) && city.pop >= 60 && count("power") === 0) adv.push("power");
-    if (unl("lab") && civCount("lab") < 3 && city.pop >= 60 && count("lab") === 0) adv.push("lab");
+    if (unl("forge") && civCount("forge") < 1 + Math.floor(civ.pop / popT(120)) && city.pop >= popT(30) && count("forge") === 0) adv.push("forge");
+    if (unl("factory") && civCount("factory") < 1 + Math.floor(civ.pop / popT(100)) && city.pop >= popT(40) && count("factory") === 0) adv.push("factory");
+    if (unl("station") && count("station") === 0 && city.pop >= popT(30)) adv.push("station");
+    if (unl("power") && civCount("power") < 1 + Math.floor(civ.pop / popT(250)) && city.pop >= popT(60) && count("power") === 0) adv.push("power");
+    if (unl("lab") && civCount("lab") < 3 && city.pop >= popT(60) && count("lab") === 0) adv.push("lab");
     if (city.pop + 9 >= city.cap + housesUnder * 5) adv.push("house");
     return adv;
   }
@@ -334,14 +335,14 @@ export class CivilizationSystem {
     const maxByTech = eraOfTech(civ.tech);
     if (civ.era > maxByTech) { this.changeEra(sim, civ, maxByTech, "tech"); return; }
     const next = civ.era + 1;
-    if (next <= 5 && next <= maxByTech && civ.pop >= ERA_POP[next] && civ.stability >= ERA_STAB[next] && civ.gold >= ERA_GOLD[next]) {
+    if (next <= 5 && next <= maxByTech && civ.pop >= popT(ERA_POP[next]) && civ.stability >= ERA_STAB[next] && civ.gold >= ERA_GOLD[next]) {
       civ.gold -= ERA_GOLD[next];
       civ.eraLow = 0;
       this.changeEra(sim, civ, next, "up");
       return;
     }
     // stagnation / déclin : population effondrée ou chaos prolongé
-    if (civ.era > 0 && (civ.pop < ERA_POP[civ.era] * 0.5 || civ.stability < 10)) {
+    if (civ.era > 0 && (civ.pop < popT(ERA_POP[civ.era]) * 0.5 || civ.stability < 10)) {
       if (++civ.eraLow >= 6) { civ.eraLow = 0; this.changeEra(sim, civ, civ.era - 1, "decline"); }
     } else civ.eraLow = Math.max(0, civ.eraLow - 1);
   }
@@ -392,7 +393,7 @@ export class CivilizationSystem {
     const wait = (civ.personality === "expansionist" ? 6 : 12) * TPY;
     if (!force && sim.tick - civ.lastCityTick < wait) return false;
     if (force) civ.wood = Math.max(civ.wood, 40);
-    if (!force && civ.pop < (20 + 8 * cities.length) / Math.max(0.7, P.expand)) return false;
+    if (!force && civ.pop < popT(20 + 8 * cities.length) / Math.max(0.7, P.expand)) return false;
     if (!force && civ.wood < 40) { civ.lastEvt.saving = sim.tick; return false; }
     if (sim.wars.some((w) => w.active && (w.a === civ.id || w.d === civ.id)) && cities.length >= 2) return false;
     const w = sim.world;
@@ -486,10 +487,10 @@ export class CivilizationSystem {
     for (const civ of sim.civs) {
       if (!civ.alive) continue;
       if ((sim.tick + civ.id) % 10 === 0) this.plan(sim, civ);
-      civ.techProg += civ.pop * 0.0007 * PERS[civ.personality].tech * (civ.leader.goat ? 0.8 : 1) * civ.mods.tech * Math.min(1, civ.stability / 45);
+      civ.techProg += civ.pop / TUNING.popThresholdScale * 0.0007 * PERS[civ.personality].tech * (civ.leader.goat ? 0.8 : 1) * civ.mods.tech * Math.min(1, civ.stability / 45);
       if (civ.tech < MAX_TECH && civ.techProg >= techThreshold(civ.tech)) {
         // une découverte exige aussi des moyens : population minimale et financement
-        if (civ.pop >= techPop(civ.tech) && civ.gold >= techGold(civ.tech)) {
+        if (civ.pop >= popT(techPop(civ.tech)) && civ.gold >= techGold(civ.tech)) {
           civ.techProg -= techThreshold(civ.tech);
           civ.gold -= techGold(civ.tech);
           setTech(civ, civ.tech + 1);

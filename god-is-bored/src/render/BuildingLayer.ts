@@ -117,7 +117,12 @@ totalEmissiveRadiance += vColor * (gy + gc) * uNight * 1.7;
       d.updateMatrix();
       const shade = ruin ? 0.45 : built ? (b.hp < b.maxHp * 0.5 ? 0.78 : 1) : 0.72;
       // teinte des murs : identité de la civilisation, à niveau égal
-      if (civ && !ruin) this.tint.setRGB(1, 1, 1).lerp(this.col.setHex(civ.color), 0.08).multiplyScalar(shade);
+      if (civ && !ruin) {
+        this.tint.setRGB(1, 1, 1).lerp(this.col.setHex(civ.color), 0.08).multiplyScalar(shade);
+        // chaque maison a sa patine : enduit chaud, pierre froide, bois vieilli (villages moins uniformes)
+        const hv = hash2(b.id, 15, 1);
+        this.tint.lerp(this.col.setRGB(hv < 0.4 ? 1.06 : 0.9, hv < 0.4 ? 0.95 : hv < 0.75 ? 0.96 : 1.02, hv < 0.4 ? 0.82 : hv < 0.75 ? 0.9 : 1.08), 0.35);
+      }
       else this.tint.setRGB(shade, shade, shade);
       if (visible) ent.body.push(d.matrix, this.tint);
       if (ent.accent && visible) {

@@ -157,3 +157,6 @@ Planète → continent → région → local sur une seule géographie continue 
 
 ## Refonte UX/UI & graphique V2
 Interface minimaliste (capsule haut, dock Interagir/Pouvoirs/Planète, cartes contextuelles, panneaux coulissants), plus aucune notification d'événement (Chroniques), pouvoirs par toucher du monde, nouveau pouvoir Incendie et influence individuelle, rendu plus chaud et plus aéré. Voir `docs/ux-v2/REFONTE_UX_UI_GRAPHIQUE_V2.md`.
+
+## V3 — The Living World
+Démographie −70 % (réglages centraux `src/sim/tuning.ts`), esprits des habitants (émotions, souvenirs, relations, intentions, idées : `src/sim/MindSystem.ts`), vie sociale émergente, interventions divines interprétées, fiche humaine avec pensées et souvenirs. Voir `docs/v3/THE_LIVING_WORLD.md`.

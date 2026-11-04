@@ -13,6 +13,7 @@ import { DiplomacySystem } from "./DiplomacySystem";
 import { WarSystem } from "./WarSystem";
 import { DivinePowerSystem } from "./DivinePowerSystem";
 import { EventSystem } from "./EventSystem";
+import { MindSystem } from "./MindSystem";
 import { SoulSystem } from "./SoulSystem";
 import { Planet } from "./Planet";
 
@@ -94,6 +95,7 @@ export class SimulationEngine {
   divine = new DivinePowerSystem();
   events = new EventSystem();
   soul = new SoulSystem();
+  mind = new MindSystem();
   private _planet: Planet | null = null;
   /** Planète portant ce monde : la carte actuelle en est la région R1 (créée à la demande, déterministe). */
   get planet(): Planet { return (this._planet ??= Planet.create(this.seed, this.world.size, 1)); }
@@ -161,6 +163,7 @@ export class SimulationEngine {
     this.war.update(this, yearly);
     this.divine.update(this);
     this.events.update(this, yearly);
+    if (yearly) this.mind.yearly(this);
     this.pruneBuildings();
     this.removeDead();
     const pop = this.citizens.length;
@@ -204,6 +207,7 @@ export class SimulationEngine {
     if (c.dead) return;
     c.dead = true;
     c.hp = 0;
+    this.mind.onDeath(this, c, cause);
     const civ = this.civById.get(c.civ);
     if (civ) civ.stats.deaths++;
     this.stats.deaths++;

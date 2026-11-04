@@ -10,6 +10,12 @@ import { Props } from "../src/render/Props";
 import { Infra } from "../src/render/Infra";
 import { Sky } from "../src/render/Sky";
 import { lightStyle } from "../src/render/Glow";
+import { LEGACY_TUNING, applyTuning, resetTuning } from "../src/sim/tuning";
+import { afterAll, beforeAll } from "vitest";
+
+// Ces suites vérifient la logique des technologies, des époques et des rendus : elles s'exécutent avec la démographie de la V2 (le réglage V3 est testé dans v3.test.ts).
+beforeAll(() => applyTuning(LEGACY_TUNING));
+afterAll(() => resetTuning());
 import { visualEra, animFor } from "../src/render/CitizenLayer";
 
 const mk = (seed = 42) => SimulationEngine.create(seed);

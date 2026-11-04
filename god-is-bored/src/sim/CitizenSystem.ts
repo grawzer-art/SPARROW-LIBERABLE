@@ -2,6 +2,7 @@ import { CITIZEN_SPEED, TICKS_PER_YEAR } from "./config";
 import { moveToward } from "./path";
 import type { SimulationEngine } from "./SimulationEngine";
 import { ACT } from "./SoulSystem";
+import { TUNING } from "./tuning";
 import type { Building, Citizen, City, Civ } from "./types";
 import { T } from "./World";
 
@@ -58,7 +59,8 @@ export class CitizenSystem {
     const civ = sim.civById.get(c.civ);
     if (!civ) { sim.killCitizen(c, "unrest"); return; }
     c.px = c.x; c.py = c.y;
-    c.age += 1 / TPY;
+    // l'enfance dure 1/childGrowth fois plus longtemps (réglage central) ; le reste du rythme de la vie est inchangé
+    c.age += (c.job === "child" ? TUNING.childGrowth : 1) / TPY;
 
     // --- environnement ---
     const ti = world.tileAt(c.x, c.y);
@@ -79,14 +81,14 @@ export class CitizenSystem {
       else c.hunger += 0.7;
     } else c.hunger += 0.7;
     if (c.hunger > 100) {
-      c.hp -= 0.8;
+      c.hp -= 0.8 * (c.job === "child" ? Math.max(0.4, TUNING.childGrowth) : 1); // l'enfance dure plus longtemps : les risques par tick sont répartis sur toute sa durée
       if (c.hp <= 0) { sim.killCitizen(c, "famine"); return; }
     } else if (c.hunger < 70 && c.sick === 0 && c.hp < 100) c.hp = Math.min(100, c.hp + (civ.blessed > 0 ? 0.2 : 0.08));
 
     if (c.sick > 0) {
       c.sick--;
       const vuln = (c.age < 5 || c.age > 50 ? 1.5 : 1) * (c.hunger > 60 ? 1.3 : 1) * (0.85 + ((c.id * 37) % 30) / 100);
-      c.hp -= 1.15 * vuln * (1 - Math.min(0.75, 0.07 * civ.tech));
+      c.hp -= 1.15 * vuln * (1 - Math.min(0.75, 0.07 * civ.tech)) * (c.job === "child" ? Math.max(0.4, TUNING.childGrowth) : 1);
       if (c.hp <= 0) { sim.killCitizen(c, "plague"); return; }
       if (c.sick === 0) c.immune = 900;
       else if (rng.chance(0.5)) {
@@ -101,7 +103,7 @@ export class CitizenSystem {
       const hz = Math.pow((c.age - 55) / 25, 2) * 0.0035;
       if (rng.chance(hz) || c.age > 100) { sim.killCitizen(c, "age"); return; }
     }
-    if (rng.chance(c.age < 4 ? 0.0002 : 0.00004)) { sim.killCitizen(c, "accident"); return; }
+    if (rng.chance((c.age < 4 ? 0.0002 : 0.00004) * (c.job === "child" ? TUNING.childGrowth : 1))) { sim.killCitizen(c, "accident"); return; }
 
     // devenir adulte
     if (c.job === "child" && c.age >= 14) c.job = sim.civSys.pickJob(sim, civ);
@@ -111,6 +113,7 @@ export class CitizenSystem {
     soul.tickNeeds(sim, c);
     if (ss.home < 0 ? (sim.tick + c.id) % 20 === 0 : (sim.tick + c.id) % 90 === 0) soul.assignHome(sim, c);
     if (c.panic <= 0 && (sim.tick + c.id) % 5 === 0) soul.sense(sim, c);
+    sim.mind.tick(sim, c, civ);
 
     // --- comportement (priorités) ---
     // 8. fuir les dangers
@@ -154,8 +157,11 @@ export class CitizenSystem {
       return;
     }
 
+    // projet de vie (partir vers un autre village…) : les besoins vitaux ci-dessus ont déjà eu la priorité
+    if (sim.mind.act(sim, c)) return;
+
     // 5. se reproduire
-    if (c.female && c.job !== "child" && c.cooldown <= 0 && c.age >= 16 && c.age <= 42 && (sim.tick + c.id) % 10 === 0) {
+    if (c.female && c.job !== "child" && c.cooldown <= 0 && c.age >= TUNING.minParentAge && c.age <= TUNING.maxMotherAge && (sim.tick + c.id) % 10 === 0) {
       if (this.tryMate(sim, c, civ, city)) return;
     }
     if (c.cooldown > 0) c.cooldown--;
@@ -255,28 +261,56 @@ export class CitizenSystem {
   }
 
   tryMate(sim: SimulationEngine, c: Citizen, civ: Civ, city: City | null): boolean {
-    if (!city || city.pop >= city.cap || civ.food < 8 || c.hunger > 45 || c.hp < 50 || c.sick > 0) return false;
+    if (!city || city.pop >= city.cap || civ.food < 8 || c.hunger > 45 || c.hp < TUNING.minHealth || c.sick > 0) return false;
+    // vivres, logement, stabilité : une famille ne se fonde pas dans la disette, la rue ou le chaos
+    if (civ.food < civ.pop * TUNING.foodPerCapita || civ.stability < TUNING.minStability) return false;
     let mate: Citizen | null = null;
-    sim.hash.query(sim.citizens, c.x, c.y, 3.5, (o) => {
-      if (mate || o.female || o.civ !== c.civ || o.age < 16 || o.age > 60 || o.sick > 0 || o.army >= 0 || o.mateT > 0 || o.panic > 0 || o.hunger > 60) return;
-      mate = o;
-    });
+    const okMate = (o: Citizen) => !o.female && !o.dead && o.civ === c.civ && o.age >= TUNING.minParentAge && o.age <= TUNING.maxFatherAge && o.sick === 0 && o.army < 0 && o.mateT <= 0 && o.panic <= 0 && o.hunger <= 60;
+    if (TUNING.requirePartner) {
+      // couple établi : seule la personne choisie (lien durable) peut être le père
+      const pid = c.soul?.mate ?? -1;
+      const partner = pid >= 0 ? sim.citizenById.get(pid) : undefined;
+      if (partner && !partner.dead) {
+        if (Math.hypot(partner.x - c.x, partner.y - c.y) > 7 || !okMate(partner)) return false;
+        mate = partner;
+      } else {
+        // célibataire : le lien se noue avec un voisin disponible (pas de parent proche), puis dure
+        sim.hash.query(sim.citizens, c.x, c.y, 4.5, (o) => {
+          if (mate || !okMate(o) || (o.soul?.mate ?? -1) >= 0 && sim.citizenById.has(o.soul!.mate) || o.soul?.mother === c.id || c.soul?.mother === o.id || (o.soul?.mother !== undefined && o.soul.mother >= 0 && o.soul.mother === c.soul?.mother)) return;
+          mate = o;
+        });
+        if (!mate) return false;
+        sim.mind.bond(sim, c, mate);
+        c.cooldown = Math.max(c.cooldown, 20 + sim.rng.int(30)); // le temps de se connaître
+        return false;
+      }
+    } else {
+      sim.hash.query(sim.citizens, c.x, c.y, 3.5, (o) => { if (!mate && okMate(o)) mate = o; });
+    }
     const m = mate as Citizen | null;
     if (!m) return false;
+    const roof = TUNING.requireHousing && (c.soul?.home ?? -1) < 0 ? 0.5 : 1; // sans toit, les couples hésitent
+    if (TUNING.rollAtConception && !sim.rng.chance(this.birthChance(sim, civ) * roof)) { c.cooldown = 25 + sim.rng.int(35); return false; } // pas de conception cette fois : on réessaiera dans l'année
     c.mateT = 14; m.mateT = 14;
     sim.soul.ensure(c).mate = m.id; sim.soul.ensure(m).mate = c.id;
     c.state = "mate"; m.state = "mate";
-    c.cooldown = 80 + sim.rng.int(60);
+    c.cooldown = Math.max(80 + sim.rng.int(60), Math.round(TUNING.birthIntervalYears * TPY) + sim.rng.int(40));
     return true;
+  }
+
+  /** Probabilité de conception/naissance : base de la V2 × multiplicateur central, plafond doux de population. */
+  birthChance(sim: SimulationEngine, civ: Civ): number {
+    const world = Math.max(0, Math.min(1, (TUNING.popSoftCap - sim.citizens.length) / 600));
+    let room = 1;
+    if (TUNING.densityBoost > 0) { let cap = 0; for (const ct of sim.cities) if (ct.civ === civ.id) cap += ct.cap; room = 1 + TUNING.densityBoost * Math.max(0, Math.min(1, 1 - civ.pop / Math.max(8, cap))); }
+    return Math.min(0.95, (civ.stability > 25 ? 0.75 : 0.4) * (civ.blessed > 0 ? 1.3 : 1) * world * TUNING.birthRate * room);
   }
 
   giveBirth(sim: SimulationEngine, mother: Citizen, civ: Civ): void {
     const city = sim.cityById.get(mother.city);
     if (!city || city.pop >= city.cap) return;
     // plafond mondial de population (performances, notamment sur iPhone) : la natalité s'effondre vers 2 500 habitants
-    const world = Math.max(0, Math.min(1, (2500 - sim.citizens.length) / 600));
-    const p = (civ.stability > 25 ? 0.75 : 0.4) * (civ.blessed > 0 ? 1.3 : 1) * world;
-    if (!sim.rng.chance(p)) return;
+    if (!TUNING.rollAtConception && !sim.rng.chance(this.birthChance(sim, civ))) return;
     // équilibre démographique : une population qui manque de femmes (ou d'hommes) finit par s'éteindre sans raison narrative
     let f = 0, m = 0;
     for (const o of sim.citizens) if (o.civ === civ.id && !o.dead) { if (o.female) f++; else m++; }
@@ -284,6 +318,7 @@ export class CitizenSystem {
     const female = sim.rng.chance(Math.max(0.2, Math.min(0.8, 0.5 + (0.5 - f / tot))));
     const child = sim.spawnCitizen(civ, city, mother.x, mother.y, 0, { parent: mother, female });
     child.job = "child";
+    sim.mind.onBirth(sim, child, mother);
     civ.stats.births++;
     sim.stats.births++;
   }
@@ -398,7 +433,7 @@ export class CitizenSystem {
           return;
         }
         c.state = "work";
-        civ.techProg += 0.02 * sim.soul.workFactor(c) * (0.4 + c.intel) * (civ.tech >= 4 ? 1.2 : 1) * civ.mods.tech;
+        civ.techProg += 0.02 / TUNING.popThresholdScale * sim.soul.workFactor(c) * (0.4 + c.intel) * (civ.tech >= 4 ? 1.2 : 1) * civ.mods.tech;
         return;
       }
       default:

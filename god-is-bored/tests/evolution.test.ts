@@ -5,6 +5,12 @@ import { ERA_GOLD, ERA_MIN_TECH, ERA_POP, TECHS, eraOfTech, isUnlocked, setTech 
 import { TICKS_PER_YEAR } from "../src/sim/config";
 import { buildingModel, geometryFingerprint, modelKey, vertexCount, MIN_ERA } from "../src/render/models";
 import { armyProp, citizenBody, citizenHead, soldierGear } from "../src/render/units";
+import { LEGACY_TUNING, applyTuning, resetTuning } from "../src/sim/tuning";
+import { afterAll, beforeAll } from "vitest";
+
+// Ces suites vérifient la logique des technologies, des époques et des rendus : elles s'exécutent avec la démographie de la V2 (le réglage V3 est testé dans v3.test.ts).
+beforeAll(() => applyTuning(LEGACY_TUNING));
+afterAll(() => resetTuning());
 import type { BuildingType, Civ } from "../src/sim/types";
 
 const mk = (seed = 42) => SimulationEngine.create(seed);

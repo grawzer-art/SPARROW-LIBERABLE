@@ -70,7 +70,7 @@ export function moodOf(c: Citizen): string {
 const ACT3: Record<string, string> = { "Travailler": "Travaille", "Se nourrir": "Se nourrit", "Se reposer": "Se repose", "Discuter": "Discute", "Fuir un danger": "Fuit un danger", "Flâner": "Flâne", "Attendre": "Attend" };
 export const jobOf = (c: Citizen): string => (c.female ? JOB_F : JOB_M)[c.job] ?? c.job;
 
-type CardSpec = { title: string; sub: string; color?: number; actions: { id: string; label: string; main?: boolean; cool?: boolean }[]; back?: boolean };
+type CardSpec = { title: string; sub: string; color?: number; actions: { id: string; label: string; main?: boolean; cool?: boolean }[]; back?: boolean; grid?: boolean };
 type Sel = { kind: "none" | "civ" | "citizen" | "city" | "building"; id: number };
 
 export class UI {
@@ -93,6 +93,7 @@ export class UI {
   private planetTab: "cont" | "civ" | "chron" = "cont";
   private menuTab: "time" | "stats" | "game" = "time";
   private influence = false;
+  private planetInf = false;
   private cardIsPlanet: { ref?: { region: number; id: number }; spec: CardSpec } | null = null;
   private detailRef: { sim: SimulationEngine; sel: Sel } | null = null;
   private lastSheetHtml = "";
@@ -161,7 +162,9 @@ export class UI {
     $("h-info").addEventListener("click", () => { this.planetTab = "chron"; this.openSheet("planet"); });
     $("h-menu").addEventListener("click", () => { this.menuTab = "time"; this.openSheet("menu"); });
     $("armed-x").addEventListener("click", () => this.setPower(null));
-    document.querySelector("#card .cx")!.addEventListener("click", () => { if (this.influence) { this.influence = false; this.refreshCard(); } else this.dismissSelection(); });
+    document.querySelector("#follow button")!.addEventListener("click", () => { if (this.follow !== null) { const sim = this.sim; this.detailRef = { sim, sel: { kind: "citizen", id: this.follow } }; this.openSheet("details"); } });
+    document.querySelector("#follow .fx")!.addEventListener("click", () => { this.follow = null; this.refreshCardIfAny(); });
+    document.querySelector("#card .cx")!.addEventListener("click", () => { if (this.planetInf && this.cardIsPlanet) { this.planetInf = false; this.showCard(this.cardIsPlanet.spec); } else if (this.influence) { this.influence = false; this.refreshCard(); } else this.dismissSelection(); });
     document.querySelector("#sheet .sx")!.addEventListener("click", () => this.closeSheet());
     this.bindSheetDrag($("sheet"), () => this.closeSheet());
     // Safari iOS : pas de zoom de page ni de menu contextuel sur la carte
@@ -366,12 +369,15 @@ export class UI {
       const act = c.soul ? (ACT3[sim.soul.explain(c).action] ?? sim.soul.explain(c).action) : STATE_LABEL[c.state] ?? c.state;
       if (this.influence) {
         const cool = (k: string) => (sim.cooldowns["inf_" + k] ?? 0) > sim.tick;
-        return { title: c.name, sub: "Que lui accorder ?", color: civ?.color, back: true, actions: [
-          { id: "inf:bless", label: "✦ Bénir", cool: cool("bless") }, { id: "inf:heal", label: "✚ Guérir", cool: cool("heal") },
-          { id: "inf:inspire", label: "💡 Inspirer", cool: cool("inspire") }, { id: "inf:smite", label: "ϟ Foudroyer", cool: cool("smite") }] };
+        const g = (k: string) => sim.divine.gate(sim, k) > 0;
+        return { title: c.name, sub: "Que lui accorder ?", color: civ?.color, back: true, grid: true, actions: [
+          { id: "inf:dream", label: "☾ Rêve", cool: g("dream") }, { id: "inf:bond", label: "♥ Rapprocher", cool: g("bond") }, { id: "inf:inspire", label: "💡 Inspirer", cool: cool("inspire") },
+          { id: "inf:bless", label: "✦ Bénir", cool: cool("bless") }, { id: "inf:heal", label: "✚ Guérir", cool: cool("heal") }, { id: "inf:smite", label: "ϟ Foudroyer", cool: cool("smite") }] };
       }
-      return { title: `${c.name} — ${Math.floor(c.age)} ans`, sub: `${jobOf(c)} · ${moodOf(c)} · ${act}`, color: civ?.color,
-        actions: [{ id: "observe", label: "Observer", main: true }, { id: "influence", label: "Influencer" }, { id: "details", label: "Détails" }] };
+      const d = sim.mind.describe(sim, c);
+      const intent = d.intent !== "Reste et vit sa vie" ? `<br><em>${esc(d.intent)}</em>` : "";
+      return { title: `${c.name} — ${Math.floor(c.age)} ans`, sub: `${jobOf(c)} · ${moodOf(c)} · ${act}${intent}<br><span class="thought">« ${esc(d.thought)} »</span>`, color: civ?.color,
+        actions: [{ id: "observe", label: this.follow === c.id ? "Suivi ✓" : "Suivre", main: true }, { id: "influence", label: "Influencer" }, { id: "details", label: "Détails" }] };
     }
     if (s.kind === "city") {
       const c = sim.cityById.get(s.id);
@@ -379,14 +385,16 @@ export class UI {
       if (!c || !civ) return null;
       const sites = sim.buildings.filter((b) => b.city === c.id && b.progress < 1 && b.civ >= 0).length;
       const state = c.siege > 0 ? "assiégée" : sim.world.fire.some((f, i) => f > 0 && sim.world.bld[i] >= 0 && sim.buildingById.get(sim.world.bld[i])?.city === c.id) ? "en proie aux flammes" : sites > 2 ? "en plein chantier" : "paisible";
+      if (this.influence) return this.civInfluenceSpec(sim, civ, c.name);
       return { title: c.name, sub: `${civ.name}${civ.capital === c.id ? " · capitale" : ""} · ${c.pop} habitants<br>Village ${state}`, color: civ.color,
-        actions: [{ id: "observe", label: "Observer", main: true }, { id: "bless", label: "Bénir" }, { id: "details", label: "Détails" }] };
+        actions: [{ id: "observe", label: "Observer", main: true }, { id: "influence", label: "Influencer" }, { id: "details", label: "Détails" }] };
     }
     if (s.kind === "civ") {
       const civ = sim.civById.get(s.id);
       if (!civ) return null;
+      if (this.influence) return this.civInfluenceSpec(sim, civ, civ.formal);
       return { title: civ.formal, sub: `${civ.pop} habitants · ${ERA_NAMES[civ.era]} · ${PERSONALITY_LABEL[civ.personality]}`, color: civ.color,
-        actions: [{ id: "observe", label: "Observer", main: true }, { id: "bless", label: "Bénir" }, { id: "details", label: "Détails" }] };
+        actions: [{ id: "observe", label: "Observer", main: true }, { id: "influence", label: "Influencer" }, { id: "details", label: "Détails" }] };
     }
     if (s.kind === "building") {
       const b = sim.buildingById.get(s.id);
@@ -396,6 +404,22 @@ export class UI {
       return { title: label, sub: civ ? `${esc(civ.name)} · ${ERA_NAMES[b.era]}` : "Ruines abandonnées", color: civ?.color, actions: [{ id: "details", label: "Détails", main: true }] };
     }
     return null;
+  }
+
+  /** Interventions sur une civilisation / un village : foi, découverte, protection, châtiment, dirigeant, bénédiction. */
+  private civInfluenceSpec(sim: SimulationEngine, civ: Civ, title: string): CardSpec {
+    const g = (k: string) => sim.divine.gate(sim, k + "_" + civ.id) > 0;
+    return { title, sub: `${esc(civ.name)} : que lui accorder ?`, color: civ.color, back: true, grid: true, actions: [
+      { id: "civ:faith", label: "☼ Foi", cool: g("faith") }, { id: "civ:inspire", label: "💡 Découverte", cool: g("inspire") }, { id: "civ:leader", label: "♛ Dirigeant" },
+      { id: "civ:protect", label: "⛨ Protéger", cool: g("protect") }, { id: "civ:punish", label: "☄ Punir", cool: g("punish") }, { id: "civ:bless", label: "✦ Bénir", cool: sim.divine.cooldownLeft(sim, "bless") > 0 }] };
+  }
+
+  /** Mini-menu de choix (messages de rêve, attitudes du dirigeant). */
+  private choose(title: string, items: { id: string; label: string }[], pick: (id: string) => void): void {
+    const m = $("msgs");
+    m.innerHTML = `<small>${esc(title)}</small>` + items.map((it) => `<button data-m="${it.id}">${esc(it.label)}</button>`).join("");
+    m.classList.remove("hidden");
+    m.querySelectorAll<HTMLButtonElement>("button").forEach((b) => b.addEventListener("click", () => { m.classList.add("hidden"); pick(b.dataset.m!); }));
   }
 
   private refreshCard(): void {
@@ -420,7 +444,7 @@ export class UI {
     $("c-title").textContent = spec.title;
     $("c-sub").innerHTML = spec.sub;
     const dot = $("c-dot"); dot.style.background = spec.color !== undefined ? hex(spec.color) : "#ffe2a8"; dot.style.display = "block";
-    const acts = $("c-actions"); acts.textContent = "";
+    const acts = $("c-actions"); acts.textContent = ""; acts.classList.toggle("grid", !!spec.grid);
     for (const a of spec.actions) {
       const b = document.createElement("button");
       b.textContent = a.label; if (a.main) b.className = "main"; if (a.cool) b.classList.add("cool");
@@ -435,45 +459,58 @@ export class UI {
     if (this.cardIsPlanet) { this.planetCardAction(id); return; }
     const sim = this.sim, s = this.sel;
     if (id === "influence") { this.influence = true; this.refreshCard(); return; }
-    if (id.startsWith("inf:")) {
-      const res = sim.divine.influence(sim, s.id, id.slice(4) as "bless" | "heal" | "inspire" | "smite");
-      this.snack(res.msg);
-      if (res.ok && id !== "inf:smite") { this.influence = false; this.game.renderer.fx.handle({ kind: "bless", x: sim.citizenById.get(s.id)!.x, y: sim.citizenById.get(s.id)!.y }, sim, this.game.renderer); }
-      this.refreshCard();
-      return;
-    }
+    if (id.startsWith("inf:") || id.startsWith("civ:")) { this.divineAction(sim, id, s); return; }
     if (id === "observe") {
-      if (s.kind === "citizen") { this.follow = s.id; const c = sim.citizenById.get(s.id); if (c) this.game.renderer.focusOn(c.x, c.y, 11); }
-      else if (s.kind === "city" || s.kind === "civ") {
+      if (s.kind === "citizen") {
+        if (this.follow === s.id) { this.follow = null; this.snack("Vous ne suivez plus cet habitant."); }
+        else { this.follow = s.id; const c = sim.citizenById.get(s.id); if (c) this.game.renderer.focusOn(c.x, c.y, 11); this.snack("Vous suivez cet habitant pendant sa vie."); }
+        this.refreshCard();
+      } else if (s.kind === "city" || s.kind === "civ") {
         const city = s.kind === "city" ? sim.cityById.get(s.id) : sim.cityById.get(sim.civById.get(s.id)?.capital ?? -1);
         if (city) this.game.renderer.focusOn(city.x + 0.5, city.y + 0.5, 22);
       }
       return;
     }
-    if (id === "bless") {
-      const civId = s.kind === "city" ? sim.cityById.get(s.id)?.civ : s.id;
-      if (civId === undefined) return;
-      const res = sim.divine.cast(sim, "bless", 0, 0, { civ: civId });
+    if (id === "details") { this.detailRef = { sim, sel: { ...s } }; this.openSheet("details"); }
+  }
+
+  /** Interventions divines depuis une carte : individu (`inf:`) ou civilisation (`civ:`). Le résultat vient de la simulation. */
+  private divineAction(sim: SimulationEngine, id: string, s: Sel): void {
+    const d = sim.divine, k = id.slice(4);
+    const civId = s.kind === "city" ? sim.cityById.get(s.id)?.civ : s.kind === "civ" ? s.id : undefined;
+    const done = (res: { ok: boolean; msg: string }, close = true) => {
       this.snack(res.msg);
+      if (res.ok && close) this.influence = false;
+      if (res.ok) { const c = s.kind === "citizen" ? sim.citizenById.get(s.id) : undefined; if (c) this.game.renderer.fx.handle({ kind: "bless", x: c.x, y: c.y }, sim, this.game.renderer); }
+      if (this.cardIsPlanet) { this.planetInf = false; this.showCard(this.cardIsPlanet.spec); } else this.refreshCard();
+    };
+    if (id.startsWith("inf:")) {
+      if (k === "dream") { this.choose("Quel rêve envoyer ?", [{ id: "hope", label: "« Tout ira mieux. »" }, { id: "flee", label: "« Quitte ce lieu. »" }, { id: "doubt", label: "« Ton chef te ment. »" }, { id: "bond", label: "« Tu n'es pas seul(e). »" }], (m) => done(d.dream(sim, s.id, m as "hope" | "flee" | "doubt" | "bond"))); return; }
+      if (k === "bond") { done(d.favorBond(sim, s.id)); return; }
+      done(d.influence(sim, s.id, k as "bless" | "heal" | "inspire" | "smite"));
       return;
     }
-    if (id === "details") { this.detailRef = { sim, sel: { ...s } }; this.openSheet("details"); }
+    if (civId === undefined) return;
+    if (k === "leader") { this.choose("Souffler au dirigeant…", [{ id: "peace", label: "La paix" }, { id: "war", label: "La guerre" }, { id: "generosity", label: "La générosité" }], (m) => done(d.influenceLeader(sim, civId, m as "peace" | "war" | "generosity"))); return; }
+    if (k === "faith") done(d.encourageFaith(sim, civId));
+    else if (k === "inspire") done(d.inspireDiscovery(sim, civId));
+    else if (k === "protect") done(d.protect(sim, civId));
+    else if (k === "punish") done(d.punish(sim, civId));
+    else if (k === "bless") done(d.cast(sim, "bless", 0, 0, { civ: civId }));
   }
 
   private planetCardAction(id: string): void {
     const pc = this.cardIsPlanet!;
     const ref = pc.ref;
-    if (id === "details" && ref) {
-      const eng = this.game.ps.engineOf(ref.region);
-      if (eng) { this.detailRef = { sim: eng, sel: { kind: "city", id: ref.id } }; this.openSheet("details"); }
-      return;
+    if (ref) {
+      const eng = this.game.ps.engineOf(ref.region), city = eng?.cityById.get(ref.id), civ = city ? eng!.civById.get(city.civ) : undefined;
+      if (eng && city && civ) {
+        if (id === "influence") { this.planetInf = true; this.showCard(this.civInfluenceSpec(eng, civ, city.name)); return; }
+        if (id.startsWith("civ:")) { this.divineAction(eng, id, { kind: "city", id: ref.id }); this.planetInf = false; this.showCard(pc.spec); return; }
+        if (id === "details") { this.detailRef = { sim: eng, sel: { kind: "city", id: ref.id } }; this.openSheet("details"); return; }
+        if (id === "observe") { this.game.observeVillage(ref.region, ref.id); return; }
+      }
     }
-    if (id === "bless" && ref) {
-      const eng = this.game.ps.engineOf(ref.region), city = eng?.cityById.get(ref.id);
-      if (eng && city) this.snack(eng.divine.cast(eng, "bless", 0, 0, { civ: city.civ }).msg);
-      return;
-    }
-    if (id === "observe" && ref) { this.game.observeVillage(ref.region, ref.id); return; }
     this.onPlanetAction?.(id);
   }
   /** Branché par Game : actions « zoom » / « enter » de la vue planète. */
@@ -502,6 +539,8 @@ export class UI {
         if (b && b.hp >= 0) r.setSelectionRing(b.x + 0.5, b.y + 0.5, 0.7, sim.civById.get(b.civ)?.color ?? 0xaaaaaa); else this.select("none", -1);
       }
     }
+    this.followPill();
+    this.bubble();
     const now = performance.now();
     if (now - this.lastHud > 250) { this.lastHud = now; this.hud(); }
   }
@@ -529,6 +568,39 @@ export class UI {
     if (!this.cardIsPlanet && this.sel.kind !== "none" && !this.influence) this.refreshCardText();
     if (this.sheet === "details") this.renderSheet();
     this.updateSpeed();
+  }
+
+  /** Bulle d'intention au-dessus de l'habitant sélectionné ou suivi : on voit d'un coup d'œil ce qu'il compte faire. */
+  private bubble(): void {
+    const el = document.getElementById("bubble");
+    if (!el) return;
+    const id = this.sel.kind === "citizen" ? this.sel.id : this.follow;
+    const c = id !== null && this.game.mode === "local" ? this.sim.citizenById.get(id) : undefined;
+    if (!c || c.dead || this.sheet) { if (!el.classList.contains("hidden")) el.classList.add("hidden"); return; }
+    const m = c.mind, g = m?.goal ?? 0;
+    const ico = c.panic > 0 ? "😨" : c.sick > 0 ? "🤒" : g === 1 ? "🧳" : g === 3 ? "✊" : g === 4 ? "😠" : g === 2 ? "💞" : g === 5 ? "🙏" : c.state === "talk" ? "💬" : c.state === "rest" ? "💤" : c.state === "eat" || c.state === "forage" ? "🍞" : c.state === "mate" ? "❤️" : c.hunger > 70 ? "🍽" : "💭";
+    const p = this.game.renderer.screenOf(c.x, c.y);
+    if (!p) { el.classList.add("hidden"); return; }
+    if (el.textContent !== ico) el.textContent = ico;
+    el.classList.remove("hidden");
+    el.style.transform = `translate(${Math.round(p.x)}px, ${Math.round(p.y)}px) translate(-50%, -100%)`;
+  }
+
+  private followName = "";
+  /** Pastille « Suivi » : un habitant suivi pendant sa vie ; sa mort est annoncée discrètement. */
+  private followPill(): void {
+    const el = document.getElementById("follow");
+    if (!el) return;
+    if (this.follow === null) { if (!el.classList.contains("hidden")) el.classList.add("hidden"); return; }
+    const c = this.sim.citizenById.get(this.follow);
+    if (!c || c.dead) {
+      this.snack(`${this.followName || "L'habitant suivi"} est mort(e). Sa vie est dans les Chroniques.`);
+      this.follow = null; el.classList.add("hidden"); return;
+    }
+    this.followName = c.name;
+    const t = `Suivi · ${c.name}`;
+    if (el.classList.contains("hidden")) el.classList.remove("hidden");
+    if (el.firstElementChild!.textContent !== t) el.firstElementChild!.textContent = t;
   }
 
   private refreshCardText(): void {
@@ -679,15 +751,25 @@ export class UI {
       if (c && civ) {
         title = c.name;
         const faith = c.faith > 0.7 ? "fervent" : c.faith > 0.4 ? "pratiquant" : "tiède";
+        const d = sim.mind.describe(sim, c);
+        const m = sim.mind.ensure(sim, c);
+        const emoBars = ["Peur", "Joie", "Tristesse", "Colère", "Espoir"].map((n, i) => `<div class="kv"><span>${n}</span><b>${Math.round(m.emo[i])}</b></div>${this.bar(m.emo[i], 100, i === 1 || i === 4 ? "green" : i === 0 ? "" : "red")}`).join("");
+        const trust = m.trust > 30 ? "confiance" : m.trust > -20 ? "réserve" : m.trust > -55 ? "méfiance" : "défiance";
         html = `<div class="h-civ"><span class="sw" style="background:${hex(civ.color)}"></span><h2>${esc(c.name)}</h2></div>
-        <div class="quote">${esc(jobOf(c))} de ${esc(civ.name)} — ${esc(STATE_LABEL[c.state] ?? c.state)}${c.sick > 0 ? " (malade)" : ""}</div>
-        <div class="kv"><span>Âge</span><b>${Math.floor(c.age)} ans</b><span>Humeur</span><b>${moodOf(c)}</b><span>Ville</span><b>${esc(sim.cityById.get(c.city)?.name ?? "—")}</b><span>Croyance</span><b>${esc(civ.religion.name)}</b></div>
+        <div class="quote">${esc(jobOf(c))} de ${esc(civ.name)} · ${Math.floor(c.age)} ans · ${esc(sim.cityById.get(c.city)?.name ?? "—")}</div>
+        <div class="sheet-sec">Pensée</div><p class="thought big">« ${esc(d.thought)} »</p>
+        <div class="sheet-sec">Intention</div><p class="law" style="color:var(--text)"><b>${esc(d.intent)}</b>${d.why.length ? "<br>Parce qu'il/elle " + d.why.map(esc).join(", ") + "." : ""}</p>
+        <div class="kv"><span>Humeur</span><b>${esc(d.emotion)}</b><span>Envers son chef</span><b>${trust}</b></div>
+        <div class="sheet-sec">Souvenirs marquants</div>${d.memories.length ? d.memories.map((x) => `<div class="law" style="color:var(--text)">${esc(x)}</div>`).join("") : '<div class="law">Rien de marquant, pour l\'instant.</div>'}
+        <div class="sheet-sec">Relations</div>${d.relations.length ? d.relations.map((x) => `<div class="law" style="color:var(--text)">${esc(x)}</div>`).join("") : '<div class="law">Encore peu de liens.</div>'}
+        <div class="sheet-sec">Émotions</div>${emoBars}
+        <div class="sheet-sec">Santé et caractère</div>
+        <div class="kv"><span>Croyance</span><b>${esc(civ.religion.name)} · ${faith}</b></div>
         <div class="kv"><span>Santé</span><b>${Math.round(c.hp)}</b></div>${this.bar(c.hp, 100, c.hp < 35 ? "red" : "green")}
         <div class="kv"><span>Faim</span><b>${Math.round(c.hunger)}</b></div>${this.bar(c.hunger, 100, c.hunger > 70 ? "red" : "")}
         <div class="kv"><span>Intelligence</span><b>${Math.round(c.intel * 100)}</b></div>${this.bar(c.intel, 1, "blue")}
         <div class="kv"><span>Courage</span><b>${Math.round(c.courage * 100)}</b></div>${this.bar(c.courage, 1)}
         <div class="kv"><span>Agressivité</span><b>${Math.round(c.aggr * 100)}</b></div>${this.bar(c.aggr, 1, "red")}
-        <div class="kv"><span>Foi</span><b>${faith}</b></div>${this.bar(c.faith, 1)}
         ${this.soulHtml(c, sim)}`;
       }
     } else if (s.kind === "city") {

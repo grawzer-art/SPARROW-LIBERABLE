@@ -129,3 +129,19 @@ body.m-planet #dock [data-d="powers"] { }
 #intro h1 { font-family: var(--serif); letter-spacing: .14em; font-size: 30px; color: var(--warm); text-shadow: 0 0 28px rgba(255, 210, 140, .35); }
 #intro .primary { border-radius: 16px; min-height: 50px; background: var(--warm); color: #2a2030; }
 #intro input { border-radius: 12px; min-height: 40px; }
+
+/* V3 : pensées, suivi, interventions en grille */
+#c-actions.grid { flex-wrap: wrap; }
+#c-actions.grid button { flex: 1 1 30%; font-size: 12.5px; }
+.thought { font-family: var(--serif); font-style: italic; color: #f0e2c4; }
+.thought.big { font-size: 16px; margin: 2px 0 6px; }
+#card em { color: var(--warm); font-style: normal; font-weight: 600; font-size: 12.5px; }
+#follow { position: absolute; z-index: 11; left: calc(10px + var(--sal)); top: calc(var(--sat) + 54px); display: flex; border-radius: 17px; overflow: hidden; background: var(--glass-hi); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid var(--warm); }
+#follow.hidden { display: none; }
+#follow button { height: 32px; padding: 0 12px; border: 0; background: none; color: var(--warm); font-size: 12.5px; font-weight: 600; }
+#follow .fx { padding: 0 10px; color: var(--dim); }
+body.m-planet #place, body.m-region #place { top: calc(var(--sat) + 92px); }
+#bubble { position: absolute; left: 0; top: 0; z-index: 9; font-size: 20px; line-height: 1; padding: 5px 8px; border-radius: 14px; background: rgba(30, 25, 40, .72); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid var(--glass-line); pointer-events: none; will-change: transform; }
+#bubble.hidden { display: none; }
+#bubble::after { content: ""; position: absolute; left: 50%; bottom: -5px; width: 8px; height: 8px; background: inherit; border-right: 1px solid var(--glass-line); border-bottom: 1px solid var(--glass-line); transform: translateX(-50%) rotate(45deg); }
+body.card-open #msgs { bottom: calc(var(--sab) + 262px); }

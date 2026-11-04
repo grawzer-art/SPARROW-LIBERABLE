@@ -17,12 +17,14 @@ export class SaveManager {
       seed: sim.seed, tick: sim.tick, nextId: sim.nextId, rng: sim.rng.s, speed: sim.speed,
       civs: sim.civs, cities: sim.cities,
       buildings: sim.buildings.filter((b) => b.hp >= 0),
-      citizens: sim.citizens.filter((c) => !c.dead).map((c) => ({ ...c, path: null, pathI: 0 })),
+      // les trajets de longue distance (départ vers un autre village) conservent leur chemin : la reprise est identique à la poursuite
+      citizens: sim.citizens.filter((c) => !c.dead).map((c) => (c.mind?.goal === 1 ? { ...c } : { ...c, path: null, pathI: 0 })),
       armies: sim.armies.map((a) => ({ ...a, path: null, pathI: 0, pathTarget: -1 })),
       wars: sim.wars.slice(-60),
       rel: sim.rel, grudge: sim.grudge, grudgeWhy: sim.grudgeWhy, status: sim.status, truce: sim.truce,
       chronicle: sim.chronicle.slice(-1200),
       planet: sim.planet.serialize(),
+      mind: sim.mind.serialize(),
       weather: sim.weather, cooldowns: sim.cooldowns, boredom: sim.boredom, lastTribeTick: sim.lastTribeTick, stats: sim.stats,
       world: {
         seedUsed: w.seedUsed, hillH: w.hillH, mtnH: w.mtnH,
@@ -51,6 +53,7 @@ export class SaveManager {
     sim.rel = d.rel; sim.grudge = d.grudge; sim.grudgeWhy = d.grudgeWhy; sim.status = d.status; sim.truce = d.truce;
     sim.chronicle = d.chronicle; sim.weather = d.weather; sim.cooldowns = d.cooldowns; sim.boredom = d.boredom;
     sim.lastTribeTick = d.lastTribeTick; sim.stats = d.stats;
+    sim.mind.restore(d.mind); // anciennes sauvegardes : esprits créés à la volée
     sim.planet = Planet.restore(d.planet, d.seed); // anciennes sauvegardes : planète régénérée à l'identique depuis la graine
     // migration des anciennes sauvegardes (avant les époques)
     for (const c of sim.civs) {

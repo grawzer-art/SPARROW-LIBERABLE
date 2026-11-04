@@ -62,12 +62,13 @@ describe("Monde", () => {
 });
 
 describe("Vie : population, mortalité, ressources, construction", () => {
-  it("les populations croissent seules", () => {
+  it("les populations croissent seules, mais lentement (rythme V3)", () => {
     const sim = mk();
     const start = sim.citizens.length;
     sim.runYears(50);
-    expect(sim.citizens.length).toBeGreaterThan(start * 1.5);
-    expect(sim.stats.births).toBeGreaterThan(20);
+    expect(sim.citizens.length).toBeGreaterThan(start * 1.1);
+    expect(sim.citizens.length).toBeLessThan(start * 2.2);
+    expect(sim.stats.births).toBeGreaterThan(15);
     expect(invariants(sim)).toEqual([]);
   });
   it("les habitants vieillissent et meurent de vieillesse", () => {

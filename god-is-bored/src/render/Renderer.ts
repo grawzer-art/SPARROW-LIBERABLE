@@ -536,6 +536,13 @@ export class Renderer {
     return this.mobile ? (this.quality >= 3 ? 33 : 15) : 0;
   }
   /** Se rapproche en douceur d'un point : l'inclinaison est ramenée dans une plage lisible (jamais rasante, jamais verticale). */
+  /** Position écran (px) d'un point de la carte locale, ou null s'il est derrière la caméra. */
+  screenOf(x: number, y: number): { x: number; y: number } | null {
+    const v = new THREE.Vector3(x - this.N / 2, Math.max(0, this.sim.world.heightAt(x, y)) + 0.95, y - this.N / 2).project(this.camera);
+    if (v.z > 1) return null;
+    const r = this.three.domElement.getBoundingClientRect();
+    return { x: (v.x * 0.5 + 0.5) * r.width, y: (-v.y * 0.5 + 0.5) * r.height };
+  }
   focusOn(x: number, y: number, dist = 26, instant = false): void {
     const t = new THREE.Vector3(x - this.N / 2, Math.max(0, this.sim.world.heightAt(x, y)) + 0.2, y - this.N / 2);
     this.tween = { t, d: Math.max(this.controls.minDistance, Math.min(this.controls.maxDistance, dist)) };

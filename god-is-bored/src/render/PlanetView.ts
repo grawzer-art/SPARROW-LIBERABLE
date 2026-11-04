@@ -627,7 +627,7 @@ export class PlanetView {
     this.placeRing(dir);
     this.sel = { kind: "settlement", dir, region: l.region.id, x, y, id };
     this.hooks.card({ kind: "settlement", title: city.name, lines: [`${civ?.name ?? "?"}${civ?.capital === city.id ? " · capitale" : ""} · ${city.pop} habitants`, `Village ${state}`], color: civ?.color,
-      actions: [{ id: "observe", label: "Observer" }, { id: "bless", label: "Bénir" }, { id: "details", label: "Détails" }], ref: { region: l.region.id, id } });
+      actions: [{ id: "observe", label: "Observer" }, { id: "influence", label: "Influencer" }, { id: "details", label: "Détails" }], ref: { region: l.region.id, id } });
   }
 
   /** Vol vers un village (zoom continu jusqu'à la vue rapprochée). */

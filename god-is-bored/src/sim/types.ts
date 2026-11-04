@@ -30,6 +30,26 @@ export interface SoulState {
   fail: number; failUntil: number; // dernière action impossible et fin de sa mise à l'écart
 }
 
+/** Souvenir persistant : genre, tick, poids signé (−100 : très douloureux … +100 : très heureux) et personne concernée. */
+export interface Mem { k: number; t: number; w: number; who: number; }
+/** Relation individuelle : autre habitant, affinité −100..100, nature (0 connaissance, 1 ami, 2 rival, 3 partenaire, 4 parenté). */
+export interface Rel { id: number; a: number; k: number; }
+/**
+ * Vie intérieure : émotions temporaires, souvenirs, relations, confiance envers le dirigeant, idées partagées, intention.
+ * Compact (≈ 300 octets) et sauvegardé tel quel.
+ */
+export interface Mind {
+  v: 1;
+  emo: [number, number, number, number, number]; // peur, joie, tristesse, colère, espoir (0..100)
+  mem: Mem[]; // 8 souvenirs au plus : les moins marquants s'effacent
+  rel: Rel[]; // 7 relations au plus
+  trust: number; // confiance au dirigeant −100..100
+  ideas: number; // idées en circulation (bits MemeBit)
+  goal: number; gT: number; gTarget: number; gWhy: number[]; // projet, début, cible (ville/habitant), raisons (codes)
+  next: number; // prochaine délibération (tick)
+  lastLeave: number;
+}
+
 export interface Citizen {
   id: number;
   name: string;
@@ -61,6 +81,7 @@ export interface Citizen {
   path?: number[] | null;
   pathI?: number;
   soul?: SoulState;
+  mind?: Mind;
 }
 
 export interface Leader {

@@ -243,7 +243,8 @@ export class SoulSystem {
     let best: Citizen | null = null, bd = Infinity;
     sim.hash.query(sim.citizens, c.x, c.y, 6, (o) => {
       if (o === c || o.dead || o.civ !== c.civ || o.army >= 0 || o.panic > 0 || o.hunger > 80 || o.state === "rest" || o.state === "mate" || o.state === "flee") return;
-      const d = Math.hypot(o.x - c.x, o.y - c.y) - (c.soul?.mate === o.id ? 3 : 0) - (o.soul?.mother === c.id || c.soul?.mother === o.id ? 2 : 0);
+      const rr = c.mind?.rel.find((q) => q.id === o.id);
+      const d = Math.hypot(o.x - c.x, o.y - c.y) - (c.soul?.mate === o.id ? 3 : 0) - (o.soul?.mother === c.id || c.soul?.mother === o.id ? 2 : 0) - (rr ? Math.abs(rr.a) / 25 : 0); // on parle volontiers à ses proches… et à ses rivaux
       if (d < bd) { bd = d; best = o; }
     });
     return best;
@@ -268,6 +269,7 @@ export class SoulSystem {
     c.state = "talk";
     const ps = this.ensure(p);
     ps.soc = clamp(ps.soc - 3);
+    sim.mind.interact(sim, c, p);
     // l'interlocuteur s'arrête aussi, s'il n'a pas d'urgence
     if (ps.act !== ACT.SOCIAL && p.hunger < 70 && ps.fat < 85 && p.panic === 0 && p.army < 0) { ps.act = ACT.SOCIAL; ps.target = c.id; ps.since = sim.tick; ps.until = sim.tick + 10; }
     return true;

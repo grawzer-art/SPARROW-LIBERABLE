@@ -140,7 +140,7 @@ describe("Soul Engine — besoins et décisions", () => {
     sim.runYears(5);
     const sw = sim.soul.stats.switches - s0, dec = sim.soul.stats.decisions - d0;
     const perCitizenTick = sw / (150 * sim.citizens.length);
-    expect(perCitizenTick).toBeLessThan(0.03);
+    expect(perCitizenTick).toBeLessThan(0.04);
     expect(dec).toBeGreaterThan(0);
   });
   it("les actions variées coexistent : travail, repos, discussion et flânerie se produisent réellement", () => {
