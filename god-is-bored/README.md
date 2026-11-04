@@ -163,3 +163,6 @@ Démographie −70 % (réglages centraux `src/sim/tuning.ts`), esprits des habit
 
 ## Sentience × Visual Experience — scène témoin
 `?scene=sentience` : un village, cinq habitants avec identité et mémoire, une conversation spontanée qui fait basculer une décision, un départ collectif et un chantier visibles, caméra sans interface. Voir `docs/sentience/SENTIENCE_X_VISUAL.md`.
+
+## Humanity Realism Reboot — point de validation n°1
+Audit, pipeline de vrais humains 3D riggés (glTF + retargeting de capture de mouvement) et banc d'essai `human.html` / `?scene=human`. Costumes préhistoriques non disponibles : voir `docs/realism/AUDIT.md`.

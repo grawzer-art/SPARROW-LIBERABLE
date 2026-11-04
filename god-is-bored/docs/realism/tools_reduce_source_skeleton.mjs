@@ -1,0 +1,12 @@
+import { NodeIO } from '@gltf-transform/core';
+import { simplify, weld, prune, dedup } from '@gltf-transform/functions';
+import { MeshoptSimplifier } from 'meshoptimizer';
+await MeshoptSimplifier.ready;
+const io = new NodeIO();
+const doc = await io.read('../assets/Xbot.glb');
+for (const m of doc.getRoot().listMaterials()) m.dispose;
+await doc.transform(weld(), simplify({ simplifier: MeshoptSimplifier, ratio: 0.03, error: 0.5, lockBorder: false }), prune(), dedup());
+await io.write('anim_xbot2.glb', doc);
+const r = doc.getRoot();
+let tris = 0; for (const m of r.listMeshes()) for (const p of m.listPrimitives()) tris += p.getIndices()?.getCount() / 3;
+console.log('tris', tris, 'skins', r.listSkins().length, 'anims', r.listAnimations().map(a => a.getName()));

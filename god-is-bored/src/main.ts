@@ -304,4 +304,5 @@ class Game implements GameHost {
   }
 }
 
-new Game();
+if (new URLSearchParams(location.search).get("scene") === "human") void import("./render/human/viewer").then((m) => m.startHumanViewer());
+else new Game();
