@@ -84,3 +84,9 @@ Pour continuer vers un campement préhistorique crédible il faut des **assets q
 - **Animations** : un lot Mixamo (ou équivalent) pour travailler, porter, s'asseoir, s'occuper d'un feu, conversation : à télécharger avec votre compte Adobe.
 - **Environnement** : packs PBR libres de droits (Poly Haven : sols, rochers, écorces ; arbres photogrammétriques) — hôte bloqué depuis le bac à sable.
 Dites-moi si vous préférez que je prépare plutôt un pipeline Blender (scripts) pour fabriquer ces vêtements à partir d'un corps nu libre de droits.
+
+## 8. Fusion au jeu (étape 2)
+Les habitants proches de la caméra (au plus 8 sur mobile, 14 sur bureau, dans un rayon de 20/28 cases) sont rendus en **humains 3D glTF riggés** (`HumanLayer`) ;
+les autres restent en silhouettes instanciées (LOD). Homme = Ready Player Me, femme = Mixamo « Michelle » ; taille, teint et corpulence varient. Les animations suivent l'état réel :
+marche (vitesse du clip asservie à la vitesse simulée), course en fuite, acquiescement pour celui qui parle (bouche animée), refus en dispute, pose abattue au repos ou malade.
+Travail, portage, construction : pas de clip de capture disponible → pose de repos (limite documentée). `?blocks=1` rétablit l'ancien rendu en blocs. Build autonome : `vite.single.config.ts`.

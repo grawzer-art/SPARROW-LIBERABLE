@@ -10,6 +10,7 @@ import { CitizenLayer } from "./CitizenLayer";
 import { Infra } from "./Infra";
 import { Terrain } from "./Terrain";
 import { Ambient } from "./Ambient";
+import { HumanLayer } from "./human/HumanLayer";
 import { Water } from "./Water";
 import { Sky } from "./Sky";
 import { Props } from "./Props";
@@ -52,6 +53,7 @@ export class Renderer {
   private glow!: Glow;
   private borders!: THREE.Mesh;
   private ambient!: Ambient;
+  humans!: HumanLayer;
   private ringTarget: THREE.Mesh;
   private ringTargetFill: THREE.Mesh;
   private ringSelect: THREE.Mesh;
@@ -181,7 +183,7 @@ export class Renderer {
     }
     this.terr?.dispose(this.scene); this.waterObj?.dispose(this.scene);
     this.heightVer = -1; this.pathVer = -1; this.vegHeight = -1;
-    this.bld?.clear(); this.cit?.clear(); this.infra?.clear(); this.props?.clear();
+    this.bld?.clear(); this.cit?.clear(); this.humans?.clear(); this.infra?.clear(); this.props?.clear();
     for (const el of this.labels.values()) el.remove();
     this.labels.clear();
     this.fx.clear();
@@ -207,6 +209,7 @@ export class Renderer {
     // bâtiments, habitants, infrastructures : couches modulaires (géométries réutilisées, instanciation)
     this.bld = new BuildingLayer(this.scene, this.sky);
     this.cit = new CitizenLayer(this.scene, this.mobile, this.sky);
+    this.humans = this.humans ?? new HumanLayer(this.scene, this.mobile ? 8 : 14, this.mobile ? 20 : 28);
     this.infra = new Infra(this.scene, this.mobile);
     this.props = new Props(this.scene);
     this.glow = this.glow ?? new Glow(this.scene, this.sky, this.mobile ? 500 : 900);
@@ -648,7 +651,9 @@ export class Renderer {
     const zs = Math.min(1.9, Math.max(1.0, dist / 55));
     const far = dist > (this.mobile ? 55 : 85);
     this.props.update(sim, this.frustum, this.camera.position, this.mobile ? 55 : 85);
-    this.cit.update(sim, alpha, this.time, zs, this.fx, !far, this.frustum, this.camera.position, this.sky.night);
+    const humanIds = this.humans.select(sim, this.camera.position, this.frustum);
+    this.cit.update(sim, alpha, this.time, zs, this.fx, !far, this.frustum, this.camera.position, this.sky.night, humanIds);
+    this.humans.update(sim, humanIds, alpha, dt, this.sky.night);
     this.ambient.update(this.time, this.controls.target, this.camera.position.distanceTo(this.controls.target), this.sky.night, (this.three.domElement.clientHeight || 700) / 700 * (this.three.getPixelRatio() || 1) * 1.6);
     this.infra.update(sim, this.time, this.bld.lamps.map(([x, y, z]) => [x, y, z] as [number, number, number]));
     this.updateFlames(dt);

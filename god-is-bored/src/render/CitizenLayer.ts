@@ -133,7 +133,7 @@ export class CitizenLayer {
     return soldier ? this.col.multiplyScalar(0.8) : this.col;
   }
 
-  update(sim: SimulationEngine, alpha: number, time: number, zoomScale: number, fx: Fx, detail: boolean, frustum: THREE.Frustum, camPos: THREE.Vector3, night: number): void {
+  update(sim: SimulationEngine, alpha: number, time: number, zoomScale: number, fx: Fx, detail: boolean, frustum: THREE.Frustum, camPos: THREE.Vector3, night: number, skip?: Set<number>): void {
     const w = sim.world, N = w.size, d = this.d;
     for (const s of this.sets.values()) s.begin();
     this.far.begin(); this.blobs.begin();
@@ -145,7 +145,7 @@ export class CitizenLayer {
     if (this.cs.size > 9000) this.cs.clear();
     const v3 = this.v3;
     for (const c of sim.citizens) {
-      if (c.dead) continue;
+      if (c.dead || skip?.has(c.id)) continue; // rendu en humain 3D (HumanLayer)
       if (n >= cap) break;
       const civ = sim.civById.get(c.civ);
       if (!civ) continue;
