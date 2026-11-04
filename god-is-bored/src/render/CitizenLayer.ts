@@ -19,6 +19,9 @@ export function visualEra(c: Pick<Citizen, "id">, civ: Pick<Civ, "era" | "eraSin
  * bûcheron → hache, mineur → pioche, cultivateur → houe (panier à la cueillette), bâtisseur → marteau, érudit → tablette.
  * Modes : 0 repos, 1 marche, 2 frappe, 3 combat, 4 assis, 5 bêche/cueillette, 6 lecture.
  */
+/** Teinte des vêtements par métier (lisibilité) : paille, flanelle rouge, ardoise, ocre, bleu savant. */
+const JOB_TINT: Record<string, number> = { farmer: 0xd2b04c, lumberjack: 0xb23a2a, miner: 0x6c7380, builder: 0xe08a34, scholar: 0x3f5fb8, child: 0xf0d8a0 };
+
 export function animFor(c: Pick<Citizen, "state" | "job" | "sick">, moving: boolean, night: number): { mode: number; tool: number; speed: number } {
   const adult = c.job !== "child";
   switch (c.state) {
@@ -95,7 +98,7 @@ export class CitizenLayer {
   }
 
   /** Teinte des vêtements : étoffe de l'époque mêlée à la couleur de la civilisation, 8 variantes par habitant. */
-  private cloth(civ: Civ, era: number, id: number, soldier: boolean): THREE.Color {
+  private cloth(civ: Civ, era: number, id: number, soldier: boolean, job = ""): THREE.Color {
     const key = `${civ.id}:${era}`;
     let v = this.variants.get(key);
     if (!v) {
@@ -110,7 +113,10 @@ export class CitizenLayer {
       this.variants.set(key, v);
     }
     const base = v[id & 7];
-    return soldier ? this.col.copy(base).multiplyScalar(0.8) : this.col.copy(base);
+    this.col.copy(base);
+    const jc = JOB_TINT[job];
+    if (jc !== undefined) this.col.lerp(this.tmp.setHex(jc), 0.42); // le métier se lit d'un coup d'œil
+    return soldier ? this.col.multiplyScalar(0.8) : this.col;
   }
 
   update(sim: SimulationEngine, alpha: number, time: number, zoomScale: number, fx: Fx, detail: boolean, frustum: THREE.Frustum, camPos: THREE.Vector3, night: number): void {
@@ -163,13 +169,13 @@ export class CitizenLayer {
       const yaw = st.yaw;
       const adult = c.job !== "child";
       const vr = (c.id >> 3) % 7;
-      const sc = (adult ? 0.95 + (c.id % 9) * 0.014 : 0.6 + Math.min(0.22, c.age * 0.016)) * zoomScale * (c.female && adult ? 0.96 : 1);
+      const sc = (adult ? 1.14 + (c.id % 9) * 0.016 : 0.74 + Math.min(0.24, c.age * 0.018)) * zoomScale * (c.female && adult ? 0.96 : 1);
       const sw = sc * (0.94 + vr * 0.02);
       d.position.set(x - N / 2, hy, y - N / 2);
       d.rotation.set(0, yaw, 0);
       d.scale.set(sw, sc, sw);
       d.updateMatrix();
-      const cl = this.cloth(civ, era, c.id, soldier);
+      const cl = this.cloth(civ, era, c.id, soldier, c.job);
       if (!detail) {
         this.far.push(d.matrix, cl);
         nfar++;

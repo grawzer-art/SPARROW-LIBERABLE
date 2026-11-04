@@ -154,3 +154,6 @@ Planète complète (6 continents, biomes lisibles), régions explorables partout
 
 ## The Living Planet V2 — échelle et continuité
 Planète → continent → région → local sur une seule géographie continue (`Geo`), terrain en tuiles à niveaux de détail (`TerrainLOD`), zoom comme navigation principale. Voir `docs/planet-v2/AUDIT_ET_ARCHITECTURE.md`.
+
+## Refonte UX/UI & graphique V2
+Interface minimaliste (capsule haut, dock Interagir/Pouvoirs/Planète, cartes contextuelles, panneaux coulissants), plus aucune notification d'événement (Chroniques), pouvoirs par toucher du monde, nouveau pouvoir Incendie et influence individuelle, rendu plus chaud et plus aéré. Voir `docs/ux-v2/REFONTE_UX_UI_GRAPHIQUE_V2.md`.

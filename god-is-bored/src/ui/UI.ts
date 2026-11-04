@@ -1,6 +1,6 @@
 import { TICKS_PER_YEAR } from "../sim/config";
 import { TRAIT_LABEL } from "../sim/SoulSystem";
-import { DOGMA_LABEL, JOB_LABEL, PERSONALITY_BLURB, PERSONALITY_LABEL, PROPHECIES, STATE_LABEL, TECH_EFFECT, TECH_NAMES } from "../sim/data";
+import { DOGMA_LABEL, PERSONALITY_BLURB, PERSONALITY_LABEL, PROPHECIES, STATE_LABEL, TECH_EFFECT, TECH_NAMES } from "../sim/data";
 import { POWERS, POWER_BY_ID, type PowerId } from "../sim/DivinePowerSystem";
 import { BUILDING_LABEL, ERA_BUILDING_NAMES } from "../sim/EconomySystem";
 import { ERA_GOLD, ERA_NAMES, ERA_POP, ERA_STAB, eraOfTech, unlockedTypes } from "../sim/TechTree";
@@ -23,6 +23,15 @@ export interface GameHost {
   newWorld(seed?: number): void;
   hasSave(): boolean;
   exportSave(): void;
+  /** Retour progressif au globe (zoom arrière animé). */
+  showGlobe(): void;
+  /** Liste des continents (sélecteur de la vue Planète) et vol vers l'un d'eux. */
+  continents(): { id: number; name: string }[];
+  focusContinent(id: number): void;
+  /** Vol vers un village (n'importe quelle région) : zoom continu jusqu'à la vue rapprochée. */
+  observeVillage(region: number, cityId: number): void;
+  /** Ferme la carte contextuelle de la vue planète (sélection). */
+  clearPlanetSelection(): void;
 }
 
 export const MOBILE_Q = "(max-width: 760px), (pointer: coarse) and (max-width: 940px)";
@@ -44,137 +53,126 @@ const FILTERS: { id: string; label: string; types: EventType[] | null }[] = [
 const TYPE_ICON: Record<EventType, string> = {
   birth: "✧", war: "⚔", peace: "☮", treaty: "✎", leader: "♛", catastrophe: "☄", miracle: "✦", discovery: "💡", collapse: "✖", absurd: "?!", city: "⌂", divine: "ϟ", law: "§",
 };
+const JOB_F: Record<string, string> = { child: "Enfant", farmer: "Fermière", lumberjack: "Bûcheronne", miner: "Mineuse", builder: "Bâtisseuse", soldier: "Soldate", scholar: "Érudite" };
+const JOB_M: Record<string, string> = { child: "Enfant", farmer: "Fermier", lumberjack: "Bûcheron", miner: "Mineur", builder: "Bâtisseur", soldier: "Soldat", scholar: "Érudit" };
+
+/** Humeur lisible, déduite des besoins réels de l'habitant (aucune donnée inventée). */
+export function moodOf(c: Citizen): string {
+  const f = c.female, s = c.soul;
+  if (c.sick > 0) return "Malade";
+  if (c.hunger > 70) return f ? "Affamée" : "Affamé";
+  if (c.panic > 0 || (s && s.fear > 40)) return f ? "Effrayée" : "Effrayé";
+  if (s && s.fat > 80) return f ? "Épuisée" : "Épuisé";
+  if (s && s.soc > 75) return f ? "Seule" : "Seul";
+  if (s && s.com >= 60 && c.hunger < 40) return f ? "Heureuse" : "Heureux";
+  return f ? "Sereine" : "Serein";
+}
+const ACT3: Record<string, string> = { "Travailler": "Travaille", "Se nourrir": "Se nourrit", "Se reposer": "Se repose", "Discuter": "Discute", "Fuir un danger": "Fuit un danger", "Flâner": "Flâne", "Attendre": "Attend" };
+export const jobOf = (c: Citizen): string => (c.female ? JOB_F : JOB_M)[c.job] ?? c.job;
+
+type CardSpec = { title: string; sub: string; color?: number; actions: { id: string; label: string; main?: boolean; cool?: boolean }[]; back?: boolean };
+type Sel = { kind: "none" | "civ" | "citizen" | "city" | "building"; id: number };
 
 export class UI {
   private power: PowerId | null = null;
   private prophecyId = "peace";
   private filter = "all";
-  private civFilter = -2;
-  private tab: "chron" | "notif" = "chron";
-  private sel: { kind: "none" | "civ" | "citizen" | "city" | "building"; id: number } = { kind: "none", id: -1 };
-  private chronDirty = true;
-  private lastDetails = "";
-  private lastCivOpts = "";
-  private notifs: { year: number; text: string }[] = [];
+  private sel: Sel = { kind: "none", id: -1 };
   private bound = new WeakSet<SimulationEngine>();
   private hist: { year: number; pops: Record<number, number> }[] = [];
   private lastHistYear = -1;
   private cursor: { x: number; y: number } | null = null;
-  private lastInfo = 0;
   private pending = new Set<PowerId>();
   private down: { x: number; y: number; t: number } | null = null;
   private lastHud = 0;
-  private lastBoredPulse = 0;
-  private sheet: "powers" | "world" | "chron" | null = null;
-  private unread = 0;
   private multi = false;
   private ptrs = new Set<number>();
-  private lastPtr: string = "mouse";
+  private follow: number | null = null;
+  private tray = false;
+  private sheet: "planet" | "menu" | "details" | null = null;
+  private planetTab: "cont" | "civ" | "chron" = "cont";
+  private menuTab: "time" | "stats" | "game" = "time";
+  private influence = false;
+  private cardIsPlanet: { ref?: { region: number; id: number }; spec: CardSpec } | null = null;
+  private detailRef: { sim: SimulationEngine; sel: Sel } | null = null;
+  private lastSheetHtml = "";
+  private snackT = 0;
 
   get mobile(): boolean { return window.matchMedia(MOBILE_Q).matches; }
 
   constructor(private game: GameHost) {
-    this.buildPowers();
-    this.buildChips();
     this.bind();
     this.attach();
   }
 
   get sim(): SimulationEngine { return this.game.sim; }
 
-  /** (Re)lie l'UI à une nouvelle simulation. */
+  /** (Re)lie l'UI à une nouvelle simulation. Les événements ne sont JAMAIS affichés : ils vont dans les Chroniques. */
   attach(): void {
-    const eng = this.sim;
-    if (!this.bound.has(eng)) { this.bound.add(eng); eng.listeners.push((e) => { if (eng === this.sim) this.onEvent(e); }); }
-    this.chronDirty = true;
     this.hist = [];
     this.lastHistYear = -1;
     this.sel = { kind: "none", id: -1 };
-    this.notifs = [];
-    this.lastDetails = "";
+    this.follow = null;
     this.setPower(null);
     this.closeSheet();
-    this.unread = 0;
-    this.updateBadge();
-    this.updateCivSelect(true);
-    this.updateSpeedButtons();
+    this.showCard(null);
+    $("h-name").textContent = this.planetName();
+    this.buildTray();
+    this.updateSpeed();
+  }
+
+  /** Nom de planète déterministe (graine). */
+  planetName(): string {
+    const seed = this.game.ps.seed >>> 0;
+    const A = ["Ter", "Ael", "Nor", "Kal", "Vor", "Ily", "Mer", "Zan", "Oru", "Sel"], B = ["ra", "ion", "dal", "mara", "vek", "thas", "nea", "gol", "ria", "lun"], C = ["", "a", "is", "on", "ae", "us"];
+    return A[seed % A.length] + B[(seed >>> 4) % B.length] + C[(seed >>> 9) % C.length];
   }
 
   // ------------------------------------------------------------ construction
 
-  private buildPowers(): void {
-    const root = $("powers");
-    root.innerHTML = POWERS.map((p) => `<button class="power" data-p="${p.id}" title="${esc(p.detail)}">
-      <span class="g">${p.glyph}</span><span><div class="n">${p.name}</div><div class="d">${esc(p.blurb)}</div></span><i class="cd" style="width:0"></i></button>`).join("");
-    root.querySelectorAll<HTMLButtonElement>(".power").forEach((b) => b.addEventListener("click", () => {
+  private buildTray(): void {
+    const t = $("tray");
+    t.innerHTML = POWERS.map((p) => `<button class="pw" data-p="${p.id}" aria-label="${esc(p.name)}"><span class="g">${p.glyph}</span><span class="n">${p.name}</span><i class="cd" style="width:0"></i></button>`).join("");
+    t.querySelectorAll<HTMLButtonElement>(".pw").forEach((b) => b.addEventListener("click", () => {
       const id = b.dataset.p as PowerId;
-      if (!this.mobile) { this.setPower(this.power === id ? null : id); return; }
-      if (id === "prophecy") { $("prophecy-box").classList.remove("hidden"); this.refreshProphecyOdds(); $("prophecy-box").scrollIntoView({ block: "nearest" }); return; }
-      this.armPower(id);
+      if (this.power === id) { this.setPower(null); return; }
+      if (id === "prophecy") { this.showMessages(); return; }
+      this.setPower(id);
     }));
-    const sel = $<HTMLSelectElement>("prophecy-sel");
-    sel.innerHTML = PROPHECIES.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join("");
-    sel.addEventListener("change", () => { this.prophecyId = sel.value; this.refreshTargetInfo(true); });
   }
 
-  private buildChips(): void {
-    const c = $("chips");
-    c.innerHTML = FILTERS.map((f) => `<button class="chip ${f.id === this.filter ? "on" : ""}" data-f="${f.id}">${f.label}</button>`).join("");
-    c.querySelectorAll<HTMLButtonElement>(".chip").forEach((b) => b.addEventListener("click", () => {
-      this.filter = b.dataset.f!;
-      c.querySelectorAll(".chip").forEach((x) => x.classList.toggle("on", x === b));
-      this.chronDirty = true;
-    }));
-    $<HTMLSelectElement>("f-civ").addEventListener("change", (e) => { this.civFilter = Number((e.target as HTMLSelectElement).value); this.chronDirty = true; });
-    document.querySelectorAll<HTMLButtonElement>(".tab").forEach((b) => b.addEventListener("click", () => {
-      this.tab = b.dataset.tab as "chron" | "notif";
-      document.querySelectorAll(".tab").forEach((x) => x.classList.toggle("active", x === b));
-      $("chron-list").classList.toggle("hidden", this.tab !== "chron");
-      $("notif-list").classList.toggle("hidden", this.tab !== "notif");
-      $("chips").classList.toggle("hidden", this.tab !== "chron");
-      $("f-civ").classList.toggle("hidden", this.tab !== "chron");
-      if (this.tab === "notif") this.renderNotifs();
-    }));
+  private showMessages(): void {
+    const m = $("msgs");
+    m.innerHTML = `<small>Quel message envoyer ?</small>` + PROPHECIES.map((p) => `<button data-m="${p.id}">${esc(p.name)}</button>`).join("");
+    m.classList.remove("hidden");
+    m.querySelectorAll<HTMLButtonElement>("button").forEach((b) => b.addEventListener("click", () => { this.prophecyId = b.dataset.m!; m.classList.add("hidden"); this.setPower("prophecy"); }));
   }
 
   private bind(): void {
     const r = this.game.renderer;
     const el = r.three.domElement;
-    // contrôle du temps
-    $("t-pause").addEventListener("click", () => this.togglePause());
-    document.querySelectorAll<HTMLButtonElement>(".time [data-speed]").forEach((b) => b.addEventListener("click", () => { this.sim.speed = Number(b.dataset.speed); this.sim.paused = false; this.updateSpeedButtons(); }));
-    // caméra
-    $("c-rot-l").addEventListener("click", () => r.rotate(-0.4));
-    $("c-rot-r").addEventListener("click", () => r.rotate(0.4));
-    $("c-in").addEventListener("click", () => r.zoom(0.8));
-    $("c-out").addEventListener("click", () => r.zoom(1.25));
-    $("c-reset").addEventListener("click", () => r.resetCamera());
-    // navigation mobile : barre d'onglets + bottom sheets
-    document.querySelectorAll<HTMLButtonElement>("#tabbar [data-sheet]").forEach((b) => b.addEventListener("click", () => {
-      const n = b.dataset.sheet as "powers" | "world" | "chron";
-      if (this.sheet === n) this.closeSheet(); else { this.setPower(null); this.openSheet(n); }
+    // dock
+    document.querySelectorAll<HTMLButtonElement>("#dock [data-d]").forEach((b) => b.addEventListener("click", () => {
+      const d = b.dataset.d;
+      if (d === "interact") { this.setPower(null); this.closeSheet(); this.showTray(false); this.dockOn("interact"); }
+      else if (d === "powers") { this.closeSheet(); this.showTray(!this.tray); }
+      else if (d === "planet") { this.showTray(false); this.setPower(null); this.openSheet("planet"); }
     }));
-    document.querySelectorAll<HTMLButtonElement>(".sheet .sx").forEach((b) => b.addEventListener("click", () => this.closeSheet()));
-    for (const id of ["left", "right", "bottom"]) this.bindSheetDrag($(id), () => this.closeSheet());
-    this.bindSheetDrag(document.querySelector("#modal .card") as HTMLElement, () => $("modal").classList.add("hidden"));
-    $("ab-cancel").addEventListener("click", () => this.setPower(null));
-    $("ab-msg").addEventListener("click", () => { this.openSheet("powers"); $("prophecy-box").classList.remove("hidden"); });
-    $("prophecy-go").addEventListener("click", () => { this.prophecyId = $<HTMLSelectElement>("prophecy-sel").value; this.armPower("prophecy"); });
+    $("h-info").addEventListener("click", () => { this.planetTab = "chron"; this.openSheet("planet"); });
+    $("h-menu").addEventListener("click", () => { this.menuTab = "time"; this.openSheet("menu"); });
+    $("armed-x").addEventListener("click", () => this.setPower(null));
+    document.querySelector("#card .cx")!.addEventListener("click", () => { if (this.influence) { this.influence = false; this.refreshCard(); } else this.dismissSelection(); });
+    document.querySelector("#sheet .sx")!.addEventListener("click", () => this.closeSheet());
+    this.bindSheetDrag($("sheet"), () => this.closeSheet());
     // Safari iOS : pas de zoom de page ni de menu contextuel sur la carte
     for (const ev of ["gesturestart", "gesturechange", "gestureend"]) document.addEventListener(ev, (e) => e.preventDefault());
     el.addEventListener("touchmove", (e) => e.preventDefault(), { passive: false });
-    // menus
-    $("b-stats").addEventListener("click", () => this.showStats());
-    $("b-menu").addEventListener("click", () => this.showMenu());
-    $("modal-x").addEventListener("click", () => $("modal").classList.add("hidden"));
-    $("modal").addEventListener("pointerdown", (e) => { if (e.target === $("modal")) $("modal").classList.add("hidden"); });
-    // carte
+    // carte (scène locale)
     el.addEventListener("contextmenu", (e) => e.preventDefault());
     el.addEventListener("pointerdown", (e) => {
       if (this.game.mode !== "local") return;
       this.ptrs.add(e.pointerId);
       if (this.ptrs.size > 1) this.multi = true;
-      this.lastPtr = e.pointerType;
       this.down = { x: e.clientX, y: e.clientY, t: performance.now() };
       if (e.pointerType !== "mouse" && this.power && this.ptrs.size === 1) {
         const g = r.pickGround(e.clientX, e.clientY);
@@ -190,7 +188,7 @@ export class UI {
       this.multi = false; this.down = null;
       if (!click || !d || wasMulti || e.button > 0) return;
       const slop = e.pointerType === "mouse" ? 6 : 12;
-      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > slop || performance.now() - d.t > 500) { if (this.mobile && this.power) r.setCursor(0, 0, 0, null); return; }
+      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > slop || performance.now() - d.t > 500) { if (this.power) r.setCursor(0, 0, 0, null); return; }
       const g = r.pickGround(e.clientX, e.clientY);
       if (g) this.onMapClick(g.x, g.y, e.pointerType);
     };
@@ -198,6 +196,8 @@ export class UI {
     el.addEventListener("pointercancel", (e) => release(e, false));
     el.addEventListener("pointermove", (e) => {
       if (this.game.mode !== "local") return;
+      // un glissement de la vue interrompt le suivi d'un habitant
+      if (this.follow !== null && this.down && Math.hypot(e.clientX - this.down.x, e.clientY - this.down.y) > 10) this.follow = null;
       if (e.pointerType === "touch" || e.pointerType === "pen" && this.mobile) return;
       const g = r.pickGround(e.clientX, e.clientY);
       this.cursor = g;
@@ -206,129 +206,63 @@ export class UI {
     el.addEventListener("pointerleave", () => { this.cursor = null; r.setCursor(0, 0, 0, null); });
     window.addEventListener("keydown", (e) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
-      if (e.key === "Escape") { this.setPower(null); $("modal").classList.add("hidden"); this.closeSheet(); }
+      if (e.key === "Escape") { this.setPower(null); this.closeSheet(); this.dismissSelection(); }
       else if (e.key === " ") { e.preventDefault(); this.togglePause(); }
-      else if (e.key === "1") { this.sim.speed = 1; this.sim.paused = false; this.updateSpeedButtons(); }
-      else if (e.key === "2") { this.sim.speed = 3; this.sim.paused = false; this.updateSpeedButtons(); }
-      else if (e.key === "3") { this.sim.speed = 10; this.sim.paused = false; this.updateSpeedButtons(); }
+      else if (e.key === "1") this.setSpeed(1);
+      else if (e.key === "2") this.setSpeed(3);
+      else if (e.key === "3") this.setSpeed(10);
     });
   }
 
-  private togglePause(): void {
-    this.sim.paused = !this.sim.paused;
-    this.updateSpeedButtons();
+  private dockOn(d: string): void { document.querySelectorAll<HTMLButtonElement>("#dock [data-d]").forEach((b) => b.classList.toggle("on", b.dataset.d === d)); }
+
+  private showTray(on: boolean): void {
+    this.tray = on;
+    if (on) this.dismissSelection(); // le plateau de pouvoirs prend la place de la carte
+    $("tray").classList.toggle("hidden", !on);
+    if (!on) $("msgs").classList.add("hidden");
+    this.dockOn(on ? "powers" : this.sheet === "planet" ? "planet" : "interact");
+    this.syncInset();
   }
 
-  private updateSpeedButtons(): void {
+  /** Recentre la scène dans la zone visible au-dessus des panneaux. */
+  private syncInset(): void {
+    const r = this.game.renderer;
+    let px = 0;
+    if (this.sheet) { const rect = $("sheet").getBoundingClientRect(); px = Math.max(0, window.innerHeight - rect.top); }
+    else if (!$("card").classList.contains("hidden")) px = 150;
+    else if (this.tray) px = 110;
+    r.setBottomInset(px);
+  }
+
+  // ------------------------------------------------------------ temps
+
+  private togglePause(): void { this.sim.paused = !this.sim.paused; this.updateSpeed(); }
+  private setSpeed(n: number): void { this.sim.speed = n; this.sim.paused = false; this.updateSpeed(); }
+  private updateSpeed(): void {
     const s = this.sim;
-    $("t-pause").classList.toggle("on", s.paused);
-    document.querySelectorAll<HTMLButtonElement>(".time [data-speed]").forEach((b) => b.classList.toggle("on", !s.paused && Number(b.dataset.speed) === s.speed));
+    $("h-speed").textContent = s.paused ? "❚❚" : s.speed === 1 ? "▶" : "×" + s.speed;
+    document.querySelectorAll<HTMLButtonElement>("#sheet [data-speed]").forEach((b) => b.classList.toggle("on", !s.paused && Number(b.dataset.speed) === s.speed));
+    document.querySelectorAll<HTMLButtonElement>("#sheet [data-pause]").forEach((b) => b.classList.toggle("on", s.paused));
   }
 
   // ------------------------------------------------------------ pouvoirs
 
-  /** Mobile : arme un pouvoir, referme le tiroir et affiche la barre d'action avec le bouton Annuler. */
-  armPower(p: PowerId): void {
-    this.closeSheet();
-    this.setPower(p);
-  }
-
-  private refreshProphecyOdds(): void {
-    const sim = this.sim;
-    const civ = sim.aliveCivs().sort((a, b) => b.pop - a.pop)[0];
-    if (!civ) return;
-    $("prophecy-odds").textContent = "Comprise selon l'intelligence, la foi et le dirigeant de la civilisation visée.";
-  }
-
   setPower(p: PowerId | null): void {
     this.power = p;
-    document.querySelectorAll<HTMLButtonElement>(".power").forEach((b) => b.classList.toggle("sel", b.dataset.p === p));
-    $("prophecy-box").classList.toggle("hidden", p !== "prophecy" && !(this.mobile && this.sheet === "powers" && false));
-    $("hint").classList.toggle("on", !!p);
+    document.querySelectorAll<HTMLButtonElement>(".pw").forEach((b) => b.classList.toggle("sel", b.dataset.p === p));
+    $("armed").classList.toggle("hidden", !p);
     $("app").classList.toggle("armed", !!p);
     if (p) {
       const info = POWER_BY_ID[p];
-      $("hint").textContent = info.target === "civ" ? `${info.name} : cliquez sur un territoire (Échap pour renoncer)` : `${info.name} : cliquez sur la carte (Échap pour renoncer)`;
-      $("ab-name").textContent = `${info.glyph} ${info.name}`;
-      const msg = PROPHECIES.find((m) => m.id === this.prophecyId)?.name ?? "";
-      $("ab-hint").textContent = p === "prophecy" ? `« ${msg} » : touchez un territoire` : info.target === "civ" ? "Touchez un territoire" : "Touchez la carte pour l'appliquer ici";
-      $("ab-msg").classList.toggle("hidden", p !== "prophecy");
+      const where = this.game.mode === "local" ? (info.target === "civ" ? "touchez un territoire" : "touchez le monde") : "touchez un village";
+      $("armed-g").textContent = info.glyph;
+      const msg = p === "prophecy" ? ` « ${PROPHECIES.find((m) => m.id === this.prophecyId)?.name ?? ""} »` : "";
+      $("armed-t").textContent = `${info.name}${msg} · ${where}`;
+      this.showCard(null);
     } else this.game.renderer.setCursor(0, 0, 0, null);
-    this.refreshTargetInfo(true);
     this.updateCursor();
     this.syncInset();
-  }
-
-  // ------------------------------------------------------------ bottom sheets (mobile)
-
-  private sheetEl(n: "powers" | "world" | "chron"): HTMLElement {
-    return $(n === "powers" ? "left" : n === "world" ? "right" : "bottom");
-  }
-
-  openSheet(n: "powers" | "world" | "chron"): void {
-    if (!this.mobile) return;
-    for (const k of ["powers", "world", "chron"] as const) { const el = this.sheetEl(k); el.classList.toggle("open", k === n); el.style.transform = ""; el.style.transition = ""; }
-    this.sheet = n;
-    $("app").classList.add("sheet-open");
-    document.querySelectorAll<HTMLButtonElement>("#tabbar [data-sheet]").forEach((b) => b.classList.toggle("on", b.dataset.sheet === n));
-    if (n === "powers") { $("prophecy-box").classList.add("hidden"); }
-    if (n === "chron") { this.unread = 0; this.updateBadge(); this.chronDirty = true; }
-    if (n === "world") { this.lastDetails = ""; this.renderDetails(); }
-    setTimeout(() => this.syncInset(), 30);
-    setTimeout(() => this.syncInset(), 320);
-  }
-
-  closeSheet(): void {
-    for (const k of ["powers", "world", "chron"] as const) { const el = this.sheetEl(k); el.classList.remove("open"); el.style.transform = ""; el.style.transition = ""; }
-    this.sheet = null;
-    $("app").classList.remove("sheet-open");
-    document.querySelectorAll("#tabbar [data-sheet]").forEach((b) => b.classList.remove("on"));
-    this.syncInset();
-  }
-
-  /** Recentre la scène dans la zone visible au-dessus du tiroir. */
-  private syncInset(): void {
-    const r = this.game.renderer;
-    if (!this.mobile) { r.setBottomInset(0); return; }
-    let px = 0;
-    if (this.sheet) { const rect = this.sheetEl(this.sheet).getBoundingClientRect(); px = Math.max(0, window.innerHeight - rect.top - ($("tabbar").offsetHeight || 0)); }
-    else if (this.power) px = 70;
-    r.setBottomInset(px);
-  }
-
-  private updateBadge(): void {
-    const b = document.querySelector<HTMLElement>('#tabbar [data-sheet="chron"] .badge');
-    if (b) { b.style.display = this.unread > 0 && this.sheet !== "chron" ? "block" : "none"; b.textContent = this.unread > 9 ? "9+" : String(this.unread); }
-  }
-
-  /** Glisser vers le bas pour refermer (touch). Ne démarre que si le contenu est tout en haut. */
-  private bindSheetDrag(el: HTMLElement, onClose: () => void): void {
-    let y0 = 0, drag = false, dy = 0, scroller: HTMLElement | null = null, t0 = 0;
-    const findScroller = (t: EventTarget | null): HTMLElement | null => {
-      let n = t as HTMLElement | null;
-      while (n && n !== el.parentElement) {
-        if (n.scrollHeight > n.clientHeight + 2) { const o = getComputedStyle(n).overflowY; if (o === "auto" || o === "scroll") return n; }
-        if (n === el) break;
-        n = n.parentElement;
-      }
-      return null;
-    };
-    el.addEventListener("touchstart", (e) => { y0 = e.touches[0].clientY; t0 = performance.now(); drag = false; dy = 0; scroller = findScroller(e.target); }, { passive: true });
-    el.addEventListener("touchmove", (e) => {
-      const d = e.touches[0].clientY - y0;
-      if (!drag && d > 10 && (!scroller || scroller.scrollTop <= 0)) { drag = true; el.style.transition = "none"; }
-      if (drag) { e.preventDefault(); dy = Math.max(0, d - 10); el.style.transform = `translateY(${dy}px)`; }
-    }, { passive: false });
-    const end = () => {
-      if (!drag) return;
-      drag = false;
-      const v = dy / Math.max(1, performance.now() - t0);
-      el.style.transition = "";
-      if (dy > Math.min(110, el.offsetHeight * 0.25) || v > 0.6) { onClose(); el.style.transform = ""; }
-      else el.style.transform = "";
-    };
-    el.addEventListener("touchend", end);
-    el.addEventListener("touchcancel", end);
   }
 
   private updateCursor(): void {
@@ -341,81 +275,53 @@ export class UI {
       if (civ && cap) r.setCursor(cap.x + 0.5, cap.y + 0.5, 2.6, civ.color);
       else r.setCursor(this.cursor.x, this.cursor.y, 0.7, 0x888888);
     } else {
-      const col = { lightning: 0xbcd8ff, meteor: 0xff8a4a, rain: 0x8fc5ff, plague: 0x9be04a, wrath: 0xff5a3a }[this.power as string] ?? 0xffffff;
+      const col = ({ lightning: 0xbcd8ff, fire: 0xff9a4a, meteor: 0xff8a4a, rain: 0x8fc5ff, plague: 0x9be04a, wrath: 0xff5a3a } as Record<string, number>)[this.power as string] ?? 0xffffff;
       r.setCursor(this.cursor.x, this.cursor.y, info.radius, col);
     }
-    this.refreshTargetInfo(false);
   }
 
-  private refreshTargetInfo(force: boolean): void {
-    const box = $("target-info");
-    const now = performance.now();
-    if (!force && now - this.lastInfo < 120) return;
-    this.lastInfo = now;
-    if (!this.power) {
-      box.innerHTML = `<b>Aucun pouvoir actif.</b><br>Choisissez un pouvoir, puis désignez une cible. Ou observez : c'est gratuit, et souvent pire.`;
-      return;
-    }
-    const info = POWER_BY_ID[this.power];
-    const cd = this.sim.divine.cooldownLeft(this.sim, this.power);
-    let html = `<b>${info.name}</b> — ${esc(info.detail)}`;
-    if (cd > 0) html += `<br><span style="color:var(--red)">Repos divin : ${Math.ceil(cd / TICKS_PER_YEAR)} an(s).</span>`;
-    if (this.cursor) {
-      const { x, y } = this.cursor;
-      if (info.target === "area") {
-        let pop = 0, b = 0;
-        for (const c of this.sim.citizens) if (Math.hypot(c.x - x, c.y - y) <= info.radius) pop++;
-        for (const bb of this.sim.buildings) if (bb.civ >= 0 && Math.hypot(bb.x + 0.5 - x, bb.y + 0.5 - y) <= info.radius) b++;
-        const civ = this.sim.divine.civAt(this.sim, x, y);
-        html += `<br><br>Zone ciblée : <b>${pop}</b> habitant(s), <b>${b}</b> bâtiment(s)${civ ? ` · territoire de <b style="color:${hex(civ.color)}">${esc(civ.name)}</b>` : " · terres sans maître"}.`;
-      } else {
-        const civ = this.sim.divine.civAt(this.sim, x, y);
-        if (civ) {
-          html += `<br><br>Cible : <b style="color:${hex(civ.color)}">${esc(civ.formal)}</b>`;
-          if (this.power === "prophecy") {
-            const o = this.sim.divine.understanding(civ);
-            $("prophecy-odds").innerHTML = `Chance qu'ils comprennent : <b>${Math.round(o * 100)} %</b><br>Intelligence ${(civ.avgIntel * 100).toFixed(0)} % · foi ${(civ.avgFaith * 100).toFixed(0)} % · dirigeant ${(civ.leader.intel * 100).toFixed(0)} %`;
-          }
-        } else html += `<br><br>Aucune civilisation sous le curseur.`;
-      }
-    }
-    box.innerHTML = html;
+  /** Lance le pouvoir armé sur un moteur donné, à une position (scène locale ou village touché depuis le globe). */
+  private cast(sim: SimulationEngine, p: PowerId, x: number, y: number, civ?: number): void {
+    if (this.pending.has(p)) return;
+    const cd = sim.divine.cooldownLeft(sim, p);
+    if (cd > 0) { this.snack(`${POWER_BY_ID[p].name} : encore ${Math.ceil(cd / TICKS_PER_YEAR)} an(s) de repos divin.`); return; }
+    const run = () => {
+      this.pending.delete(p);
+      const res = sim.divine.cast(sim, p, x, y, { prophecy: this.prophecyId, civ });
+      this.snack(res.msg);
+      if (this.game.mode === "local") this.game.renderer.setCursor(0, 0, 0, null);
+    };
+    if (p === "meteor" && sim === this.sim && this.game.mode === "local") {
+      this.pending.add(p);
+      this.game.renderer.fx.meteorIncoming(x, y, sim.world.size, sim.world, run);
+    } else run();
+  }
+
+  /** Un village a été touché sur le globe/la région : si un pouvoir est armé, il s'y applique directement. */
+  villageTap(regionId: number, cityId: number): boolean {
+    if (!this.power) return false;
+    const eng = this.game.ps.engineOf(regionId);
+    const city = eng?.cityById.get(cityId);
+    if (!eng || !city) return false;
+    this.cast(eng, this.power, city.x + 0.5, city.y + 0.5, city.civ);
+    return true;
   }
 
   private onMapClick(x: number, y: number, pointer = "mouse"): void {
-    const sim = this.sim;
-    const touch = pointer !== "mouse";
-    if (this.power) {
-      const p = this.power;
-      if (this.pending.has(p)) return;
-      const cd = sim.divine.cooldownLeft(sim, p);
-      if (cd > 0) { this.toast(`${POWER_BY_ID[p].name} : encore ${Math.ceil(cd / TICKS_PER_YEAR)} an(s) de repos divin.`, "", false); return; }
-      const run = () => {
-        this.pending.delete(p);
-        const res = sim.divine.cast(sim, p, x, y, { prophecy: this.prophecyId });
-        this.toast(res.msg, "", false);
-        if (touch) this.game.renderer.setCursor(0, 0, 0, null);
-        this.notifs.unshift({ year: sim.year, text: res.msg });
-        this.lastDetails = "";
-      };
-      if (p === "meteor") {
-        this.pending.add(p);
-        this.game.renderer.fx.meteorIncoming(x, y, sim.world.size, sim.world, run);
-      } else run();
-      return;
-    }
-    this.selectAt(x, y, touch);
+    if (this.power) { this.cast(this.sim, this.power, x, y); return; }
+    void pointer;
+    this.selectAt(x, y, pointer !== "mouse");
   }
 
-  // ------------------------------------------------------------ sélection
+  // ------------------------------------------------------------ sélection et carte contextuelle
 
   private selectAt(x: number, y: number, touch = false): void {
     const sim = this.sim;
-    const k = touch ? 1.5 : 1;
+    const k = touch ? 1.7 : 1;
     let best: { d: number; kind: "citizen" | "building" | "city"; id: number } | null = null;
     for (const c of sim.citizens) {
       const d = Math.hypot(c.x - x, c.y - y);
-      if (d < 0.85 * k && (!best || d < best.d)) best = { d, kind: "citizen", id: c.id };
+      if (d < 0.9 * k && (!best || d < best.d)) best = { d, kind: "citizen", id: c.id };
     }
     if (!best) {
       for (const c of sim.cities) {
@@ -431,76 +337,182 @@ export class UI {
     else {
       const civ = sim.divine.civAt(sim, x, y);
       if (civ && sim.world.owner[sim.world.tileAt(x, y)] === civ.id) this.select("civ", civ.id);
-      else { this.select("none", -1); if (this.mobile) this.closeSheet(); }
+      else this.select("none", -1);
     }
   }
 
-  select(kind: "none" | "civ" | "citizen" | "city" | "building", id: number): void {
+  select(kind: Sel["kind"], id: number): void {
     this.sel = { kind, id };
     this.game.renderer.selection = { kind, id };
-    this.lastDetails = "";
-    if (kind === "none") this.game.renderer.clearSelection();
-    this.renderDetails();
-    if (kind !== "none" && this.mobile) this.openSheet("world");
+    this.influence = false;
+    if (kind === "none") { this.game.renderer.clearSelection(); this.follow = null; this.showCard(null); return; }
+    if (this.tray) this.showTray(false);
+    this.refreshCard();
   }
 
-  /** Appelé à chaque frame : l'anneau de sélection suit sa cible. */
+  private dismissSelection(): void {
+    if (this.cardIsPlanet) this.game.clearPlanetSelection();
+    this.influence = false;
+    this.cardIsPlanet = null;
+    if (this.sel.kind !== "none") this.select("none", -1); else this.showCard(null);
+  }
+
+  /** Carte d'une sélection en scène locale. */
+  private specFor(sim: SimulationEngine, s: Sel): CardSpec | null {
+    if (s.kind === "citizen") {
+      const c = sim.citizenById.get(s.id);
+      const civ = c ? sim.civById.get(c.civ) : undefined;
+      if (!c || c.dead) return null;
+      const act = c.soul ? (ACT3[sim.soul.explain(c).action] ?? sim.soul.explain(c).action) : STATE_LABEL[c.state] ?? c.state;
+      if (this.influence) {
+        const cool = (k: string) => (sim.cooldowns["inf_" + k] ?? 0) > sim.tick;
+        return { title: c.name, sub: "Que lui accorder ?", color: civ?.color, back: true, actions: [
+          { id: "inf:bless", label: "✦ Bénir", cool: cool("bless") }, { id: "inf:heal", label: "✚ Guérir", cool: cool("heal") },
+          { id: "inf:inspire", label: "💡 Inspirer", cool: cool("inspire") }, { id: "inf:smite", label: "ϟ Foudroyer", cool: cool("smite") }] };
+      }
+      return { title: `${c.name} — ${Math.floor(c.age)} ans`, sub: `${jobOf(c)} · ${moodOf(c)} · ${act}`, color: civ?.color,
+        actions: [{ id: "observe", label: "Observer", main: true }, { id: "influence", label: "Influencer" }, { id: "details", label: "Détails" }] };
+    }
+    if (s.kind === "city") {
+      const c = sim.cityById.get(s.id);
+      const civ = c ? sim.civById.get(c.civ) : undefined;
+      if (!c || !civ) return null;
+      const sites = sim.buildings.filter((b) => b.city === c.id && b.progress < 1 && b.civ >= 0).length;
+      const state = c.siege > 0 ? "assiégée" : sim.world.fire.some((f, i) => f > 0 && sim.world.bld[i] >= 0 && sim.buildingById.get(sim.world.bld[i])?.city === c.id) ? "en proie aux flammes" : sites > 2 ? "en plein chantier" : "paisible";
+      return { title: c.name, sub: `${civ.name}${civ.capital === c.id ? " · capitale" : ""} · ${c.pop} habitants<br>Village ${state}`, color: civ.color,
+        actions: [{ id: "observe", label: "Observer", main: true }, { id: "bless", label: "Bénir" }, { id: "details", label: "Détails" }] };
+    }
+    if (s.kind === "civ") {
+      const civ = sim.civById.get(s.id);
+      if (!civ) return null;
+      return { title: civ.formal, sub: `${civ.pop} habitants · ${ERA_NAMES[civ.era]} · ${PERSONALITY_LABEL[civ.personality]}`, color: civ.color,
+        actions: [{ id: "observe", label: "Observer", main: true }, { id: "bless", label: "Bénir" }, { id: "details", label: "Détails" }] };
+    }
+    if (s.kind === "building") {
+      const b = sim.buildingById.get(s.id);
+      if (!b) return null;
+      const civ = sim.civById.get(b.civ);
+      const label = ERA_BUILDING_NAMES[b.type]?.[Math.min(5, b.era)] ?? BUILDING_LABEL[b.type];
+      return { title: label, sub: civ ? `${esc(civ.name)} · ${ERA_NAMES[b.era]}` : "Ruines abandonnées", color: civ?.color, actions: [{ id: "details", label: "Détails", main: true }] };
+    }
+    return null;
+  }
+
+  private refreshCard(): void {
+    const spec = this.specFor(this.sim, this.sel);
+    if (!spec) { this.showCard(null); return; }
+    this.cardIsPlanet = null;
+    this.showCard(spec);
+  }
+
+  /** Carte posée par la vue planète (village, continent, lieu). */
+  setPlanetCard(spec: CardSpec | null, ref?: { region: number; id: number }): void {
+    if (!spec) { if (this.cardIsPlanet) { this.cardIsPlanet = null; this.showCard(null); } return; }
+    this.cardIsPlanet = { spec, ref };
+    if (this.tray && !ref) this.showTray(false);
+    this.showCard(spec);
+  }
+
+  private showCard(spec: CardSpec | null): void {
+    const card = $("card");
+    document.body.classList.toggle("card-open", !!spec);
+    if (!spec) { card.classList.add("hidden"); this.syncInset(); return; }
+    $("c-title").textContent = spec.title;
+    $("c-sub").innerHTML = spec.sub;
+    const dot = $("c-dot"); dot.style.background = spec.color !== undefined ? hex(spec.color) : "#ffe2a8"; dot.style.display = "block";
+    const acts = $("c-actions"); acts.textContent = "";
+    for (const a of spec.actions) {
+      const b = document.createElement("button");
+      b.textContent = a.label; if (a.main) b.className = "main"; if (a.cool) b.classList.add("cool");
+      b.addEventListener("click", () => this.cardAction(a.id));
+      acts.appendChild(b);
+    }
+    card.classList.remove("hidden");
+    this.syncInset();
+  }
+
+  private cardAction(id: string): void {
+    if (this.cardIsPlanet) { this.planetCardAction(id); return; }
+    const sim = this.sim, s = this.sel;
+    if (id === "influence") { this.influence = true; this.refreshCard(); return; }
+    if (id.startsWith("inf:")) {
+      const res = sim.divine.influence(sim, s.id, id.slice(4) as "bless" | "heal" | "inspire" | "smite");
+      this.snack(res.msg);
+      if (res.ok && id !== "inf:smite") { this.influence = false; this.game.renderer.fx.handle({ kind: "bless", x: sim.citizenById.get(s.id)!.x, y: sim.citizenById.get(s.id)!.y }, sim, this.game.renderer); }
+      this.refreshCard();
+      return;
+    }
+    if (id === "observe") {
+      if (s.kind === "citizen") { this.follow = s.id; const c = sim.citizenById.get(s.id); if (c) this.game.renderer.focusOn(c.x, c.y, 11); }
+      else if (s.kind === "city" || s.kind === "civ") {
+        const city = s.kind === "city" ? sim.cityById.get(s.id) : sim.cityById.get(sim.civById.get(s.id)?.capital ?? -1);
+        if (city) this.game.renderer.focusOn(city.x + 0.5, city.y + 0.5, 22);
+      }
+      return;
+    }
+    if (id === "bless") {
+      const civId = s.kind === "city" ? sim.cityById.get(s.id)?.civ : s.id;
+      if (civId === undefined) return;
+      const res = sim.divine.cast(sim, "bless", 0, 0, { civ: civId });
+      this.snack(res.msg);
+      return;
+    }
+    if (id === "details") { this.detailRef = { sim, sel: { ...s } }; this.openSheet("details"); }
+  }
+
+  private planetCardAction(id: string): void {
+    const pc = this.cardIsPlanet!;
+    const ref = pc.ref;
+    if (id === "details" && ref) {
+      const eng = this.game.ps.engineOf(ref.region);
+      if (eng) { this.detailRef = { sim: eng, sel: { kind: "city", id: ref.id } }; this.openSheet("details"); }
+      return;
+    }
+    if (id === "bless" && ref) {
+      const eng = this.game.ps.engineOf(ref.region), city = eng?.cityById.get(ref.id);
+      if (eng && city) this.snack(eng.divine.cast(eng, "bless", 0, 0, { civ: city.civ }).msg);
+      return;
+    }
+    if (id === "observe" && ref) { this.game.observeVillage(ref.region, ref.id); return; }
+    this.onPlanetAction?.(id);
+  }
+  /** Branché par Game : actions « zoom » / « enter » de la vue planète. */
+  onPlanetAction?: (id: string) => void;
+
+  /** Appelé à chaque frame. */
   frame(): void {
     const sim = this.sim, r = this.game.renderer;
     const s = this.sel;
-    if (s.kind === "citizen") {
-      const c = sim.citizenById.get(s.id);
-      if (c && !c.dead) { const civ = sim.civById.get(c.civ); r.setSelectionRing(c.x, c.y, 0.45, civ?.color ?? 0xffffff); }
-      else this.select("none", -1);
-    } else if (s.kind === "civ") {
-      const civ = sim.civById.get(s.id);
-      const cap = civ ? sim.cityById.get(civ.capital) ?? sim.cities.find((c) => c.civ === civ.id) : null;
-      if (civ && cap) r.setSelectionRing(cap.x + 0.5, cap.y + 0.5, 2.2, civ.color);
-      else r.clearSelection();
-    } else if (s.kind === "city") {
-      const c = sim.cityById.get(s.id);
-      if (c) r.setSelectionRing(c.x + 0.5, c.y + 0.5, 1.4, sim.civById.get(c.civ)?.color ?? 0xffffff); else this.select("none", -1);
-    } else if (s.kind === "building") {
-      const b = sim.buildingById.get(s.id);
-      if (b && b.hp >= 0) r.setSelectionRing(b.x + 0.5, b.y + 0.5, 0.7, sim.civById.get(b.civ)?.color ?? 0xaaaaaa); else this.select("none", -1);
+    if (this.game.mode === "local") {
+      if (s.kind === "citizen") {
+        const c = sim.citizenById.get(s.id);
+        if (c && !c.dead) {
+          const civ = sim.civById.get(c.civ); r.setSelectionRing(c.x, c.y, 0.5, civ?.color ?? 0xffffff);
+          if (this.follow === s.id) r.focusOn(c.x, c.y, Math.min(14, r.getPose().dist), false);
+        } else this.select("none", -1);
+      } else if (s.kind === "civ") {
+        const civ = sim.civById.get(s.id);
+        const cap = civ ? sim.cityById.get(civ.capital) ?? sim.cities.find((c) => c.civ === civ.id) : null;
+        if (civ && cap) r.setSelectionRing(cap.x + 0.5, cap.y + 0.5, 2.2, civ.color); else r.clearSelection();
+      } else if (s.kind === "city") {
+        const c = sim.cityById.get(s.id);
+        if (c) r.setSelectionRing(c.x + 0.5, c.y + 0.5, 1.4, sim.civById.get(c.civ)?.color ?? 0xffffff); else this.select("none", -1);
+      } else if (s.kind === "building") {
+        const b = sim.buildingById.get(s.id);
+        if (b && b.hp >= 0) r.setSelectionRing(b.x + 0.5, b.y + 0.5, 0.7, sim.civById.get(b.civ)?.color ?? 0xaaaaaa); else this.select("none", -1);
+      }
     }
     const now = performance.now();
     if (now - this.lastHud > 250) { this.lastHud = now; this.hud(); }
   }
 
-  // ------------------------------------------------------------ HUD
-
-  /** Bloc « âme » de la fiche : action en cours, raisons de la décision (utilités), besoins et traits. */
-  private soulHtml(c: Citizen): string {
-    const s = c.soul;
-    if (!s) return "";
-    const ex = this.sim.soul.explain(c);
-    const home = s.home >= 0 ? this.sim.buildingById.get(s.home) : undefined;
-    const why = ex.reasons.slice(0, 3).map(([n, v]) => `${esc(n)} ${v}`).join(" · ");
-    const mother = s.mother >= 0 ? this.sim.citizenById.get(s.mother)?.name : undefined;
-    const traits = TRAIT_LABEL.map((n, i) => `<span>${n}</span><b>${Math.round(s.t[i] * 100)}</b>`).join("");
-    return `<p class="hint"><b>Vie intérieure</b></p>
-      <div class="kv"><span>Action</span><b>${esc(ex.action)}</b><span>Logis</span><b>${home ? "oui" : "sans toit"}</b>${mother ? `<span>Mère</span><b>${esc(mother)}</b>` : ""}</div>
-      <div class="kv"><span>Fatigue</span><b>${Math.round(s.fat)}</b></div>${this.bar(s.fat, 100, s.fat > 80 ? "red" : "")}
-      <div class="kv"><span>Solitude</span><b>${Math.round(s.soc)}</b></div>${this.bar(s.soc, 100, s.soc > 80 ? "red" : "")}
-      <div class="kv"><span>Confort</span><b>${Math.round(s.com)}</b></div>${this.bar(s.com, 100, s.com < 30 ? "red" : "green")}
-      <div class="kv"><span>Peur</span><b>${Math.round(s.fear)}</b></div>${this.bar(s.fear, 100, s.fear > 40 ? "red" : "")}
-      <div class="kv">${traits}</div>
-      <p class="hint">Pourquoi : ${why || "—"}</p>`;
-  }
-
   private hud(): void {
     const sim = this.sim;
-    $("s-year").textContent = String(sim.year);
     const world = this.game.mode !== "local", tot = this.game.ps.totals();
-    $("s-pop").textContent = String(world ? tot.population : sim.totalPop());
-    $("s-civs").textContent = String(world ? tot.civs : sim.aliveCivs().length);
-    const wars = world ? tot.wars : sim.activeWars().length;
-    $("s-wars").textContent = String(wars);
-    $("s-wars-wrap").classList.toggle("warn", wars > 0);
-    $("s-bored").style.width = `${Math.round(sim.boredom)}%`;
-    // cooldowns
-    document.querySelectorAll<HTMLButtonElement>(".power").forEach((b) => {
+    $("h-year").textContent = String(sim.year);
+    $("h-pop").textContent = String(tot.population);
+    void world;
+    document.querySelectorAll<HTMLButtonElement>(".pw").forEach((b) => {
       const p = b.dataset.p as PowerId;
       const left = sim.divine.cooldownLeft(sim, p);
       b.classList.toggle("cool", left > 0);
@@ -512,62 +524,177 @@ export class UI {
       for (const c of sim.civs) pops[c.id] = c.pop;
       this.hist.push({ year: sim.year, pops });
       if (this.hist.length > 600) this.hist.shift();
-      this.updateCivSelect(false);
     }
-    if (this.chronDirty) this.renderChron();
-    this.renderDetails();
-    this.updateSpeedButtons();
-    if (this.power) this.refreshTargetInfo(false);
+    // la fiche de l'habitant suit ses besoins ; le panneau Détails reste à jour
+    if (!this.cardIsPlanet && this.sel.kind !== "none" && !this.influence) this.refreshCardText();
+    if (this.sheet === "details") this.renderSheet();
+    this.updateSpeed();
   }
 
-  private updateCivSelect(force: boolean): void {
-    const sel = $<HTMLSelectElement>("f-civ");
-    const opts = ["Toutes les civilisations", ...this.sim.civs.map((c) => c.name)].join("|");
-    if (!force && opts === this.lastCivOpts) return;
-    this.lastCivOpts = opts;
-    sel.innerHTML = `<option value="-2">Toutes les civilisations</option><option value="-1">Monde (sans civilisation)</option>` +
-      this.sim.civs.map((c) => `<option value="${c.id}">${esc(c.name)}${c.alive ? "" : " †"}</option>`).join("");
-    sel.value = String(this.civFilter);
+  private refreshCardText(): void {
+    const spec = this.specFor(this.sim, this.sel);
+    if (!spec) return;
+    if ($("c-title").textContent !== spec.title) $("c-title").textContent = spec.title;
+    if ($("c-sub").innerHTML !== spec.sub) $("c-sub").innerHTML = spec.sub;
   }
 
-  // ------------------------------------------------------------ panneau de droite
+  // ------------------------------------------------------------ panneaux coulissants
 
-  private bar(v: number, max: number, cls = ""): string {
-    return `<div class="bar ${cls}"><i style="width:${Math.max(0, Math.min(100, (v / max) * 100)).toFixed(0)}%"></i></div>`;
+  openSheet(n: "planet" | "menu" | "details"): void {
+    this.showTray(false);
+    this.showCard(null);
+    this.sheet = n;
+    const el = $("sheet");
+    el.style.transform = ""; el.classList.remove("hidden");
+    el.style.animation = "none"; void el.offsetWidth; el.style.animation = "";
+    document.body.classList.add("sheet-open");
+    this.dockOn(n === "planet" ? "planet" : "interact");
+    this.lastSheetHtml = "";
+    this.renderSheet();
+    this.syncInset();
   }
 
-  private renderDetails(): void {
-    const sim = this.sim;
-    let html = "";
-    let title = "Observation";
-    const s = this.sel;
+  closeSheet(): void {
+    if (!this.sheet) return;
+    const wasDetails = this.sheet === "details";
+    this.sheet = null;
+    $("sheet").classList.add("hidden");
+    document.body.classList.remove("sheet-open");
+    this.dockOn(this.tray ? "powers" : "interact");
+    if (wasDetails) this.refreshCardIfAny();
+    this.syncInset();
+  }
+
+  private refreshCardIfAny(): void {
+    if (this.cardIsPlanet) this.showCard(this.cardIsPlanet.spec);
+    else if (this.sel.kind !== "none") this.refreshCard();
+  }
+
+  private renderSheet(): void {
+    const body = $("sheet-body");
+    let title = "", html = "";
+    if (this.sheet === "details") {
+      const d = this.detailRef;
+      if (!d) { this.closeSheet(); return; }
+      const r = this.detailsHtml(d.sim, d.sel);
+      title = r.title; html = r.html;
+      if (!r.html) { this.closeSheet(); return; }
+    } else if (this.sheet === "planet") { title = this.planetName(); html = this.planetHtml(); }
+    else if (this.sheet === "menu") { title = "Temps et réglages"; html = this.menuHtml(); }
+    $("sheet-t").textContent = title;
+    if (html === this.lastSheetHtml) return;
+    this.lastSheetHtml = html;
+    const top = body.scrollTop;
+    body.innerHTML = html;
+    body.scrollTop = top;
+    this.bindSheet();
+    if (this.sheet === "menu" && this.menuTab === "stats") this.drawChart();
+  }
+
+  private bindSheet(): void {
+    const body = $("sheet-body");
+    body.querySelectorAll<HTMLButtonElement>("[data-tab]").forEach((b) => b.addEventListener("click", () => {
+      const t = b.dataset.tab!;
+      if (this.sheet === "planet") this.planetTab = t as "cont" | "civ" | "chron"; else this.menuTab = t as "time" | "stats" | "game";
+      this.lastSheetHtml = ""; this.renderSheet();
+    }));
+    body.querySelectorAll<HTMLButtonElement>("[data-filter]").forEach((b) => b.addEventListener("click", () => { this.filter = b.dataset.filter!; this.lastSheetHtml = ""; this.renderSheet(); }));
+    body.querySelectorAll<HTMLButtonElement>("[data-speed]").forEach((b) => b.addEventListener("click", () => { this.setSpeed(Number(b.dataset.speed)); }));
+    body.querySelectorAll<HTMLButtonElement>("[data-pause]").forEach((b) => b.addEventListener("click", () => this.togglePause()));
+    body.querySelectorAll<HTMLButtonElement>("[data-cont]").forEach((b) => b.addEventListener("click", () => { this.closeSheet(); this.game.focusContinent(Number(b.dataset.cont)); }));
+    body.querySelectorAll<HTMLButtonElement>("[data-globe]").forEach((b) => b.addEventListener("click", () => { this.closeSheet(); this.game.showGlobe(); }));
+    body.querySelectorAll<HTMLButtonElement>("[data-civgo]").forEach((b) => b.addEventListener("click", () => {
+      const [reg, id] = b.dataset.civgo!.split(":").map(Number);
+      this.closeSheet();
+      const eng = this.game.ps.engineOf(reg), civ = eng?.civById.get(id), cap = civ ? eng!.cityById.get(civ.capital) ?? eng!.cities.find((c) => c.civ === id) : null;
+      if (cap) this.game.observeVillage(reg, cap.id);
+    }));
+    body.querySelectorAll<HTMLButtonElement>("[data-go]").forEach((b) => b.addEventListener("click", () => {
+      const [k, id] = b.dataset.go!.split(":");
+      if (this.detailRef) { this.detailRef = { sim: this.detailRef.sim, sel: { kind: k as Sel["kind"], id: Number(id) } }; this.lastSheetHtml = ""; this.renderSheet(); }
+    }));
+    const act = (id: string, f: () => void) => { const e = body.querySelector<HTMLElement>("#" + id); if (e) e.addEventListener("click", f); };
+    act("m-save", () => this.snack(this.game.save()));
+    act("m-load", () => { if (this.game.load()) this.closeSheet(); });
+    act("m-export", () => this.game.exportSave());
+    act("m-new", () => { const v = (body.querySelector("#m-seed") as HTMLInputElement).value.trim(); this.closeSheet(); this.game.newWorld(v ? Number(v.replace(/\D/g, "")) || undefined : undefined); });
+  }
+
+  private tabs(list: [string, string][], cur: string): string {
+    return `<div class="tabs2">${list.map(([id, l]) => `<button data-tab="${id}" class="${id === cur ? "on" : ""}">${l}</button>`).join("")}</div>`;
+  }
+
+  private planetHtml(): string {
+    const ps = this.game.ps;
+    let h = this.tabs([["cont", "Continents"], ["civ", "Peuples"], ["chron", "Chroniques"]], this.planetTab);
+    if (this.planetTab === "cont") {
+      h += `<div class="btns"><button class="pri" data-globe="1">Voir le globe</button></div><div class="lst">` +
+        this.game.continents().map((c) => `<button class="row2" data-cont="${c.id}"><span><b>${esc(c.name)}</b></span><span class="go">›</span></button>`).join("") + `</div>`;
+    } else if (this.planetTab === "civ") {
+      h += `<div class="lst">`;
+      const rows: { reg: number; civ: Civ }[] = [];
+      for (const [reg, e] of ps.engines) for (const c of e.civs) rows.push({ reg, civ: c });
+      rows.sort((a, b) => Number(b.civ.alive) - Number(a.civ.alive) || b.civ.pop - a.civ.pop);
+      h += rows.map(({ reg, civ: c }) => `<button class="row2" data-civgo="${reg}:${c.id}" style="${c.alive ? "" : "opacity:.45"}"><i class="sw" style="background:${hex(c.color)}"></i><span><b>${esc(c.name)}${c.alive ? "" : " †"}</b><small>${c.alive ? `${c.pop} hab. · ${PERSONALITY_LABEL[c.personality]} · ${ERA_NAMES[c.era]}` : `Disparue en l'an ${c.extinctYear}`}</small></span><span class="go">›</span></button>`).join("") || `<div class="law">Personne.</div>`;
+      h += `</div>`;
+    } else {
+      h += `<div class="chipsrow">${FILTERS.map((f) => `<button data-filter="${f.id}" class="${f.id === this.filter ? "on" : ""}">${f.label}</button>`).join("")}</div>`;
+      const f = FILTERS.find((x) => x.id === this.filter)!;
+      const rows = this.game.worldChronicle(120).filter(({ entry: e }) => !f.types || f.types.includes(e.type));
+      h += rows.map(({ region, entry: e }) => `<div class="ev i${e.importance} type-${e.type}"><div class="y">An ${e.year}</div><div><div class="t"><b style="color:var(--warm)">${esc(region)}</b> — ${esc(e.text)}</div>${e.consequences ? `<div class="c">${TYPE_ICON[e.type]} ${esc(e.consequences)}</div>` : ""}</div></div>`).join("") || `<div class="law" style="padding:10px 0">Rien à signaler. Ce qui, en histoire, est toujours suspect.</div>`;
+    }
+    return h;
+  }
+
+  private menuHtml(): string {
+    let h = this.tabs([["time", "Temps"], ["stats", "Statistiques"], ["game", "Partie"]], this.menuTab);
+    const s = this.sim;
+    if (this.menuTab === "time") {
+      h += `<div class="seg"><button data-pause="1" class="${s.paused ? "on" : ""}">❚❚</button><button data-speed="1" class="${!s.paused && s.speed === 1 ? "on" : ""}">×1</button><button data-speed="3" class="${!s.paused && s.speed === 3 ? "on" : ""}">×3</button><button data-speed="10" class="${!s.paused && s.speed === 10 ? "on" : ""}">×10</button></div>
+      <p class="law">Le temps s'écoule pour toute la planète, que vous la regardiez ou non. Année ${s.year}.</p>`;
+    } else if (this.menuTab === "stats") {
+      const tot = this.game.ps.totals(), st = s.stats, alive = s.aliveCivs();
+      h += `<div class="kv"><span>Habitants (planète)</span><b>${tot.population}</b><span>Civilisations vivantes</span><b>${tot.civs}</b><span>Guerres actives</span><b>${tot.wars}</b><span>Pic de population (région)</span><b>${st.peakPop}</b>
+      <span>Villes (région)</span><b>${s.cities.length}</b><span>Naissances (région)</span><b>${st.births}</b><span>Décès (région)</span><b>${st.deaths}</b><span>— vieillesse / faim / guerre</span><b>${st.oldAgeDeaths} / ${st.famineDeaths} / ${st.warDeaths}</b><span>Civilisations (région)</span><b>${alive.length}/${s.civs.length}</b></div>
+      <div class="sheet-sec">Population par civilisation</div><canvas id="chart" class="chart"></canvas><div class="legend" id="legend"></div>`;
+    } else {
+      h += `<div class="btns"><button id="m-save">Sauvegarder</button><button id="m-load" ${this.game.hasSave() ? "" : "disabled"}>Charger</button><button id="m-export">Exporter (.json)</button></div>
+      <p class="law">Sauvegarde automatique toutes les 45 secondes dans ce navigateur.</p>
+      <div class="sheet-sec">Nouveau monde</div>
+      <div class="btns"><input id="m-seed" type="text" inputmode="numeric" placeholder="graine (aléatoire)" style="flex:1 1 140px;min-height:46px;border-radius:15px;padding:0 14px"><button id="m-new" class="pri">Recommencer l'humanité</button></div>
+      <p class="law">Même graine, même planète. Pas la même histoire : vous y êtes pour quelque chose.</p>
+      <div class="sheet-sec">Gestes</div><p class="law">Glisser : se déplacer · Pincer : zoomer (de la planète jusqu'au village) · Deux doigts : pivoter · Toucher : sélectionner · Pouvoir : le choisir, puis toucher le monde.</p>`;
+    }
+    return h;
+  }
+
+  private detailsHtml(sim: SimulationEngine, s: Sel): { title: string; html: string } {
+    let html = "", title = "Détails";
     if (s.kind === "civ") {
       const civ = sim.civById.get(s.id);
-      if (civ) { title = "Civilisation"; html = this.civHtml(civ); } else this.sel = { kind: "none", id: -1 };
+      if (civ) { title = "Civilisation"; html = this.civHtml(civ, sim); }
     } else if (s.kind === "citizen") {
       const c = sim.citizenById.get(s.id);
       const civ = c ? sim.civById.get(c.civ) : undefined;
       if (c && civ) {
-        title = "Habitant";
+        title = c.name;
         const faith = c.faith > 0.7 ? "fervent" : c.faith > 0.4 ? "pratiquant" : "tiède";
         html = `<div class="h-civ"><span class="sw" style="background:${hex(civ.color)}"></span><h2>${esc(c.name)}</h2></div>
-        <div class="quote">${esc(JOB_LABEL[c.job])} de ${esc(civ.name)} — ${esc(STATE_LABEL[c.state] ?? c.state)}${c.sick > 0 ? " (malade)" : ""}</div>
-        <div class="kv"><span>Identifiant</span><b>#${c.id}</b><span>Âge</span><b>${Math.floor(c.age)} ans</b><span>Position</span><b>${c.x.toFixed(1)} ; ${c.y.toFixed(1)}</b>
-        <span>Ville</span><b>${esc(sim.cityById.get(c.city)?.name ?? "—")}</b><span>Croyance</span><b>${esc(civ.religion.name)}</b></div>
+        <div class="quote">${esc(jobOf(c))} de ${esc(civ.name)} — ${esc(STATE_LABEL[c.state] ?? c.state)}${c.sick > 0 ? " (malade)" : ""}</div>
+        <div class="kv"><span>Âge</span><b>${Math.floor(c.age)} ans</b><span>Humeur</span><b>${moodOf(c)}</b><span>Ville</span><b>${esc(sim.cityById.get(c.city)?.name ?? "—")}</b><span>Croyance</span><b>${esc(civ.religion.name)}</b></div>
         <div class="kv"><span>Santé</span><b>${Math.round(c.hp)}</b></div>${this.bar(c.hp, 100, c.hp < 35 ? "red" : "green")}
         <div class="kv"><span>Faim</span><b>${Math.round(c.hunger)}</b></div>${this.bar(c.hunger, 100, c.hunger > 70 ? "red" : "")}
         <div class="kv"><span>Intelligence</span><b>${Math.round(c.intel * 100)}</b></div>${this.bar(c.intel, 1, "blue")}
         <div class="kv"><span>Courage</span><b>${Math.round(c.courage * 100)}</b></div>${this.bar(c.courage, 1)}
         <div class="kv"><span>Agressivité</span><b>${Math.round(c.aggr * 100)}</b></div>${this.bar(c.aggr, 1, "red")}
         <div class="kv"><span>Foi</span><b>${faith}</b></div>${this.bar(c.faith, 1)}
-        ${this.soulHtml(c)}
-        <p><button class="link" data-go="civ:${civ.id}">Voir ${esc(civ.name)}</button></p>`;
-      } else this.sel = { kind: "none", id: -1 };
+        ${this.soulHtml(c, sim)}`;
+      }
     } else if (s.kind === "city") {
       const c = sim.cityById.get(s.id);
       const civ = c ? sim.civById.get(c.civ) : undefined;
       if (c && civ) {
-        title = "Ville";
+        title = c.name;
         const counts: Record<string, number> = {};
         const nm = (t: string, e: number) => (ERA_BUILDING_NAMES[t]?.[Math.min(5, e)] ?? BUILDING_LABEL[t as keyof typeof BUILDING_LABEL]);
         for (const b of sim.buildings) if (b.city === c.id && b.civ >= 0 && b.progress >= 1) { const k = nm(b.type, b.era) + (b.up >= 0 ? " (modernisation)" : ""); counts[k] = (counts[k] ?? 0) + 1; }
@@ -576,10 +703,10 @@ export class UI {
         <div class="quote">${civ.capital === c.id ? "Capitale" : "Ville"} de ${esc(civ.formal)}</div>
         <div class="kv"><span>Population</span><b>${c.pop} / ${c.cap}</b><span>Fondée en</span><b>An ${c.foundedYear}</b><span>Remparts</span><b>${Math.round(c.hp)} / ${c.maxHp}</b>
         <span>Statut</span><b>${c.siege > 0 ? "Assiégée" : "Paisible"}</b><span>Chantiers</span><b>${sites}</b></div>
-        <div class="sec">Bâtiments</div>
+        <div class="sheet-sec">Bâtiments</div>
         <div class="kv">${Object.entries(counts).sort().map(([k, v]) => `<span>${k}</span><b>${v}</b>`).join("") || "<span>Aucun</span><b>—</b>"}</div>
         <p><button class="link" data-go="civ:${civ.id}">Voir ${esc(civ.name)}</button></p>`;
-      } else this.sel = { kind: "none", id: -1 };
+      }
     } else if (s.kind === "building") {
       const b = sim.buildingById.get(s.id);
       if (b) {
@@ -591,33 +718,32 @@ export class UI {
         <div class="kv"><span>Ville</span><b>${esc(sim.cityById.get(b.city)?.name ?? "—")}</b><span>Avancement</span><b>${Math.round(b.progress * 100)} %</b>
         <span>Solidité</span><b>${Math.round(b.hp)} / ${b.maxHp}</b><span>Travailleurs</span><b>${b.workers}</b></div>
         ${civ ? `<p><button class="link" data-go="civ:${civ.id}">Voir ${esc(civ.name)}</button></p>` : ""}`;
-      } else this.sel = { kind: "none", id: -1 };
+      }
     }
-    if (this.sel.kind === "none") {
-      title = "Observation";
-      const civs = sim.civs.slice().sort((a, b) => Number(b.alive) - Number(a.alive) || b.pop - a.pop);
-      html = `<div class="empty">Aucune sélection. Cliquez sur un territoire, une ville ou un habitant. Ou choisissez un favori ci-dessous.</div>` +
-        civs.map((c) => `<button class="civcard ${c.alive ? "" : "dead"}" data-go="civ:${c.id}"><span class="sw" style="background:${hex(c.color)}"></span>
-        <span><b>${esc(c.name)}</b>${c.alive ? "" : " †"}<small>${c.alive ? `${c.pop} hab. · ${PERSONALITY_LABEL[c.personality]} · ${ERA_NAMES[c.era]}` : `Disparue en l'an ${c.extinctYear}`}</small></span></button>`).join("");
-    }
-    if (this.sel.kind !== "none") html = `<p><button class="link back" data-go="none:-1">← Toutes les civilisations</button></p>` + html;
-    $("right-title").textContent = title;
-    document.querySelectorAll<HTMLElement>("#right .gt").forEach((g) => (g.textContent = title === "Observation" ? "Monde" : title));
-    if (html !== this.lastDetails) {
-      const el = $("details");
-      const top = $("right").scrollTop;
-      el.innerHTML = html;
-      $("right").scrollTop = top;
-      this.lastDetails = html;
-      el.querySelectorAll<HTMLButtonElement>("[data-go]").forEach((b) => b.addEventListener("click", () => {
-        const [k, id] = b.dataset.go!.split(":");
-        this.select(k as "civ" | "none", Number(id));
-        if (k === "none") return;
-        const civ = this.sim.civById.get(Number(id));
-        const cap = civ ? this.sim.cityById.get(civ.capital) : null;
-        if (cap) this.game.renderer.focusOn(cap.x + 0.5, cap.y + 0.5, 38);
-      }));
-    }
+    return { title, html };
+  }
+
+  /** Bloc « âme » de la fiche : action en cours, raisons de la décision (utilités), besoins et traits. */
+  private soulHtml(c: Citizen, sim: SimulationEngine): string {
+    const s = c.soul;
+    if (!s) return "";
+    const ex = sim.soul.explain(c);
+    const home = s.home >= 0 ? sim.buildingById.get(s.home) : undefined;
+    const why = ex.reasons.slice(0, 3).map(([n, v]) => `${esc(n)} ${v}`).join(" · ");
+    const mother = s.mother >= 0 ? sim.citizenById.get(s.mother)?.name : undefined;
+    const traits = TRAIT_LABEL.map((n, i) => `<span>${n}</span><b>${Math.round(s.t[i] * 100)}</b>`).join("");
+    return `<p class="hint"><b>Vie intérieure</b></p>
+      <div class="kv"><span>Action</span><b>${esc(ex.action)}</b><span>Logis</span><b>${home ? "oui" : "sans toit"}</b>${mother ? `<span>Mère</span><b>${esc(mother)}</b>` : ""}</div>
+      <div class="kv"><span>Fatigue</span><b>${Math.round(s.fat)}</b></div>${this.bar(s.fat, 100, s.fat > 80 ? "red" : "")}
+      <div class="kv"><span>Solitude</span><b>${Math.round(s.soc)}</b></div>${this.bar(s.soc, 100, s.soc > 80 ? "red" : "")}
+      <div class="kv"><span>Confort</span><b>${Math.round(s.com)}</b></div>${this.bar(s.com, 100, s.com < 30 ? "red" : "green")}
+      <div class="kv"><span>Peur</span><b>${Math.round(s.fear)}</b></div>${this.bar(s.fear, 100, s.fear > 40 ? "red" : "")}
+      <div class="kv">${traits}</div>
+      <p class="hint">Pourquoi : ${why || "—"}</p>`;
+  }
+
+  private bar(v: number, max: number, cls = ""): string {
+    return `<div class="bar ${cls}"><i style="width:${Math.max(0, Math.min(100, (v / max) * 100)).toFixed(0)}%"></i></div>`;
   }
 
   /** Ce qui retient la civilisation à sa époque actuelle (technologie, population, stabilité, or). */
@@ -634,8 +760,7 @@ export class UI {
       <div class="law">Bâtiments disponibles : ${unlockedTypes(civ).map((t) => BUILDING_LABEL[t]).join(", ")}.</div>`;
   }
 
-  private civHtml(civ: Civ): string {
-    const sim = this.sim;
+  private civHtml(civ: Civ, sim: SimulationEngine): string {
     const cities = sim.citiesOf(civ.id);
     const L = civ.leader;
     const war = sim.wars.find((w) => w.active && (w.a === civ.id || w.d === civ.id || w.aAllies.includes(civ.id) || w.dAllies.includes(civ.id)));
@@ -689,144 +814,50 @@ export class UI {
     <span>Ennemis tués</span><b>${civ.stats.kills}</b><span>Pic de population</span><b>${civ.stats.peakPop}</b><span>Effondrements</span><b>${civ.stats.collapses}</b></div>`;
   }
 
-  // ------------------------------------------------------------ chroniques & notifications
 
-  private onEvent(e: ChronicleEntry): void {
-    this.chronDirty = true;
-    if (e.importance >= 2 && this.sheet !== "chron") { this.unread++; this.updateBadge(); }
-    if (e.importance >= 2) {
-      const civ = this.sim.civById.get(e.civ);
-      const fast = this.sim.speed >= 3 && !this.sim.paused;
-      if (!fast || e.importance === 3) this.toast(e.text, e.consequences, e.type === "war" || e.type === "catastrophe", e.importance === 3, e.type);
-      this.notifs.unshift({ year: e.year, text: e.text });
-      if (this.notifs.length > 80) this.notifs.pop();
-      void civ;
-      if (this.tab === "notif") this.renderNotifs();
-    }
+  // ------------------------------------------------------------ retours discrets
+
+  /** Retour bref à une action du joueur (résultat d'un pouvoir, sauvegarde). Jamais un événement du monde : ceux-ci vont aux Chroniques. */
+  snack(text: string): void {
+    const box = $("snack");
+    box.textContent = "";
+    const d = document.createElement("div");
+    d.textContent = text;
+    box.appendChild(d);
+    const my = ++this.snackT;
+    setTimeout(() => { if (my === this.snackT) d.classList.add("out"); }, 2200);
+    setTimeout(() => { if (my === this.snackT) d.remove(); }, 2700);
   }
 
-  private matches(e: ChronicleEntry): boolean {
-    const f = FILTERS.find((x) => x.id === this.filter)!;
-    if (f.types && !f.types.includes(e.type)) return false;
-    if (this.civFilter === -1) return e.civ < 0;
-    if (this.civFilter >= 0 && e.civ !== this.civFilter && e.civ2 !== this.civFilter) return false;
-    return true;
-  }
-
-  private renderChron(): void {
-    this.chronDirty = false;
-    const list = $("chron-list");
-    const out: string[] = [];
-    const ch = this.sim.chronicle;
-    for (let i = ch.length - 1; i >= 0 && out.length < 140; i--) {
-      const e = ch[i];
-      if (!this.matches(e)) continue;
-      const civ = this.sim.civById.get(e.civ);
-      out.push(`<div class="ev i${e.importance} type-${e.type}"><div class="y">An ${e.year}</div><div><div class="t"><span class="dot" style="background:${civ ? hex(civ.color) : "#888"}"></span>${esc(e.text)}</div>${e.consequences ? `<div class="c">${TYPE_ICON[e.type]} ${esc(e.consequences)}</div>` : ""}</div></div>`);
-    }
-    list.innerHTML = out.join("") || `<div class="empty" style="padding:10px">Rien à signaler. Ce qui, en histoire, est toujours suspect.</div>`;
-  }
-
-  private renderNotifs(): void {
-    $("notif-list").innerHTML = this.notifs.map((n) => `<div class="ev"><div class="y">An ${n.year}</div><div class="t">${esc(n.text)}</div></div>`).join("") || `<div class="empty" style="padding:10px">Aucune notification. Les mortels se tiennent bien. Pour l'instant.</div>`;
-  }
-
-  /** Notification d'une autre région : compacte, préfixée par le nom de la région. */
-  remoteNotice(region: string, text: string, war = false): void {
-    this.toast(`${region} — ${text}`, "", war, false);
-  }
-
-  private toastGroup = { n: 0, t: 0 };
-  toast(text: string, sub = "", war = false, big = false, _type?: string): void {
-    const box = $("toasts");
-    const mob = this.mobile;
-    if (this.game.mode !== "local") {
-      // vue planète / région : UNE notification compacte à la fois ; les suivantes sont regroupées (« +N »), les Chroniques gardent tout
-      const now = performance.now();
-      const live = box.firstElementChild as HTMLElement | null;
-      this.toastGroup.n = live && now - this.toastGroup.t < 3500 ? this.toastGroup.n + 1 : 0;
-      this.toastGroup.t = now;
-      box.textContent = "";
-      const t = document.createElement("div");
-      t.className = `toast compact ${war ? "war" : ""}`;
-      t.textContent = text;
-      if (this.toastGroup.n > 0) { const b = document.createElement("b"); b.textContent = ` +${this.toastGroup.n}`; t.appendChild(b); }
-      box.appendChild(t);
-      setTimeout(() => { if (t.parentElement) { t.classList.add("out"); setTimeout(() => t.remove(), 500); } }, 3800);
-      t.addEventListener("click", () => { t.remove(); this.showWorldChronicle(); });
-      return;
-    }
-    const t = document.createElement("div");
-    t.className = `toast ${war ? "war" : ""} ${big && !mob ? "big" : ""}`;
-    t.innerHTML = `${esc(text)}${sub && !mob ? `<small>${esc(sub)}</small>` : ""}`;
-    box.appendChild(t);
-    while (box.children.length > (mob ? 2 : 3)) box.firstElementChild?.remove();
-    setTimeout(() => { t.classList.add("out"); setTimeout(() => t.remove(), 600); }, mob ? (big ? 4200 : 3000) : big ? 7000 : 4500);
-    t.addEventListener("click", () => t.remove());
-  }
-
-  /** Chroniques de toute la planète (toutes régions), accessibles depuis la vue planète. */
-  showWorldChronicle(): void {
-    const rows = this.game.worldChronicle(70).map(({ region, entry: e }) => `<div class="ev i${e.importance} type-${e.type}"><div class="y">An ${e.year}</div><div><div class="t"><b style="color:var(--gold)">${esc(region)}</b> — ${esc(e.text)}</div>${e.consequences ? `<div class="c">${esc(e.consequences)}</div>` : ""}</div></div>`).join("");
-    $("modal-body").innerHTML = `<h2>Chroniques de la planète</h2><div class="list" style="max-height:60vh;overflow:auto">${rows || '<div class="empty">Rien à signaler.</div>'}</div>`;
-    $("modal").classList.remove("hidden");
-  }
-
-  // ------------------------------------------------------------ modales
-
-  private menuHtml(withTitle: boolean): string {
-    return `${withTitle ? "<h2>Menu divin</h2>" : '<div class="sec">Partie</div>'}
-      <div class="row" style="justify-content:flex-start">
-        <button class="secondary" id="m-save">Sauvegarder</button>
-        <button class="secondary" id="m-load" ${this.game.hasSave() ? "" : "disabled"}>Charger</button>
-        <button class="secondary desk-only" id="m-export">Exporter (.json)</button>
-      </div>
-      <p class="quote">Sauvegarde automatique toutes les 45 secondes dans ce navigateur.</p>
-      <div class="sec">Nouveau monde</div>
-      <div class="row" style="justify-content:flex-start"><label>Graine <input id="m-seed" type="text" inputmode="numeric" placeholder="aléatoire" style="width:120px" /></label>
-      <button class="primary" id="m-new">Recommencer l'humanité</button></div>
-      <p class="quote">Même graine, même carte. Pas la même histoire : vous y êtes pour quelque chose.</p>
-      <div class="sec desk-only">Commandes</div>
-      <p class="law desk-only">Clic gauche glissé : pivoter · Clic droit / 2 doigts : déplacer · Molette / pincement : zoom · WASD/flèches : déplacer · Q/E : pivoter · Espace : pause · 1/2/3 : vitesses · Échap : annuler le pouvoir.</p>
-      <div class="sec mob-only">Commandes tactiles</div>
-      <p class="law mob-only">1 doigt : déplacer la vue · 2 doigts : zoom (et pivoter en les faisant glisser) · toucher un habitant ou une ville : sa fiche · glisser une fenêtre vers le bas : la fermer.</p>`;
-  }
-
-  private bindMenu(): void {
-    $("m-save").addEventListener("click", () => { this.toast(this.game.save(), "", false); });
-    $("m-load").addEventListener("click", () => { if (this.game.load()) $("modal").classList.add("hidden"); });
-    $("m-export").addEventListener("click", () => this.game.exportSave());
-    $("m-new").addEventListener("click", () => {
-      const v = ($("m-seed") as HTMLInputElement).value.trim();
-      this.game.newWorld(v ? Number(v.replace(/\D/g, "")) || undefined : undefined);
-      $("modal").classList.add("hidden");
-    });
-  }
-
-  private showMenu(): void {
-    $("modal-body").innerHTML = this.menuHtml(true);
-    $("modal").classList.remove("hidden");
-    this.bindMenu();
-  }
-
-  private showStats(): void {
-    const sim = this.sim, st = sim.stats;
-    const alive = sim.aliveCivs();
-    const soldiers = alive.reduce((a, c) => a + c.soldiers, 0);
-    const buildings = sim.buildings.filter((b) => b.civ >= 0 && b.progress >= 1).length;
-    const avgTech = alive.length ? alive.reduce((a, c) => a + c.tech, 0) / alive.length : 0;
-    const body = $("modal-body");
-    body.innerHTML = `<h2>Statistiques mondiales — An ${sim.year}</h2>
-      <div class="grid2 kv"><span>Habitants</span><b>${sim.totalPop()}</b><span>Pic de population</span><b>${st.peakPop}</b><span>Civilisations vivantes</span><b>${alive.length} / ${sim.civs.length}</b>
-      <span>Villes</span><b>${sim.cities.length}</b><span>Bâtiments</span><b>${buildings}</b><span>Soldats</span><b>${soldiers}</b><span>Niveau technologique moyen</span><b>${avgTech.toFixed(1)}</b>
-      <span>Guerres actives / total</span><b>${sim.activeWars().length} / ${st.warsStarted}</b><span>Naissances</span><b>${st.births}</b><span>Décès (total)</span><b>${st.deaths}</b>
-      <span>— de vieillesse</span><b>${st.oldAgeDeaths}</b><span>— de faim</span><b>${st.famineDeaths}</b><span>— de guerre</span><b>${st.warDeaths}</b>
-      <span>— de peste</span><b>${st.plagueDeaths}</b><span>— de votre fait</span><b>${st.godDeaths}</b><span>Villes fondées</span><b>${st.citiesFounded}</b></div>
-      <div class="sec">Population par civilisation</div><canvas id="chart" class="chart"></canvas><div class="legend" id="legend"></div>
-      ${this.mobile ? this.menuHtml(false) : ""}`;
-    $("modal").classList.remove("hidden");
-    this.drawChart();
-    if (this.mobile) this.bindMenu();
+  /** Tiroir : glisser vers le bas pour refermer. Ne démarre que si le contenu est tout en haut. */
+  private bindSheetDrag(el: HTMLElement, onClose: () => void): void {
+    let y0 = 0, drag = false, dy = 0, scroller: HTMLElement | null = null, t0 = 0;
+    const findScroller = (t: EventTarget | null): HTMLElement | null => {
+      let n = t as HTMLElement | null;
+      while (n && n !== el.parentElement) {
+        if (n.scrollHeight > n.clientHeight + 2) { const o = getComputedStyle(n).overflowY; if (o === "auto" || o === "scroll") return n; }
+        if (n === el) break;
+        n = n.parentElement;
+      }
+      return null;
+    };
+    el.addEventListener("touchstart", (e) => { y0 = e.touches[0].clientY; t0 = performance.now(); drag = false; dy = 0; scroller = findScroller(e.target); }, { passive: true });
+    el.addEventListener("touchmove", (e) => {
+      const d = e.touches[0].clientY - y0;
+      if (!drag && d > 10 && (!scroller || scroller.scrollTop <= 0)) { drag = true; el.style.animation = "none"; el.style.transition = "none"; }
+      if (drag) { e.preventDefault(); dy = Math.max(0, d - 10); el.style.transform = `translateY(${dy}px)`; }
+    }, { passive: false });
+    const end = () => {
+      if (!drag) return;
+      drag = false;
+      const v = dy / Math.max(1, performance.now() - t0);
+      el.style.transition = "";
+      const close = dy > Math.min(110, el.offsetHeight * 0.25) || v > 0.6;
+      el.style.transform = "";
+      if (close) onClose();
+    };
+    el.addEventListener("touchend", end);
+    el.addEventListener("touchcancel", end);
   }
 
   private drawChart(): void {
@@ -845,7 +876,7 @@ export class UI {
     g.strokeStyle = "#ffffff18"; g.fillStyle = "#9aa3b5"; g.font = "10px sans-serif";
     for (let i = 0; i <= 4; i++) { const y = y0 + hh - (hh * i) / 4; g.beginPath(); g.moveTo(x0, y); g.lineTo(x0 + w, y); g.stroke(); g.fillText(String(Math.round((max * i) / 4)), 4, y + 3); }
     g.fillText(`An ${h[0].year}`, x0, H - 5); g.fillText(`An ${h[h.length - 1].year}`, x0 + w - 40, H - 5);
-    for (const civ of this.sim.civs) {
+    for (const civ of this.game.sim.civs) {
       g.strokeStyle = hex(civ.color); g.lineWidth = 2; g.beginPath();
       let started = false;
       h.forEach((p, i) => {
@@ -856,8 +887,9 @@ export class UI {
       });
       g.stroke();
     }
-    $("legend").innerHTML = this.sim.civs.map((c) => `<span><span class="sw" style="display:inline-block;background:${hex(c.color)}"></span> ${esc(c.name)}${c.alive ? "" : " †"}</span>`).join("");
+    $("legend").innerHTML = this.game.sim.civs.map((c) => `<span><span class="sw" style="display:inline-block;background:${hex(c.color)}"></span> ${esc(c.name)}${c.alive ? "" : " †"}</span>`).join("");
   }
+
 
   /** Monde recréé / rechargé : on repart d'un état propre. */
   rebind(): void {

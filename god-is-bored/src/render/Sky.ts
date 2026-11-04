@@ -53,16 +53,16 @@ export class Sky {
     this.sun.position.copy(this.sunOffset);
     // couleur du soleil : blanc chaud le jour, orange à l'horizon, bleu lunaire la nuit
     const warm = 1 - Math.min(1, Math.max(0, elev - 0.05) / 0.45);
-    lerp3(0xfff0d8, 0xff9a55, warm * (1 - this.night), this.sun.color);
+    lerp3(0xffe9c4, 0xff9a55, warm * (1 - this.night), this.sun.color); // lumière ambiante chaleureuse
     this.sun.color.lerp(this.c1.setHex(0x7f98ff), this.night);
     this.sun.intensity = 0.38 + 2.5 * day;
-    lerp3(0xdbe8ff, 0xffc7a0, warm * (1 - this.night) * 0.6, this.hemi.color);
+    lerp3(0xe6eaff, 0xffc7a0, warm * (1 - this.night) * 0.6, this.hemi.color);
     this.hemi.color.lerp(this.c1.setHex(0x30427a), this.night);
-    this.hemi.groundColor.setHex(0x7a6650).lerp(this.c1.setHex(0x1a1f33), this.night);
+    this.hemi.groundColor.setHex(0x8a7154).lerp(this.c1.setHex(0x1a1f33), this.night);
     this.hemi.intensity = 0.62 + 0.75 * day;
     this.ambient.intensity = 0.1 + 0.08 * this.night;
     // brume
-    lerp3(0x8ea3c0, 0xc9a98f, warm * (1 - this.night) * 0.5, this.fog.color);
+    lerp3(0x9fb0c6, 0xd4ad90, warm * (1 - this.night) * 0.5 + 0.12, this.fog.color);
     this.fog.color.lerp(this.c1.setHex(0x111a30), this.night * 0.92);
     this.renderer.toneMappingExposure = 1.0 - 0.08 * this.night;
     // fond (CSS) : dégradé du ciel

@@ -1,4 +1,5 @@
 import "./style.css";
+import "./ui2.css";
 import { Renderer } from "./render/Renderer";
 import { PlanetView, type LocalPose, type PlanetCard, type ScaleLevel } from "./render/PlanetView";
 import { PlanetSim, START_INHABITED_REGIONS } from "./sim/PlanetSim";
@@ -32,16 +33,16 @@ class Game implements GameHost {
     this.renderer.setSim(this.sim);
     this.renderer.resetCamera();
     this.planetView = new PlanetView(this.renderer, document.getElementById("app")!, window.matchMedia(MOBILE_Q).matches, {
-      card: (c) => this.showCard(c),
+      card: (c) => this.planetCard(c),
       enterLocal: (p) => this.goLocal(p),
       modeChanged: (m) => { if (this.mode !== "local") { this.mode = m; this.syncChrome(); } },
       levelChanged: (l) => { this.level = l; this.syncChrome(); },
+      villageTap: (r, id) => this.ui.villageTap(r, id),
       place: (t) => { const el = document.getElementById("place"); if (el && el.textContent !== t) el.textContent = t; },
     });
     this.planetView.setPlanetSim(this.ps);
-    this.bindRemote();
     this.ui = new UI(this);
-    this.bindPlanetUi();
+    this.ui.onPlanetAction = (id) => this.planetView.action(id);
     (window as unknown as { game: Game }).game = this;
     const q = new URLSearchParams(location.search);
     if (q.has("ref")) { this.referenceScene(); this.setMode("local", true); }
@@ -79,9 +80,8 @@ class Game implements GameHost {
   private syncChrome(): void {
     const b = document.body.classList;
     b.remove("m-planet", "m-region", "m-local");
-    b.add("m-" + this.mode);
-    document.querySelectorAll<HTMLButtonElement>("#crumbs button").forEach((e) => e.classList.toggle("on", e.dataset.lvl === (this.mode === "local" ? "local" : this.level)));
-    if (this.mode === "local") this.showCard(null);
+    b.add(this.mode === "local" ? "m-local" : this.level === "planet" ? "m-planet" : "m-region");
+    if (this.mode === "local") this.ui?.setPlanetCard(null);
   }
 
   private veil(on: boolean): Promise<void> {
@@ -129,26 +129,22 @@ class Game implements GameHost {
     this.planetView.goLevel(l);
   }
 
-  private showCard(c: PlanetCard | null): void {
-    const card = document.getElementById("planet-card")!;
-    document.body.classList.toggle("card-open", !!c);
-    if (!c) { card.classList.add("hidden"); return; }
-    document.getElementById("pc-title")!.textContent = c.title;
-    const lines = document.getElementById("pc-lines")!; lines.textContent = "";
-    for (const l of c.lines) { const d = document.createElement("div"); d.textContent = l; lines.appendChild(d); }
-    const acts = document.getElementById("pc-actions")!; acts.textContent = "";
-    for (const a of c.actions) { const b = document.createElement("button"); b.textContent = a.label; b.addEventListener("click", () => this.planetView.action(a.id)); acts.appendChild(b); }
-    card.classList.remove("hidden");
+  /** Carte contextuelle de la vue planète (village, continent, lieu) : rendue par l'interface commune. */
+  private planetCard(c: PlanetCard | null): void {
+    if (!c) { this.ui?.setPlanetCard(null); return; }
+    const esc = (t: string) => t.replace(/[&<>]/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[m]!));
+    this.ui.setPlanetCard({ title: c.title, sub: c.lines.map(esc).join("<br>"), color: c.color, actions: c.actions.map((a, i) => ({ ...a, main: i === 0 })) }, c.ref);
   }
 
-  private bindPlanetUi(): void {
-    document.querySelectorAll<HTMLButtonElement>("#crumbs button").forEach((b) => b.addEventListener("click", () => { void this.goLevel(b.dataset.lvl as ScaleLevel); }));
-    document.querySelector("#planet-card .pc-x")!.addEventListener("click", () => this.showCard(null));
-    document.getElementById("p-in")!.addEventListener("click", () => this.planetView.zoomBy(0.72));
-    document.getElementById("p-out")!.addEventListener("click", () => this.planetView.zoomBy(1.4));
-    document.getElementById("c-globe")!.addEventListener("click", () => { void this.goRegion(); });
-    document.getElementById("p-home")!.addEventListener("click", () => this.planetView.recenter());
-    document.getElementById("p-chron")!.addEventListener("click", () => this.ui.showWorldChronicle());
+  // --- services pour l'interface (GameHost)
+  showGlobe(): void { void this.goLevel("planet"); }
+  continents(): { id: number; name: string }[] { return this.planetView.continentChoices(); }
+  focusContinent(id: number): void { void this.goLevel("planet").then(() => this.planetView.focusContinent(id)); }
+  clearPlanetSelection(): void { this.planetView.clearSelection(); }
+  async observeVillage(region: number, cityId: number): Promise<void> {
+    if (this.mode === "local" && region === this.ps.activeId) { const c = this.sim.cityById.get(cityId); if (c) this.renderer.focusOn(c.x + 0.5, c.y + 0.5, 22); return; }
+    if (this.mode === "local") await this.goRegion();
+    this.planetView.flyToVillage(region, cityId);
   }
 
   started(): boolean {
@@ -196,21 +192,7 @@ class Game implements GameHost {
     this.renderer.setSim(this.sim);
     this.renderer.resetCamera();
     this.planetView.setPlanetSim(ps);
-    this.bindRemote();
     this.ui.rebind();
-    this.buildChips();
-  }
-
-  /** Sélecteur discret de continents (vue planète) : recentre le globe et ouvre la fiche. */
-  private buildChips(): void {
-    const box = document.getElementById("continents")!;
-    box.textContent = "";
-    for (const c of this.planetView.continentChoices()) {
-      const b = document.createElement("button");
-      b.textContent = c.name;
-      b.addEventListener("click", () => this.planetView.focusContinent(c.id));
-      box.appendChild(b);
-    }
   }
 
   /** Change de région locale observée : même monde, autre simulation (les autres continuent de vivre). */
@@ -221,24 +203,7 @@ class Game implements GameHost {
     this.sim.speed = prev.speed; this.sim.paused = prev.paused;
     this.renderer.setSim(this.sim);
     this.renderer.resetCamera();
-    this.bindRemote();
     this.ui.rebind();
-  }
-
-  /** Les événements des régions non observées arrivent en notifications compactes préfixées par leur région. */
-  private remoteBound = new WeakSet<SimulationEngine>();
-  private bindRemote(): void {
-    for (const [id, e] of this.ps.engines) {
-      if (this.remoteBound.has(e)) continue;
-      this.remoteBound.add(e);
-      e.listeners.push((en) => { if (e !== this.sim) this.onRemoteEvent(id, e, en); });
-    }
-  }
-  private onRemoteEvent(id: number, e: SimulationEngine, en: ChronicleEntry): void {
-    if (en.importance < 2) return;
-    const name = this.ps.planet.regionById(id)?.name ?? `Région ${id}`;
-    this.ui.remoteNotice(name, en.text, en.type === "war" || en.type === "catastrophe");
-    void e;
   }
 
   /** Chronique de TOUTE la planète : événements de toutes les régions, par ordre chronologique. */
@@ -254,7 +219,7 @@ class Game implements GameHost {
   newWorld(seed?: number): void {
     this.swap(PlanetSim.create(seed ?? this.randomSeed()));
     this.arrive();
-    this.ui.toast(`Nouveau monde (graine ${this.sim.seed}) : ${this.ps.totals().civs} civilisations sur ${this.ps.totals().inhabited} régions.`, "", false, true);
+    this.ui.snack(`Nouveau monde · graine ${this.sim.seed}`);
   }
 
   save(): string {
@@ -265,7 +230,7 @@ class Game implements GameHost {
 
   load(): boolean {
     const ps = PlanetSim.load();
-    if (!ps) { this.ui.toast("Aucune sauvegarde exploitable.", "", false); return false; }
+    if (!ps) { this.ui.snack("Aucune sauvegarde exploitable."); return false; }
     let note = "";
     if (ps.migrateScale()) note += " Géographie mise à l'échelle : vos lieux et peuples n'ont pas bougé.";
     // migration explicite d'une ancienne partie à région unique : Terre Première et sa planète restent intactes, un nouveau peuple est ajouté
@@ -275,7 +240,7 @@ class Game implements GameHost {
     }
     this.swap(ps);
     this.arrive();
-    this.ui.toast(`Partie restaurée : An ${this.sim.year}, ${ps.totals().population} habitants sur ${ps.engines.size} régions.${note}`, "", false);
+    this.ui.snack(`Partie restaurée · An ${this.sim.year}${note}`);
     return true;
   }
 

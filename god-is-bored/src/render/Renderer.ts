@@ -9,6 +9,7 @@ import { BuildingLayer } from "./BuildingLayer";
 import { CitizenLayer } from "./CitizenLayer";
 import { Infra } from "./Infra";
 import { Terrain } from "./Terrain";
+import { Ambient } from "./Ambient";
 import { Water } from "./Water";
 import { Sky } from "./Sky";
 import { Props } from "./Props";
@@ -50,6 +51,7 @@ export class Renderer {
   private props!: Props;
   private glow!: Glow;
   private borders!: THREE.Mesh;
+  private ambient!: Ambient;
   private ringTarget: THREE.Mesh;
   private ringTargetFill: THREE.Mesh;
   private ringSelect: THREE.Mesh;
@@ -147,6 +149,7 @@ export class Renderer {
     this.scene.add(this.ringTarget, this.ringTargetFill, this.ringSelect);
 
     this.fx = new Fx(this.scene, this.mobile ? 1400 : 3200);
+    this.ambient = new Ambient(this.scene, this.mobile ? 70 : 140);
     window.addEventListener("resize", () => this.resize());
     window.addEventListener("orientationchange", () => setTimeout(() => this.resize(), 250));
     this.three.domElement.addEventListener("webglcontextlost", (e) => e.preventDefault());
@@ -208,7 +211,7 @@ export class Renderer {
     this.props = new Props(this.scene);
     this.glow = this.glow ?? new Glow(this.scene, this.sky, this.mobile ? 500 : 900);
     // frontières & routes
-    this.borders = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.9, depthWrite: false }));
+    this.borders = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.5, depthWrite: false }));
     this.borders.renderOrder = 5; this.borders.frustumCulled = false;
     this.scene.add(this.borders);
   }
@@ -302,7 +305,7 @@ export class Renderer {
           if (no === o) continue;
           if (w.type[ny * N + nx] === T.WATER) continue;
           const rival = no >= 0;
-          addQuad(ax, ay, w.heightAt(ax, ay), bx, by, w.heightAt(bx, by), ix, iz, rival ? 0.16 : 0.08, rival ? civ.color : this.tmpColor.setHex(civ.color).lerp(new THREE.Color(0xffffff), 0.35).getHex());
+          addQuad(ax, ay, w.heightAt(ax, ay), bx, by, w.heightAt(bx, by), ix, iz, rival ? 0.075 : 0.04, rival ? civ.color : this.tmpColor.setHex(civ.color).lerp(new THREE.Color(0xffffff), 0.35).getHex());
         }
       }
     const g = this.borders.geometry;
@@ -631,6 +634,7 @@ export class Renderer {
     const far = dist > (this.mobile ? 55 : 85);
     this.props.update(sim, this.frustum, this.camera.position, this.mobile ? 55 : 85);
     this.cit.update(sim, alpha, this.time, zs, this.fx, !far, this.frustum, this.camera.position, this.sky.night);
+    this.ambient.update(this.time, this.controls.target, this.camera.position.distanceTo(this.controls.target), this.sky.night, (this.three.domElement.clientHeight || 700) / 700 * (this.three.getPixelRatio() || 1) * 1.6);
     this.infra.update(sim, this.time, this.bld.lamps.map(([x, y, z]) => [x, y, z] as [number, number, number]));
     this.updateFlames(dt);
     this.glow.update(this.bld.lights, this.bld.fires, this.bld.lamps, this.time);

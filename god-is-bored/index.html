@@ -17,80 +17,32 @@
     <div id="stage"></div>
     <div id="labels"></div>
 
-    <header id="top">
-      <div class="brand"><b>GOD IS BORED</b><small>v0.1</small></div>
-      <div class="stat" title="Année courante"><span>An</span><b id="s-year">1</b></div>
-      <div class="stat" title="Population mondiale"><span>Habitants</span><b id="s-pop">0</b></div>
-      <div class="stat" title="Civilisations vivantes"><span>Civilisations</span><b id="s-civs">0</b></div>
-      <div class="stat" id="s-wars-wrap" title="Guerres actives"><span>Guerres</span><b id="s-wars">0</b></div>
-      <div class="stat boredom" title="L'ennui divin monte quand il ne se passe rien."><span>Ennui divin</span><div class="meter"><i id="s-bored"></i></div></div>
-      <div class="spacer"></div>
-      <div class="time" role="group" aria-label="Contrôle du temps">
-        <button id="t-pause" title="Suspendre le temps (Espace)">❚❚</button>
-        <button id="t-1" data-speed="1" title="Vitesse normale (1)">×1</button>
-        <button id="t-3" data-speed="3" title="Vitesse ×3 (2)">×3</button>
-        <button id="t-10" data-speed="10" title="Vitesse ×10 (3)">×10</button>
-      </div>
-      <button id="b-stats" class="ghost" title="Statistiques mondiales">Stats</button>
-      <button id="b-menu" class="ghost" title="Sauvegarde, nouveau monde">Menu</button>
+    <div id="veil"></div>
+
+    <header id="hud">
+      <button id="h-info" class="pill" aria-label="Chroniques et planète"><b id="h-name">Terra</b><span class="sep"></span><span class="m">An <b id="h-year">1</b></span><span class="sep"></span><span class="m"><svg viewBox="0 0 24 24" class="ico"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.6 2.7-6 6-6s6 2.4 6 6"/><circle cx="17.5" cy="9" r="2.4"/><path d="M16.5 14.2c2.9 0 4.8 1.9 4.8 4.8"/></svg> <b id="h-pop">0</b></span></button>
+      <button id="h-menu" class="round" aria-label="Temps et réglages"><span id="h-speed">▶</span></button>
     </header>
 
-    <aside id="left" class="panel sheet">
-      <div class="grab"><i></i><span class="gt">Pouvoirs divins</span><button class="sx" aria-label="Fermer">×</button></div>
-      <h3>Pouvoirs divins</h3>
-      <div id="powers"></div>
-      <div id="target-info" class="infobox"></div>
-      <div id="prophecy-box" class="infobox hidden">
-        <b class="mob-only">Quel message envoyer ?</b>
-        <label for="prophecy-sel">Message à transmettre</label>
-        <select id="prophecy-sel"></select>
-        <p id="prophecy-odds"></p>
-        <button id="prophecy-go" class="primary mob-only">Armer la prophétie</button>
-      </div>
-    </aside>
+    <div id="place"></div>
+    <div id="snack"></div>
 
-    <aside id="right" class="panel sheet">
-      <div class="grab"><i></i><span class="gt">Monde</span><button class="sx" aria-label="Fermer">×</button></div>
-      <h3 id="right-title">Observation</h3>
-      <div id="details"></div>
-    </aside>
+    <div id="armed" class="hidden"><span id="armed-g"></span><span id="armed-t"></span><button id="armed-x" aria-label="Annuler">✕</button></div>
+    <div id="msgs" class="hidden"></div>
+    <div id="tray" class="hidden"></div>
 
-    <section id="bottom" class="panel sheet">
-      <div class="grab"><i></i><span class="gt">Chroniques du monde</span><button class="sx" aria-label="Fermer">×</button></div>
-      <div class="tabs">
-        <button class="tab active" data-tab="chron">Chroniques du monde</button>
-        <button class="tab" data-tab="notif">Notifications</button>
-        <select id="f-civ" title="Filtrer par civilisation"><option value="-2">Toutes les civilisations</option></select>
-        <div class="chips" id="chips"></div>
-      </div>
-      <div id="chron-list" class="list"></div>
-      <div id="notif-list" class="list hidden"></div>
-    </section>
+    <div id="card" class="hidden"><button class="cx" aria-label="Fermer">×</button><div class="c-head"><i id="c-dot"></i><div><h3 id="c-title"></h3><p id="c-sub"></p></div></div><div id="c-actions"></div></div>
 
-    <div id="veil"></div>
-    <nav id="crumbs" aria-label="Échelle de vue"><button data-lvl="planet">Planète</button><i>›</i><button data-lvl="continent">Continent</button><i>›</i><button data-lvl="region">Région</button><i>›</i><button data-lvl="local">Local</button></nav>
-    <div id="place"></div><div id="planet-tools"><button id="p-in" title="Zoom +">+</button><button id="p-out" title="Zoom −">−</button><button id="p-home" title="Recentrer le globe">◎</button><button id="p-chron" title="Chroniques de la planète">📜</button></div>
-    <div id="continents" aria-label="Continents"></div>
-    <div id="planet-card" class="hidden"><button class="pc-x" aria-label="Fermer">×</button><h3 id="pc-title"></h3><div id="pc-lines"></div><div id="pc-actions"></div></div>
-    <div id="toasts"></div>
-    <div id="actionbar"><div class="ab-info"><b id="ab-name"></b><span id="ab-hint"></span></div><button id="ab-msg" class="secondary hidden">Message</button><button id="ab-cancel" class="cancel">Annuler</button></div>
-    <div id="hint"></div>
-    <nav id="tabbar" aria-label="Navigation">
-      <button data-sheet="powers"><svg viewBox="0 0 24 24"><path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H12.5z"/></svg><span>Pouvoirs</span></button>
-      <button data-sheet="world"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg><span>Monde</span></button>
-      <button data-sheet="chron"><svg viewBox="0 0 24 24"><path d="M6 3h11a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6zM6 3v18M10 8h6M10 12h6M10 16h4"/></svg><span>Chroniques</span><i class="badge"></i></button>
+    <nav id="dock" aria-label="Actions">
+      <button data-d="interact" class="on"><svg viewBox="0 0 24 24"><path d="M9 11V5.5a1.6 1.6 0 0 1 3.2 0V10m0-1.5a1.6 1.6 0 0 1 3.2 0V11m0-.5a1.6 1.6 0 0 1 3.2 0v4.8c0 3.3-2.3 5.7-5.6 5.7h-1.2c-2 0-3.3-.8-4.4-2.3L4 14.6a1.5 1.5 0 0 1 2.3-1.9L9 15.2"/></svg><span>Interagir</span></button>
+      <button data-d="powers"><svg viewBox="0 0 24 24" class="fill"><path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H12.5z"/></svg><span>Pouvoirs</span></button>
+      <button data-d="planet"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg><span>Planète</span></button>
     </nav>
 
-    <div id="cam-tools">
-      <button id="c-rot-l" title="Pivoter (Q)">⟲</button>
-      <button id="c-rot-r" title="Pivoter (E)">⟳</button>
-      <button id="c-in" title="Zoom +">+</button>
-      <button id="c-out" title="Zoom −">−</button>
-      <button id="c-reset" title="Recentrer la vue">◎</button>
-      <button id="c-globe" title="Vue régionale et planète">🌍</button>
-    </div>
-
-    <div id="modal" class="hidden"><div class="card"><div class="grab"><i></i></div><button class="x" id="modal-x">×</button><div id="modal-body"></div></div></div>
+    <section id="sheet" class="hidden" aria-live="polite">
+      <div class="grab"><i></i><span id="sheet-t"></span><button class="sx" aria-label="Fermer">×</button></div>
+      <div id="sheet-body"></div>
+    </section>
 
     <div id="intro">
       <div class="card">

@@ -6,7 +6,7 @@ import { T } from "./World";
 
 const TPY = TICKS_PER_YEAR;
 
-export type PowerId = "lightning" | "meteor" | "rain" | "plague" | "bless" | "wrath" | "prophecy";
+export type PowerId = "lightning" | "fire" | "meteor" | "rain" | "plague" | "bless" | "wrath" | "prophecy";
 
 export interface PowerInfo {
   id: PowerId; name: string; glyph: string; radius: number; cooldown: number; target: "area" | "civ"; blurb: string; detail: string;
@@ -15,6 +15,8 @@ export interface PowerInfo {
 export const POWERS: PowerInfo[] = [
   { id: "lightning", name: "Foudre", glyph: "ϟ", radius: 2.2, cooldown: 40, target: "area", blurb: "Rappelle à un village qui est le patron.",
     detail: "Détruit des bâtiments, tue des habitants, déclenche la panique et des incendies dans les forêts." },
+  { id: "fire", name: "Incendie", glyph: "♨", radius: 3.2, cooldown: 90, target: "area", blurb: "Une étincelle. La forêt fait le reste.",
+    detail: "Embrase forêts et toits dans la zone ; le feu se propage seul et chasse les habitants." },
   { id: "meteor", name: "Météorite", glyph: "◉", radius: 4, cooldown: 500, target: "area", blurb: "Un caillou. Très gros. Sans préavis.",
     detail: "Rase la zone, creuse un cratère (parfois un lac) et rend les voisins nerveux." },
   { id: "rain", name: "Pluie divine", glyph: "≋", radius: 7, cooldown: 240, target: "area", blurb: "Ils avaient demandé autre chose, mais bon.",
@@ -60,6 +62,7 @@ export class DivinePowerSystem {
     let res: CastResult;
     switch (id) {
       case "lightning": res = this.lightning(sim, x, y); break;
+      case "fire": res = this.fire(sim, x, y); break;
       case "meteor": res = this.meteor(sim, x, y); break;
       case "rain": res = this.rain(sim, x, y); break;
       case "plague": res = this.plague(sim, x, y); break;
@@ -133,6 +136,63 @@ export class DivinePowerSystem {
       text: `La foudre frappe ${where}. ${res.killed > 0 ? "Les survivants y voient un signe ; les morts n'ont pas d'avis." : "Un arbre a des opinions fortes à ce sujet."}`,
       consequences: `${res.killed} mort(s), ${res.destroyed} bâtiment(s) détruit(s), panique et incendies.` });
     return { ok: true, msg: `Foudre : ${res.killed} mort(s), ${res.destroyed} bâtiment(s) détruit(s).` };
+  }
+
+  // --------------------------------------------------------------- incendie
+
+  fire(sim: SimulationEngine, x: number, y: number): CastResult {
+    const w = sim.world, rng = sim.rng, r = POWER_BY_ID.fire.radius;
+    let lit = 0;
+    for (let ty = Math.floor(y - r); ty <= Math.floor(y + r); ty++)
+      for (let tx = Math.floor(x - r); tx <= Math.floor(x + r); tx++) {
+        if (!w.inb(tx, ty)) continue;
+        const i = ty * w.size + tx;
+        if (Math.hypot(tx + 0.5 - x, ty + 0.5 - y) > r || w.type[i] === T.WATER || w.type[i] === T.RIVER) continue;
+        if ((w.trees[i] > 0 || w.bld[i] >= 0) && rng.chance(0.8)) { w.fire[i] = Math.max(w.fire[i], 45 + rng.int(40)); lit++; }
+      }
+    if (lit === 0) return { ok: false, msg: "Rien à brûler ici : il faut des arbres ou des toits." };
+    w.fireV++;
+    sim.fx.push({ kind: "fire", x, y });
+    for (const c of sim.citizens) if (!c.dead && Math.hypot(c.x - x, c.y - y) < r + 3) { c.panic = Math.max(c.panic, 40); c.fx = x; c.fy = y; }
+    const near = this.nearestCity(sim, x, y, 10), civ = near ? sim.civById.get(near.civ) ?? null : null;
+    sim.events.log(sim, { civ: civ?.id ?? -1, type: "divine", importance: near && Math.hypot(near.x - x, near.y - y) < r + 3 ? 2 : 1,
+      text: `Un incendie ravage ${near ? `les abords de ${near.name}` : "la forêt"}. Personne n'avoue avoir vu l'étincelle.`, consequences: `${lit} case(s) en flammes.` });
+    return { ok: true, msg: `Incendie : ${lit} case(s) en flammes.` };
+  }
+
+  // --------------------------------------------------------------- influence sur un habitant
+
+  /** Actions divines sur UN habitant : bénir, guérir, inspirer, foudroyer. Modifient réellement son état (jamais le décor). */
+  influence(sim: SimulationEngine, citizenId: number, kind: "bless" | "heal" | "inspire" | "smite"): CastResult {
+    const c = sim.citizenById.get(citizenId);
+    if (!c || c.dead) return { ok: false, msg: "Cet habitant n'est plus là." };
+    const key = "inf_" + kind, cd = Math.max(0, (sim.cooldowns[key] ?? 0) - sim.tick);
+    if (cd > 0) return { ok: false, msg: `Encore ${Math.ceil(cd / TPY)} an(s) de repos divin.` };
+    const CD: Record<string, number> = { bless: 60, heal: 30, inspire: 90, smite: 200 };
+    const civ = sim.civById.get(c.civ);
+    let msg = "";
+    if (kind === "bless") {
+      c.hp = 100; c.hunger = Math.min(c.hunger, 15); c.faith = Math.min(1, c.faith + 0.25);
+      if (c.soul) { c.soul.com = Math.min(100, c.soul.com + 40); c.soul.fear = 0; c.soul.fat = Math.max(0, c.soul.fat - 40); }
+      msg = `${c.name} est béni(e).`;
+      sim.events.log(sim, { civ: c.civ, type: "miracle", importance: 1, text: `${c.name} se sent soudain étrangement bien. ${civ ? civ.religion.name : "On"} y voit un signe.`, consequences: "Santé, foi et moral en hausse." });
+    } else if (kind === "heal") {
+      c.sick = 0; c.hp = Math.max(c.hp, 90); c.immune = Math.max(c.immune, 400);
+      msg = `${c.name} est guéri(e).`;
+      sim.events.log(sim, { civ: c.civ, type: "miracle", importance: 1, text: `${c.name} se relève, guéri(e). Les médecins sont vexés.`, consequences: "Maladie dissipée, immunité temporaire." });
+    } else if (kind === "inspire") {
+      c.intel = Math.min(1, c.intel + 0.12); c.courage = Math.min(1, c.courage + 0.12);
+      msg = `${c.name} a une idée de génie.`;
+      sim.events.log(sim, { civ: c.civ, type: "divine", importance: 1, text: `${c.name} est saisi(e) d'une inspiration subite. Ça ne durera pas.`, consequences: "Intelligence et courage en hausse." });
+    } else {
+      sim.fx.push({ kind: "lightning", x: c.x, y: c.y });
+      sim.killCitizen(c, "god");
+      sim.removeDead(); sim.citizenSys.census(sim);
+      msg = `${c.name} a été foudroyé(e).`;
+      sim.events.log(sim, { civ: c.civ, type: "divine", importance: 2, text: `${c.name} est foudroyé(e) en plein champ. La météo n'a pas été consultée.`, consequences: "1 mort. Les voisins ont des questions." });
+    }
+    sim.cooldowns[key] = sim.tick + CD[kind];
+    return { ok: true, msg };
   }
 
   // --------------------------------------------------------------- météorite

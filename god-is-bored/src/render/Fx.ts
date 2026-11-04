@@ -261,7 +261,12 @@ export class Fx {
         this.ring(x, y + 0.15, z, 0.5, 4, 1.2, col);
         break;
       }
-      case "fire": break;
+      case "fire": {
+        const x = gx(e.x), z = gz(e.y), y = w.heightAt(e.x, e.y);
+        this.burst(x, y + 0.3, z, 70, 0xff8a2a, 3, 1.3, 0.12, 4);
+        this.ring(x, y + 0.15, z, 0.4, 3.4, 0.9, 0xff9a4a);
+        break;
+      }
     }
   }
 

@@ -107,15 +107,22 @@ transformed.z += cos(uTime*1.05 + instanceMatrix[3].z*1.1)*0.009*position.y;
         if (t === T.WATER || t === T.RIVER) continue;
         const cnt = w.trees[i];
         const urb = w.bld[i] >= 0;
-        for (let k = 0; k < cnt + (cnt > 2 ? 1 : 0); k++) {
+        // forêts aérées (rendu seulement : la simulation garde ses arbres) : clairières, lisières claires, gros sujets plus rares
+        let shown = cnt <= 1 ? cnt : Math.max(1, Math.round(cnt * 0.6));
+        const glade = hash2((tx / 4) | 0, (ty / 4) | 0, 77);
+        if (cnt <= 3 && glade < 0.2) shown = hash2(tx, ty, 78) < 0.3 ? 1 : 0;
+        let nearBld = false;
+        for (let dy = -2; dy <= 2 && !nearBld; dy++) for (let dx = -2; dx <= 2; dx++) if (w.inb(tx + dx, ty + dy) && w.bld[(ty + dy) * N + tx + dx] >= 0) { nearBld = true; break; }
+        if (nearBld) shown = Math.min(shown, hash2(tx, ty, 79) < 0.45 ? 1 : 0);
+        for (let k = 0; k < shown; k++) {
           const seed = tx * 73 + ty * 131 + k * 17;
           const px = tx + 0.12 + hash2(tx, ty, k * 5 + 1) * 0.76, py = ty + 0.12 + hash2(tx, ty, k * 5 + 2) * 0.76;
           const r = hash2(tx, ty, k * 5 + 3);
           let sp: number;
           if (h > 1.1 || t === T.HILL) sp = r < 0.55 ? 0 : r < 0.85 ? 1 : 3;
           else sp = r < 0.34 ? 2 : r < 0.56 ? 3 : r < 0.8 ? 0 : 1;
-          const big = hash2(tx, ty, k + 90) > 0.93 ? 1.45 : 1;
-          push(sp, px, py, (0.86 + hash2(tx, ty, k * 5 + 4) * 0.66) * big * (1 + Math.min(cnt, 4) * 0.04), 0.85 + hash2(tx, ty, k + 40) * 0.5, seed);
+          const big = hash2(tx, ty, k + 90) > 0.95 ? 1.5 : hash2(tx, ty, k + 91) < 0.25 ? 0.72 : 1;
+          push(sp, px, py, (0.78 + hash2(tx, ty, k * 5 + 4) * 0.8) * big * (1 + Math.min(cnt, 4) * 0.03), 0.72 + hash2(tx, ty, k + 40) * 0.7, seed);
         }
         if (urb || t === T.MOUNTAIN) {
           if (t === T.MOUNTAIN && hash2(tx, ty, 8) < 0.5) push(5, tx + 0.5, ty + 0.5, 1.4 + hash2(tx, ty, 9) * 1.6, 0.7 + hash2(tx, ty, 10) * 0.8, tx * 5 + ty, 0.3);
@@ -172,7 +179,7 @@ transformed.z += cos(uTime*1.05 + instanceMatrix[3].z*1.1)*0.009*position.y;
       d.rotation.set(it.tx, it.rot, it.tz);
       d.scale.set(it.s, it.s * it.sy, it.s);
       d.updateMatrix();
-      this.col.setRGB(0.86 + it.c * 0.28, 0.9 + it.c * 0.2, 0.84 + it.c * 0.26);
+      this.col.setRGB(0.8 + it.c * 0.42, 0.86 + it.c * 0.3, 0.74 + it.c * 0.34);
       const farLimit = (this.mobile ? 34 : 56);
       if (sp.far !== undefined && d2 > farLimit * farLimit) { (it.sp <= 1 ? this.far.cone : this.far.blob).push(d.matrix, this.col); }
       else this.meshes[it.sp].push(d.matrix, this.col);

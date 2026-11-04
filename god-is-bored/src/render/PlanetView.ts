@@ -12,7 +12,7 @@ import { tileBaseColor } from "./Terrain";
 /** Niveaux d'échelle : le zoom est continu, ces niveaux ne servent qu'aux raccourcis et à l'affichage. */
 export type ScaleLevel = "planet" | "continent" | "region" | "local";
 export type PlanetMode = "planet" | "region";
-export interface PlanetCard { kind: "continent" | "ocean" | "region" | "settlement" | "tile" | "land"; title: string; lines: string[]; actions: { id: string; label: string }[]; }
+export interface PlanetCard { kind: "continent" | "ocean" | "region" | "settlement" | "tile" | "land"; title: string; lines: string[]; actions: { id: string; label: string }[]; color?: number; ref?: { region: number; id: number }; }
 export interface LocalPose { region: number; x: number; y: number; dist: number; el: number; az: number; }
 export interface PlanetHooks {
   card(c: PlanetCard | null): void;
@@ -20,6 +20,8 @@ export interface PlanetHooks {
   modeChanged(m: PlanetMode): void;
   levelChanged(l: ScaleLevel): void;
   place(text: string): void;
+  /** Un village est touché : si un pouvoir est armé, l'interface l'applique et renvoie true (pas de carte). */
+  villageTap?(region: number, id: number): boolean;
 }
 
 const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
@@ -616,12 +618,27 @@ export class PlanetView {
   private selectVillage(l: Layer, id: number, x: number, y: number): void {
     const sim = l.sim, city = sim.cityById.get(id);
     if (!city) return;
-    const civ = sim.civById.get(city.civ), nb = sim.buildings.filter((b) => b.city === city.id && b.progress >= 1 && b.civ >= 0).length;
     const dir = this.planet.localToDir(l.region, x, y);
+    if (this.hooks.villageTap?.(l.region.id, id)) { this.placeRing(dir); return; }
+    const civ = sim.civById.get(city.civ);
+    const burning = sim.buildings.some((b) => b.city === city.id && b.civ >= 0 && sim.world.fire[sim.world.idx(b.x, b.y)] > 0);
+    const sites = sim.buildings.filter((b) => b.city === city.id && b.progress < 1 && b.civ >= 0).length;
+    const state = city.siege > 0 ? "assiégé" : burning ? "en proie aux flammes" : sites > 2 ? "en plein chantier" : "paisible";
     this.placeRing(dir);
     this.sel = { kind: "settlement", dir, region: l.region.id, x, y, id };
-    this.hooks.card({ kind: "settlement", title: city.name, lines: [`${civ?.name ?? "?"}${civ?.capital === city.id ? " · capitale" : ""}`, `${city.pop} habitants · ${nb} bâtiments · époque ${civ ? civ.era + 1 : "?"}`, `${this.planet.continentAt(dir)?.name ?? "Terres"} · An ${sim.year}`], actions: [{ id: "enter", label: "Entrer dans le village" }] });
+    this.hooks.card({ kind: "settlement", title: city.name, lines: [`${civ?.name ?? "?"}${civ?.capital === city.id ? " · capitale" : ""} · ${city.pop} habitants`, `Village ${state}`], color: civ?.color,
+      actions: [{ id: "observe", label: "Observer" }, { id: "bless", label: "Bénir" }, { id: "details", label: "Détails" }], ref: { region: l.region.id, id } });
   }
+
+  /** Vol vers un village (zoom continu jusqu'à la vue rapprochée). */
+  flyToVillage(regionId: number, id: number): boolean {
+    const region = this.planet.regionById(regionId), city = this.ps.engineOf(regionId)?.cityById.get(id);
+    if (!region || !city) return false;
+    this.hooks.card(null);
+    this.flyTo({ P: this.planet.localToDir(region, city.x + 0.5, city.y + 0.5), d: 0.05, el: 0.62 }, 1.5);
+    return true;
+  }
+  clearSelection(): void { this.hooks.card(null); this.ring.visible = false; this.sel = null; }
 
   private selectLand(dir: Vec3): void {
     const pl = this.planet;
